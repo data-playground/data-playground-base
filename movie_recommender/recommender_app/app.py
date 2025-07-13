@@ -30,12 +30,12 @@ def load_and_process_data():
     """
     with st.spinner("Loading and processing data... This might take a moment."):
         # Load the main DataFrame (df)
-        df_path = r'movies_tv_4_recs.json'
+        df_path = 'movies_tv_4_recs.json'
         df = pd.read_json(df_path)
         df['id'] = df['id'].astype(str) # Ensure ID is string
 
         # Load the full DataFrame (full_df) for content lookup
-        full_df_path = r'movies_tv.json'
+        full_df_path = 'movies_tv.json'
         full_df = pd.read_json(full_df_path)
         full_df['id'] = full_df['id'].astype(str) # Ensure ID is string
 
