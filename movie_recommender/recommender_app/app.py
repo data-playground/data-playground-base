@@ -21,6 +21,8 @@ def build_cosine_similarity(df):
     tfidf_matrix_trigram = tfidf_trigram.fit_transform(df['soup'])
     cosine_sim_trigram = cosine_similarity(tfidf_matrix_trigram, tfidf_matrix_trigram)
 
+    print("Cosine Similarity built and ready to be used")
+
     return cosine_sim_trigram
 
 @st.cache_data
@@ -61,6 +63,8 @@ def load_and_process_data():
         unique_providers = sorted(full_df['provider_id'].dropna().unique().tolist())
         unique_providers_names = sorted(full_df['provider_name'].dropna().unique().tolist())
         all_content_titles = sorted(full_df['title'].unique().tolist())
+
+        print("Gathered all preloaded data")
 
         return df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_title_to_id_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles
 
@@ -125,6 +129,7 @@ def get_recommendations(watched_ids, cosine_sim, indices_series, df_main, n_reco
 df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_title_to_id_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles = load_and_process_data()
 cosine_sim_trigram = build_cosine_similarity(df) # This will also be cached
 
+print("All preloaded processes are done")
 # %%
 
 # my_watched_movies = ["tv94951"]
@@ -132,11 +137,6 @@ cosine_sim_trigram = build_cosine_similarity(df) # This will also be cached
 # print(recommendations)
 
 # %%
-
-
-# Define columns for main content and watch options
-main_content_cols = ['id', 'title', 'original_language', 'poster_path', 'info', 'content_type']
-watch_option_cols = ['country', 'watch_type', 'display_priority', 'provider_name', 'provider_id', 'logo_path']
 
 # --- Helper Function for JSON Transformation ---
 def transform_dataframe_to_json(dataframe):
@@ -195,6 +195,8 @@ def transform_dataframe_to_json(dataframe):
         json_output.append(content_details)
 
     return json_output
+
+print("Starting Streamlit build")
 
 # --- Streamlit Application Layout ---
 st.set_page_config(layout="wide", page_title="Content Recommender")
