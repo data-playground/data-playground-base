@@ -25,6 +25,9 @@ def build_cosine_similarity(df):
     
     # The rest of the process is the same
     tfidf_matrix_trigram = tfidf_trigram.fit_transform(df['soup'])
+
+    logger.info("fit_transform done")
+    
     cosine_sim_trigram = cosine_similarity(tfidf_matrix_trigram, tfidf_matrix_trigram)
 
     logger.info("Cosine Similarity built and ready to be used")
