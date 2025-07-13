@@ -5,20 +5,32 @@ import pandas as pd
 import json
 import numpy as np
 import re
+import os
 
 # %%
+
+logger = st.logger.get_logger(__name__)
 
 @st.cache_resource
 def build_cosine_similarity(df):
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
 
+    logger.info("Installed SKLearn")
+
     # Use ngram_range=(1, 2) to include both unigrams and bigrams
     tfidf_trigram = TfidfVectorizer(stop_words='english', ngram_range=(1, 3))
 
+    logger.info("built TF-IDF for trigrams")
+    
     # The rest of the process is the same
     tfidf_matrix_trigram = tfidf_trigram.fit_transform(df['soup'])
+
+    logger.info("fit_transform done")
+    
     cosine_sim_trigram = cosine_similarity(tfidf_matrix_trigram, tfidf_matrix_trigram)
+
+    logger.info("Cosine Similarity built and ready to be used")
 
     return cosine_sim_trigram
 
@@ -29,13 +41,15 @@ def load_and_process_data():
     This function will run only once when the app starts or when its inputs change.
     """
     with st.spinner("Loading and processing data... This might take a moment."):
+        script_dir = os.path.dirname(__file__)
+        
         # Load the main DataFrame (df)
-        df_path = r'movies_tv_4_recs.json'
+        df_path = os.path.join(script_dir, 'movies_tv_4_recs.json')
         df = pd.read_json(df_path)
         df['id'] = df['id'].astype(str) # Ensure ID is string
 
         # Load the full DataFrame (full_df) for content lookup
-        full_df_path = r'movies_tv.json'
+        full_df_path = os.path.join(script_dir, 'movies_tv.json')
         full_df = pd.read_json(full_df_path)
         full_df['id'] = full_df['id'].astype(str) # Ensure ID is string
 
@@ -58,6 +72,8 @@ def load_and_process_data():
         unique_providers = sorted(full_df['provider_id'].dropna().unique().tolist())
         unique_providers_names = sorted(full_df['provider_name'].dropna().unique().tolist())
         all_content_titles = sorted(full_df['title'].unique().tolist())
+
+        logger.info("Gathered all preloaded data")
 
         return df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_title_to_id_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles
 
@@ -122,6 +138,7 @@ def get_recommendations(watched_ids, cosine_sim, indices_series, df_main, n_reco
 df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_title_to_id_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles = load_and_process_data()
 cosine_sim_trigram = build_cosine_similarity(df) # This will also be cached
 
+logger.info("All preloaded processes are done")
 # %%
 
 # my_watched_movies = ["tv94951"]
@@ -129,11 +146,6 @@ cosine_sim_trigram = build_cosine_similarity(df) # This will also be cached
 # print(recommendations)
 
 # %%
-
-
-# Define columns for main content and watch options
-main_content_cols = ['id', 'title', 'original_language', 'poster_path', 'info', 'content_type']
-watch_option_cols = ['country', 'watch_type', 'display_priority', 'provider_name', 'provider_id', 'logo_path']
 
 # --- Helper Function for JSON Transformation ---
 def transform_dataframe_to_json(dataframe):
@@ -192,6 +204,8 @@ def transform_dataframe_to_json(dataframe):
         json_output.append(content_details)
 
     return json_output
+
+logger.info("Starting Streamlit build")
 
 # --- Streamlit Application Layout ---
 st.set_page_config(layout="wide", page_title="Content Recommender")
