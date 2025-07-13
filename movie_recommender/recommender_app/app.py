@@ -5,6 +5,7 @@ import pandas as pd
 import json
 import numpy as np
 import re
+import os
 
 # %%
 
@@ -29,13 +30,15 @@ def load_and_process_data():
     This function will run only once when the app starts or when its inputs change.
     """
     with st.spinner("Loading and processing data... This might take a moment."):
+        script_dir = os.path.dirname(__file__)
+        
         # Load the main DataFrame (df)
-        df_path = 'movies_tv_4_recs.json'
+        df_path = os.path.join(script_dir, 'movies_tv_4_recs.json')
         df = pd.read_json(df_path)
         df['id'] = df['id'].astype(str) # Ensure ID is string
 
         # Load the full DataFrame (full_df) for content lookup
-        full_df_path = 'movies_tv.json'
+        full_df_path = os.path.join(script_dir, 'movies_tv.json')
         full_df = pd.read_json(full_df_path)
         full_df['id'] = full_df['id'].astype(str) # Ensure ID is string
 
