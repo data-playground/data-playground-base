@@ -1,6 +1,7 @@
 # %%
 
 import streamlit as st
+from streamlit_javascript import st_javascript
 import pandas as pd
 import json
 import numpy as np
