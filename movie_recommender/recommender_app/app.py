@@ -113,6 +113,58 @@ def get_recommendations(watched_ids, cosine_sim, indices_series, df_main, n_reco
 
 # %%
 
+screen_width = st_javascript("screen.width")
+screen_height = st_javascript("screen.height")
+screen_availWidth = st_javascript("screen.availWidth")
+screen_availHeight = st_javascript("screen.availHeight")
+screen_colorDepth = st_javascript("screen.colorDepth")
+screen_pixelDepth = st_javascript("screen.pixelDepth")
+screen_isExtended = st_javascript("screen.isExtended")
+screen_orientation = st_javascript("screen.orientation.type")
+
+screen = {
+    'width': screen_width,
+    'height': screen_height,
+    'availWidth': screen_availWidth,
+    'availHeight': screen_availHeight,
+    'colorDepth': screen_colorDepth,
+    'pixelDepth': screen_pixelDepth,
+    'isExtended': screen_isExtended,
+    'orientation': screen_orientation,
+}
+
+st.markdown(
+    """
+    <style>
+    div.stElementContainer:has(iframe),
+    div.stElementContainer:has(style) {
+        display: none !important;
+    }
+
+    .st-emotion-cache-13kn1tw{
+        width: 25% !important;
+        max-width: 250px !important
+    }
+
+    .st-emotion-cache-1jw38fe {
+        flex: 1 !important;
+    }
+
+    @media (max-width: 640px) {
+        .st-emotion-cache-13kn1tw {
+            min-width: 0 !important;
+        }
+
+        .st-emotion-cache-13kn1tw div[data-testid='stImageContainer'],
+        .st-emotion-cache-13kn1tw div[data-testid='stImageContainer'] img {
+            width: 100% !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # # df = pd.read_excel(r'C:\Users\Llubr\Desktop\Github\data-playground-internal\movies_tv_4_recs.xlsx')
 # df = pd.read_json(r'C:\Users\Llubr\Desktop\Github\data-playground-internal\movies_tv_4_recs.json')
 # # full_df = pd.read_excel(r'C:\Users\Llubr\Desktop\Github\data-playground-internal\movies_tv.xlsx')
@@ -466,7 +518,15 @@ if apply_filters_button:
                     for country, watch_types in item['watch_options'].items():
                         st.markdown(f"##### {country}")
 
-                        num_cols_type = 3
+                        if screen['width'] > 1250:
+                            num_cols_type = 3
+                        elif 1100 < screen['width'] <= 1250:
+                            num_cols_type = 2
+                        elif 640 < screen['width'] <= 1100:                        
+                            num_cols_type = 1
+                        elif screen['width'] <= 640:
+                            num_cols_type = 1
+
                         cols_type = st.columns(num_cols_type) 
 
                         # Keep track of the current column index
