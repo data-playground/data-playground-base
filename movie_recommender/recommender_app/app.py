@@ -50,8 +50,8 @@ def load_and_process_data():
         provider_id_to_name_map = {v: k for k, v in provider_name_to_id_map.items() if v is not None}
 
         # Create mappings for content titles to IDs for the watched content lookup
-        content_title_to_id_map = full_df.set_index('title')['id'].drop_duplicates().to_dict()
-        content_id_to_title_map = {v: k for k, v in content_title_to_id_map.items()}
+        # content_title_to_id_map = full_df.set_index('title')['id'].drop_duplicates().to_dict()
+        content_id_to_title_map = full_df[['id', 'title']].drop_duplicates().set_index('id').to_dict()['title']
 
         indices = pd.Series(df.index, index=df['id']).drop_duplicates()
 
@@ -62,9 +62,9 @@ def load_and_process_data():
         unique_watch_types = sorted(full_df['watch_type'].unique().tolist())
         unique_providers = sorted(full_df['provider_id'].dropna().unique().tolist())
         unique_providers_names = sorted(full_df['provider_name'].dropna().unique().tolist())
-        all_content_titles = sorted(full_df['title'].unique().tolist())
+        all_content_titles = [key + " --- " + value for key, value in content_id_to_title_map.items()]
 
-        return df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_title_to_id_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles
+        return df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles
 
 
 def get_recommendations(watched_ids, cosine_sim, indices_series, df_main, n_recommendations=10):
@@ -124,7 +124,7 @@ def get_recommendations(watched_ids, cosine_sim, indices_series, df_main, n_reco
 
 
 # --- 2. Data Loading and Caching ---
-df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_title_to_id_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles = load_and_process_data()
+df, full_df, provider_name_to_id_map, provider_id_to_name_map, content_id_to_title_map, indices, unique_content_types, unique_languages, unique_countries, unique_watch_types, unique_providers, unique_providers_names, all_content_titles = load_and_process_data()
 cosine_sim_trigram = build_cosine_similarity(df) # This will also be cached
 
 # %%
@@ -201,7 +201,9 @@ def transform_dataframe_to_json(dataframe):
 st.set_page_config(layout="wide", page_title="Content Recommender")
 
 st.title("Content Recommendation Engine")
-st.markdown("Use the filters on the sidebar to narrow down recommendations.")
+st.markdown("The application provides content (Movies and TV shows) recommendations based on a set of content entered as previously watched. The idea is for any user to get recommendation on what to watch next based on their past watched content.")
+st.markdown("The data used to power this recommender was extracted from TMDB (The Movie Database), which provides one of the largest free databases for movies and TV shows. While in the recommendations one can see where to watch the content recommended, this data is updated as of July 10th, 2025 and, to get the direct link to the streaming service, you will need to visit TMDb's website (by clicking on the content's title), as per their API's agreement.")
+st.markdown('Use the filters on the sidebar to narrow down recommendations. "Watch Type" and "Providers" are preselected and can be changed, while "Content Type" and "Original Languages" default to all. The streaming services will only be available for two countries: US and Brazil (BR), as a development choice.')
 
 # --- Sidebar for Filters ---
 st.sidebar.header("Filter Recommendations")
@@ -338,7 +340,7 @@ selected_watched_title = st.selectbox(
 )
 
 if selected_watched_title and selected_watched_title != '':
-    selected_id_for_title = content_title_to_id_map.get(selected_watched_title)
+    selected_id_for_title = selected_watched_title.split(" --- ")[0]
     if selected_id_for_title and selected_id_for_title not in st.session_state.current_watched_ids:
         st.session_state.current_watched_ids.append(selected_id_for_title)
         # Increment the key counter *before* calling rerun
