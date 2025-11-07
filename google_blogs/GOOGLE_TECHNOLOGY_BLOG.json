@@ -1,0 +1,202 @@
+[
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/google-labs/opal-expansion-160/",
+        "title": "Opal is now available in more than 160 countries",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Opal_blog_header_1.max-600x600.format-webp.webp",
+        "author": "Megan Li",
+        "track": null,
+        "description": "We\u2019re bringing Opal to 160 countries.",
+        "published_date": "2025-11-06 19:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/developers/file-search-gemini-api/",
+        "title": "Introducing the File Search Tool in Gemini API",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/FileSearch-Keyword_RD2-V01.max-600x600.format-webp.webp",
+        "author": "Animesh Chatterji",
+        "track": null,
+        "description": "File Search is a fully managed Retrieval Augmented Generation (RAG) system built directly into the Gemini API.",
+        "published_date": "2025-11-06 18:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/google-labs/notebooklm-app-quizzes-flashcards/",
+        "title": "Create flashcards and quizzes in the NotebookLM app.",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/FlashcardsQuiz_Social.max-600x600.format-webp.webp",
+        "author": null,
+        "track": null,
+        "description": "<img src=\"https://storage.googleapis.com/gweb-uniblog-publish-prod/images/FlashcardsQuiz_Social.max-600x600.format-webp.webp\" />We\u2019re rolling out a big update to the NotebookLM app this week.",
+        "published_date": "2025-11-06 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/products/search/new-google-finance-ai-deep-search/",
+        "title": "Google Finance adds AI features for research, earnings and more",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Google_Finance_adds_AI_features.max-600x600.format-webp.webp",
+        "author": "Robert Dunnette",
+        "track": null,
+        "description": "Learn more about the new Google Finance, including new features like Deep Search and prediction markets data.",
+        "published_date": "2025-11-06 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/outreach-initiatives/education/ai-and-learning/",
+        "title": "AI and learning: A new chapter for students and educators",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/TeacherTeaching_Hero.max-600x600.format-webp.webp",
+        "author": "Lila Ibrahim",
+        "track": null,
+        "description": "How Google approaches AI and education, from our tools to our commitment to responsibility.",
+        "published_date": "2025-11-06 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/safety-security/fraud-and-scams-advisory-november-2025/",
+        "title": "Our latest fraud and scams advisory",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/OnlineScamsAdvisory3_Hero.max-600x600.format-webp.webp",
+        "author": "Laurie Richardson",
+        "track": null,
+        "description": "An overview from Google\u2019s Trust & Safety teams on the most recent online scam trends.",
+        "published_date": "2025-11-06 15:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/developers/gemini-api-structured-outputs/",
+        "title": "Improving Structured Outputs in the Gemini API",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/StructuredOutput_Hero.max-600x600.format-webp.webp",
+        "author": "Gemini API Team",
+        "track": null,
+        "description": "Today, we're announcing enhancements to Structured Outputs in the Gemini API.",
+        "published_date": "2025-11-05 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/safety-security/google-threat-intelligence-group-report-ai-november-2025/",
+        "title": "A new report from the Google Threat Intelligence Group shows adversaries experimenting with AI for novel capabilities.",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/GoogleSecurity_Social.max-600x600.format-webp.webp",
+        "author": null,
+        "track": null,
+        "description": "",
+        "published_date": "2025-11-05 14:30:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/outreach-initiatives/arts-culture/forest-listeners/",
+        "title": "Listen to the Brazilian rainforests and help contribute to AI research",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Hero_main_16_9_CentreHigh_O9EM7.max-600x600.format-webp.webp",
+        "author": "Marconi Campos",
+        "track": null,
+        "description": "Google Arts & Culture is launching a new Nature & AI experiment that invites people everywhere to listen to the sounds of the Brazilian rainforests to help monitor their biodiversity health",
+        "published_date": "2025-11-05 12:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/outreach-initiatives/google-org/girl-scouts-digital-wellbeing/",
+        "title": "Google is helping girls \u201cscout\u201d a path to digital wellbeing.",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/20251104_WashingtonDC_DL_2071.max-600x600.format-webp.webp",
+        "author": null,
+        "track": null,
+        "description": "",
+        "published_date": "2025-11-04 20:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/ai/google-ai-updates-october-2025/",
+        "title": "The latest AI news we announced in October",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/October_AI_Recap_hero_still_1.max-600x600.format-webp.webp",
+        "author": "Keyword Team",
+        "track": null,
+        "description": "Here are Google\u2019s latest AI updates from October 2025",
+        "published_date": "2025-11-04 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/research/google-project-suncatcher/",
+        "title": "Meet Project Suncatcher, a research moonshot to scale machine learning compute in space.",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Suncatcher_Social.max-600x600.format-webp.webp",
+        "author": null,
+        "track": null,
+        "description": "<img src=\"https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Suncatcher_Social.max-600x600.format-webp.webp\" />Artificial intelligence is a foundational technology that could help us tackle humanity's greatest challenges. Now, we're asking where we can go next to unlock its fulle\u2026",
+        "published_date": "2025-11-04 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/google-labs/mixboard-180-more-countries/",
+        "title": "Mixboard is now available in over 180 more countries.",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Australian_Architectural_Styles.max-600x600.format-webp.webp",
+        "author": null,
+        "track": null,
+        "description": "",
+        "published_date": "2025-10-30 18:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/developers/google-ai-studio-logs-datasets/",
+        "title": "New tools in Google AI Studio to explore, debug and share logs",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/0057-AIfD-Logging-Datasets-Keyw.max-600x600.format-webp_jqmcLSK.webp",
+        "author": "Sara Wiltberger",
+        "track": null,
+        "description": "We\u2019re introducing a new logs and datasets feature in Google AI Studio.",
+        "published_date": "2025-10-30 17:05:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/google-labs/notebooklm-custom-personas-engine-upgrade/",
+        "title": "Chat in NotebookLM: A powerful, goal-focused AI research partner",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/ChatinNotebookLM_Hero2096x1182.max-600x600.format-webp.webp",
+        "author": "Anuja Agrawal",
+        "track": null,
+        "description": "We\u2019re rolling out changes to NotebookLM to make it fundamentally smarter and more powerful.",
+        "published_date": "2025-10-29 17:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/google-deepmind/ai-for-math/",
+        "title": "Accelerating discovery with the AI for Math Initiative",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/AIforMath_Hero_Image_-_2096_x_1.max-600x600.format-webp.webp",
+        "author": "Eug\u00e9nie Rives",
+        "track": null,
+        "description": "The AI for Math Initiative brings together five of the world's most prestigious research institutions.",
+        "published_date": "2025-10-29 14:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/outreach-initiatives/entrepreneurs/google-for-startups-ai-for-cybersecurity-cohort/",
+        "title": "Meet the 11 startups using AI to build a safer digital future in Latin America",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/AI-for-Startups_Hero.max-600x600.format-webp.webp",
+        "author": "Paco Solsona",
+        "track": null,
+        "description": "Learn more about the startups chosen for Google for Startups Accelerator: AI for Cybersecurity.",
+        "published_date": "2025-10-28 17:30:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/safety-security/cybersecurity-awareness-month-2025/",
+        "title": "Cybersecurity Awareness Month 2025",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Cybersecurity_awarenessmonth_He.max-600x600.format-webp.webp",
+        "author": null,
+        "track": null,
+        "description": "<img src=\"https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Cybersecurity_awarenessmonth_He.max-600x600.format-webp.webp\" />A collection of Google's latest security features and updates for Cybersecurity Awareness Month 2025.",
+        "published_date": "2025-10-28 17:30:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/technology/google-labs/pomelli/",
+        "title": "Create on-brand marketing content for your business with Pomelli",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Pomelli_Keyword_Blog_Header.max-600x600.format-webp.webp",
+        "author": "Bea Alessio",
+        "track": null,
+        "description": "Pomelli, our newest experiment from Google Labs and DeepMind, is here to help you create on-brand marketing content.",
+        "published_date": "2025-10-28 16:00:00"
+    },
+    {
+        "website": "GOOGLE_TECHNOLOGY_BLOG",
+        "link": "https://blog.google/feed/google-beam-uso-partnership/",
+        "title": "Google Beam is working with the USO to support military families.",
+        "thumbnail": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/GoogleBeam_CarouselBall.max-600x600.format-webp.webp",
+        "author": "Andrew Nartker",
+        "track": null,
+        "description": "<img src=\"https://storage.googleapis.com/gweb-uniblog-publish-prod/images/GoogleBeam_CarouselBall.max-600x600.format-webp.webp\" />Learn more about Google\u2019s work with the USO and how it plans to launch a program that will enable service members to stay in touch with loved ones.",
+        "published_date": "2025-10-27 17:45:00"
+    }
+]
