@@ -10,6 +10,7 @@ from tqdm import tqdm
 import json
 import os
 import xml.etree.ElementTree as ET
+from google import genai
 
 # %%
 
@@ -18,7 +19,7 @@ def fetch_and_parse_feed(url, site_name):
     print(f"Fetching feed from: {url}")
     feed = feedparser.parse(url)
 
-    file_name = f"C:\\Users\\Llubr\\Desktop\\Github\\data-playground-base\\google_blogs\\{site_name}.json"
+    file_name = f"C:\\Users\\Llubr\\Desktop\\Github\\data-playground-data\\{site_name}.json"
 
     post_list = []
     
@@ -130,13 +131,15 @@ def workspace_data_get(GOOGLE_WORKSPACE_BLOG):
     for i, post_dict in tqdm(enumerate(worskpace_data), total=len(worskpace_data)):
         post_detail(post_dict)
 
-    with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\worskpace_data.json", "r") as f:
+    # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\worskpace_data.json", "r") as f:
+    with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "r") as f:
         worskpace_data_hist_full = json.load(f)
 
     worskpace_data_hist_full.extend(worskpace_data)
+    worskpace_data_hist_full = deduplicate_list_of_dicts(worskpace_data_hist_full, 'link')
     worskpace_data_hist_full = sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True)
     
-    with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\worskpace_data.json", "w") as f:    
+    with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w") as f:    
         json.dump(worskpace_data_hist_full, f, indent= 4)
 
     return worskpace_data_hist_full
@@ -161,7 +164,7 @@ def workspace_hist(GOOGLE_WORKSPACE_BLOG):
 
         return worskpace_data_hist
 
-    # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\worskpace_data.json", "w") as f:
+    # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\GOOGLE_WORKSPACE_BLOG.json", "w") as f:
     #     json.dump(sorted(worskpace_data_hist, key = lambda x: x['published_date'], reverse=True), f)
 
 # %%
@@ -204,6 +207,53 @@ def get_google_devs_full_map(GOOGLE_DEVS_SITEMAP):
 
     return full_map
 
+def get_ai_summary_tags(content_list):
+    client = genai.Client(api_key='AIzaSyCgseccg-9EkxQ3aMIw9ss-WOU6cpL9L8A')
+
+    prompt = f'''
+You are an expert news digest curator for a daily push notification and email service. Your goal is to research the content at each provided URL, generate a concise, highly information-dense summary, and a set of relevant tags. The entire output must be returned in a strict JSON array format.
+
+---
+**INSTRUCTIONS**
+1.  **ACCESS CONTENT:** For each object in the 'INPUT ITEMS' list, access the content available at the provided 'link'.
+    * **For Blog Posts:** Extract the full text content.
+    * **For YouTube Videos:** Analyze the video's title, description, and transcript/key visual elements.
+2.  **GENERATE SUMMARY:** Create a summary that is **2 to 3 sentences long**. The summary must be **information-dense** (including specific people, products, companies, and key statistics/takeaways) to serve as a high-quality chunk for a Retrieval-Augmented Generation (RAG) system.
+3.  **GENERATE TAGS:** Generate a list of **5 to 8 single-word or short-phrase tags** for each item. These tags must represent the **main topics, primary keywords, named entities (brands/products/people), and core concepts** discussed.
+4.  **STRICT OUTPUT:** The final output MUST be a JSON array. Do not include any text, headers, preambles, or markdown outside of the JSON array itself.
+
+---
+**INPUT ARTICLES**
+
+{content_list}
+
+---
+**EXPECTED JSON OUTPUT FORMAT**
+
+[
+    {{
+        "link": "...",
+        "summary": "...",
+        "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+    }}
+]
+    '''
+
+    response_1 = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt, 
+    )
+    # Close the sync client to release resources.
+    client.close()
+
+    try:
+        result = json.loads(response_1.text.replace('```json', '')[:-3])
+    except Exception as e:
+        print("Error found in JSON transformation: ", e)
+        result = response_1
+
+    return result
+
 # %%
 
 GOOGLE_WORKSPACE_BLOG = "https://workspace.google.com/blog/"
@@ -231,3 +281,30 @@ GOOGLE_DEVELOPERS_DATA = fetch_and_parse_feed(GOOGLE_DEVELOPERS_BLOG, "GOOGLE_DE
 GOOGLE_DEVS_FULLMAP = get_google_devs_full_map(GOOGLE_DEVS_SITEMAP)
 # %%
 
+flerlagetwins = fetch_and_parse_feed("https://www.flerlagetwins.com/feeds/posts/default", "TABLEAU_flerlagetwins")
+vizwiz = fetch_and_parse_feed("https://www.vizwiz.com/feeds/posts/default", "TABLEAU_vizwiz")
+storytellingwithdata = fetch_and_parse_feed("https://www.storytellingwithdata.com/blog?format=rss", "TABLEAU_storytellingwithdata")
+playfairdata = fetch_and_parse_feed("https://playfairdata.com/feed/", "TABLEAU_playfairdata")
+theinformationlab = fetch_and_parse_feed("https://www.theinformationlab.com/", "TABLEAU_theinformationlab")
+# %%
+
+YOUTUBE_GOOGLE_WORKSPACE = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCBmwzQnSoj9b6HzNmFrg_yw", "YOUTUBE_GOOGLE_WORKSPACE")
+YOUTUBE_GOOGLE_DEVELOPERS = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw", "YOUTUBE_GOOGLE_DEVELOPERS")
+YOUTUBE_GOOGLE_CREATORS = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCXZNlYNefXV3iMcyzszt_9Q", "YOUTUBE_GOOGLE_CREATORS")
+YOUTUBE_GOOGLE_DEEPMIND = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCP7jMXSY2xbc3KCAE0MHQ-A", "YOUTUBE_GOOGLE_DEEPMIND")
+YOUTUBE_GOOGLE = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCK8sQmJBp8GCxrOtXWBpyEA", "YOUTUBE_GOOGLE")
+YOUTUBE_GOOGLE_CLOUD = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCTMRxtyHoE3LPcrl-kT4AQQ", "YOUTUBE_GOOGLE_CLOUD")
+YOUTUBE_GOOGLE_QUANTUMAI = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCO5cgpkcYjnsdxZdEDR3Jog", "YOUTUBE_GOOGLE_QUANTUMAI")
+YOUTUBE_GOOGLE_TALKS = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCbmNph6atAoGfqLoCL_duAg", "YOUTUBE_GOOGLE_TALKS")
+
+# %%
+
+YOUTUBE_TABLEAU_FLERLAGE = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCDyr5VgVvkmfhHpeMUB8ZDA", "YOUTUBE_TABLEAU_FLERLAGE")
+YOUTUBE_TABLEAU = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCWGrtxO6JrPSDUcgp3Qm_Gw", "YOUTUBE_TABLEAU")
+YOUTUBE_TABLEAU_TIM = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UC7HYxRWmaNlJux-X7rNLZyw", "YOUTUBE_TABLEAU_TIM")
+YOUTUBE_TABLEAU_VIZWIZ = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCTlX7UpqASrldmx5_CpG3CA", "YOUTUBE_TABLEAU_VIZWIZ")
+YOUTUBE_TABLEAU_SQLBELLE = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCW2E1sGBVde5WMMxEh5CW4w", "YOUTUBE_TABLEAU_SQLBELLE")
+YOUTUBE_TABLEAU_DATAFAM = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCuDUG9ZHa-IlTm6y-2Lko_Q", "YOUTUBE_TABLEAU_DATAFAM")
+
+
+# %%
