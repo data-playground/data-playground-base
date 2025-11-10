@@ -207,7 +207,26 @@ def get_google_devs_full_map(GOOGLE_DEVS_SITEMAP):
 
     return full_map
 
-def get_ai_summary_tags(content_list):
+def merge_list_left_join(list1, list2, join_key = 'link'):
+    merged_list = []
+
+    # 1. Create the lookup from list2 (same as before)
+    lookup = {item[join_key]: item for item in list2}
+
+    # 2. Iterate through list1 and use an if/else
+    for item1 in list1:
+        item2_match = lookup.get(item1[join_key])
+        
+        if item2_match:
+            # Match found: merge them
+            merged_list.append({**item1, **item2_match})
+        else:
+            # No match: just append the original item from list1
+            merged_list.append(item1)
+
+    return merged_list
+
+def get_ai_summary_tags(content_list, content_type = 'article'):
     client = genai.Client(api_key='AIzaSyCgseccg-9EkxQ3aMIw9ss-WOU6cpL9L8A')
 
     prompt = f'''
@@ -239,10 +258,31 @@ You are an expert news digest curator for a daily push notification and email se
 ]
     '''
 
-    response_1 = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt, 
-    )
+    if content_type == 'video':
+        contents = [
+            {
+                "fileData": {
+                    "fileUri": link,
+                    "mimeType": "video/*" 
+                }
+            } for link in content_list
+        ] + [
+            {
+                "text": prompt
+            }
+        ]
+
+        response_1 = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents, 
+        )
+    else:
+
+        response_1 = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt, 
+        )
+        
     # Close the sync client to release resources.
     client.close()
 
