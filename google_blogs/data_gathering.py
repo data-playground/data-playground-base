@@ -48,7 +48,12 @@ def fetch_and_parse_feed(url, site_name):
         with open(file_name, "r") as f:
             post_data_full = json.load(f)
 
+        post_list = [i for i in post_list if i['link'] in list(
+            set([i['link'] for i in post_list]) - set([i['link'] for i in post_data_full])
+        )]
+
         post_data_full.extend(post_list)
+        # post_data_full = deduplicate_list_of_dicts(post_data_full, 'link')
         post_data_full = sorted(post_data_full, key = lambda x: x['published_date'], reverse=True)
     else:
         post_data_full = sorted(post_list, key = lambda x: x['published_date'], reverse=True)
@@ -56,7 +61,7 @@ def fetch_and_parse_feed(url, site_name):
     with open(file_name, "w") as f:    
         json.dump(post_data_full, f, indent= 4)    
 
-    return post_data_full
+    return post_list
 
 # %%
 
@@ -128,21 +133,26 @@ def workspace_data_get(GOOGLE_WORKSPACE_BLOG):
 
     worskpace_data = [workspace_data_dict(card) for card in cards]
 
-    for i, post_dict in tqdm(enumerate(worskpace_data), total=len(worskpace_data)):
-        post_detail(post_dict)
-
     # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\worskpace_data.json", "r") as f:
     with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "r") as f:
         worskpace_data_hist_full = json.load(f)
 
-    worskpace_data_hist_full.extend(worskpace_data)
-    worskpace_data_hist_full = deduplicate_list_of_dicts(worskpace_data_hist_full, 'link')
-    worskpace_data_hist_full = sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True)
-    
-    with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w") as f:    
-        json.dump(worskpace_data_hist_full, f, indent= 4)
+    worskpace_data = [i for i in worskpace_data if i['link'] in list(
+        set([i['link'] for i in worskpace_data]) - set([i['link'] for i in worskpace_data_hist_full])
+    )]
 
-    return worskpace_data_hist_full
+    if len(worskpace_data) > 0:
+        for i, post_dict in tqdm(enumerate(worskpace_data), total=len(worskpace_data)):
+            post_detail(post_dict)
+
+        worskpace_data_hist_full.extend(worskpace_data)
+        # worskpace_data_hist_full = deduplicate_list_of_dicts(worskpace_data_hist_full, 'link')
+        worskpace_data_hist_full = sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True)
+        
+        with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w") as f:    
+            json.dump(worskpace_data_hist_full, f, indent= 4)
+
+    return worskpace_data
 
 # %%
 
@@ -226,8 +236,8 @@ def merge_list_left_join(list1, list2, join_key = 'link'):
 
     return merged_list
 
-def get_ai_summary_tags(content_list, content_type = 'article'):
-    client = genai.Client(api_key='AIzaSyCgseccg-9EkxQ3aMIw9ss-WOU6cpL9L8A')
+def get_ai_summary_tags(gemini_api_key, content_list, content_type = 'article'):
+    client = genai.Client(api_key=gemini_api_key)
 
     prompt = f'''
 You are an expert news digest curator for a daily push notification and email service. Your goal is to research the content at each provided URL, generate a concise, highly information-dense summary, and a set of relevant tags. The entire output must be returned in a strict JSON array format.
@@ -238,7 +248,9 @@ You are an expert news digest curator for a daily push notification and email se
     * **For Blog Posts:** Extract the full text content.
     * **For YouTube Videos:** Analyze the video's title, description, and transcript/key visual elements.
 2.  **GENERATE SUMMARY:** Create a summary that is **2 to 3 sentences long**. The summary must be **information-dense** (including specific people, products, companies, and key statistics/takeaways) to serve as a high-quality chunk for a Retrieval-Augmented Generation (RAG) system.
-3.  **GENERATE TAGS:** Generate a list of **5 to 8 single-word or short-phrase tags** for each item. These tags must represent the **main topics, primary keywords, named entities (brands/products/people), and core concepts** discussed.
+3.  **GENERATE METADATA:**
+    * **tools (3-8 items):** Identify and list only **Google-branded products and services** mentioned in the content. This includes, but is not limited to: Google Sheets, Docs, Slides, Gemini, NotebookLM, Drive, Meet, Chat, Classroom, and Google Cloud services. **Do not include non-Google products or general hardware here.**
+    * **tags (5-8 items):** List all **main topics, industries, broad keywords, and core concepts** discussed. This list may include non-Google products, hardware, and company names as general keywords (e.g., 'Dell', 'Home Office', 'Networking').
 4.  **STRICT OUTPUT:** The final output MUST be a JSON array. Do not include any text, headers, preambles, or markdown outside of the JSON array itself.
 
 ---
@@ -253,8 +265,8 @@ You are an expert news digest curator for a daily push notification and email se
     {{
         "link": "...",
         "summary": "...",
-        "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
-    }}
+        "tools": ["Google Docs", "Gemini", "Drive"], // ONLY Google Products
+        "tags": ["Collaboration", "AI", "Productivity"] // Broader Topics/Keywords    }}
 ]
     '''
 
@@ -282,7 +294,7 @@ You are an expert news digest curator for a daily push notification and email se
             model="gemini-2.5-flash",
             contents=prompt, 
         )
-        
+
     # Close the sync client to release resources.
     client.close()
 
