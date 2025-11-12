@@ -327,7 +327,7 @@ GOOGLE_WORKSPACE_DATA = workspace_data_get(GOOGLE_WORKSPACE_BLOG)
 # worskpace_data_hist_full = merge_list_left_join(worskpace_data_hist_full, gen_ai_data)
 
 # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w") as f:
-#     json.dump(sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True), f)
+#     json.dump(sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True), f, indent = 4)
 # %%
 
 
