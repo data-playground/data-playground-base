@@ -299,7 +299,7 @@ You are an expert news digest curator for a daily push notification and email se
     client.close()
 
     try:
-        result = json.loads(response_1.text.replace('```json', '')[:-3])
+        result = json.loads(response_1.text.replace('```json', '').replace('```', ''))
     except Exception as e:
         print("Error found in JSON transformation: ", e)
         result = response_1
