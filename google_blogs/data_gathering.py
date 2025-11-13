@@ -2,7 +2,7 @@
 
 import requests
 import feedparser
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from bs4 import BeautifulSoup
 import re
 from selenium import webdriver
@@ -11,6 +11,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from google import genai
+import unicodedata
 
 # %%
 
@@ -328,6 +329,7 @@ GOOGLE_WORKSPACE_DATA = workspace_data_get(GOOGLE_WORKSPACE_BLOG)
 
 # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w") as f:
 #     json.dump(sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True), f, indent = 4)
+
 # %%
 
 
@@ -367,5 +369,61 @@ YOUTUBE_TABLEAU_VIZWIZ = fetch_and_parse_feed("https://www.youtube.com/feeds/vid
 YOUTUBE_TABLEAU_SQLBELLE = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCW2E1sGBVde5WMMxEh5CW4w", "YOUTUBE_TABLEAU_SQLBELLE")
 YOUTUBE_TABLEAU_DATAFAM = fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCuDUG9ZHa-IlTm6y-2Lko_Q", "YOUTUBE_TABLEAU_DATAFAM")
 
+
+# %%
+
+
+def extract_app_update_data(r):
+    soup = BeautifulSoup(r.content)
+
+    cards = soup.select('article')
+
+    content = [{
+        "website": "GOOGLE_APPS_DATA",
+        "link": card.select_one('a').get('href'),
+        "title": card.select_one('a').get('title'),
+        "thumbnail": card.select_one('img').get('src'),
+        "author": None,
+        "track": None,
+        "description": unicodedata.normalize("NFKD", card.select_one(".blog-summary__body").text.strip()),
+        "published_date": datetime.strptime(card.select_one(".blog-summary__date").text.strip(), "%A, %B %d, %Y").strftime("%Y-%m-%d %H:%M:%S")
+    } for card in cards]
+
+    new_date = (datetime.strptime(content[-1]['published_date'], "%Y-%m-%d %H:%M:%S") + timedelta(days=1)).strftime('%Y-%m-%d')
+
+    return content, new_date
+
+def app_update_hist():
+    all_content = []
+
+    new_date = date.today().strftime('%Y-%m-%d')
+
+
+    while new_date >= '2020-01-01': # The articles actually date back to 2007-02-27
+        print(new_date)
+        r = requests.get(f"https://workspaceupdates.googleblog.com/search?updated-max={new_date}T00:00:00-05:00&max-results=20&start=20&by-date=true")
+
+        content, new_date = extract_app_update_data(r)
+        all_content.extend(content)
+
+    all_content = deduplicate_list_of_dicts(all_content)
+
+    # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs\worskpace_data.json", "r") as f:
+    with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_APPS_DATA.json", "r") as f:
+        google_apps_full = json.load(f)
+
+    all_content = [i for i in all_content if i['link'] in list(
+        set([i['link'] for i in all_content]) - set([i['link'] for i in google_apps_full])
+    )]
+
+    if len(all_content) > 0:
+        google_apps_full.extend(all_content)
+        # worskpace_data_hist_full = deduplicate_list_of_dicts(worskpace_data_hist_full, 'link')
+        google_apps_full = sorted(google_apps_full, key = lambda x: x['published_date'], reverse=True)
+        
+        with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_APPS_DATA.json", "w") as f:    
+            json.dump(google_apps_full, f, indent= 4)
+
+    return google_apps_full
 
 # %%
