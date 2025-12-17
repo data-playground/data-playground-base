@@ -1,18 +1,21 @@
 # %%
 
-import requests
-import feedparser
-from datetime import datetime, timedelta, date
-from bs4 import BeautifulSoup
-import re
-from selenium import webdriver
-from tqdm import tqdm 
+import base64
+import hashlib
 import json
-import os
-import xml.etree.ElementTree as ET
-from google import genai
+import re
+import secrets
 import unicodedata
+import xml.etree.ElementTree as ET
+from datetime import date, datetime, timedelta
+
+import feedparser
+import requests
+from bs4 import BeautifulSoup
+from google import genai
 from google.cloud import secretmanager
+from selenium import webdriver
+from tqdm import tqdm
 
 # %%
 
@@ -20,6 +23,14 @@ class BLOG_SITES:
 
     def __init__(self):
         self.gemini_key = self.get_key("Gemini-API")
+        self.github_key = self.get_key("Github-Key")
+
+        self.SUBMODULE_OWNER = 'data-playground'
+        self.SUBMODULE_REPO = 'data-playground-data'
+        self.PARENT_OWNER = 'data-playground'
+        self.PARENT_REPO = 'data-playground.github.io'
+        self.BRANCH = 'main'
+        self.SUBMODULE_PATH = '_data/data_playground_data' 
 
         self.GOOGLE_WORKSPACE_BLOG = "https://workspace.google.com/blog/"
         self.GOOGLE_APPS_UPDATES = "https://feeds.feedburner.com/GoogleAppsUpdates"
@@ -30,6 +41,18 @@ class BLOG_SITES:
         self.GOOGLE_DEEPMIND_BLOG = "https://blog.google/technology/google-deepmind/rss/"
         self.GOOGLE_DEVELOPERS_BLOG = "https://developers.googleblog.com/rss/"
         self.GOOGLE_DEVS_SITEMAP = "https://developers.google.com/sitemap.xml"
+
+        self.HEADERS_RAW={
+            "Accept": "application/vnd.github.v3.raw", 
+            "Authorization": f"Bearer {self.github_key}", 
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+
+        self.HEADERS_META={
+            "Accept": "application/vnd.github+json", 
+            "Authorization": f"Bearer {self.github_key}", 
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
 
     def get_key(self, SECRET_NAME):
         """
@@ -58,7 +81,8 @@ class BLOG_SITES:
         print(f"Fetching feed from: {url}")
         feed = feedparser.parse(url)
 
-        file_name = f"C:\\Users\\Llubr\\Desktop\\Github\\data-playground-data\\{site_name}.json"
+        # file_name = f"C:\\Users\\Llubr\\Desktop\\Github\\data-playground-data\\{site_name}.json"
+        file_name = f"{site_name}.json"
 
         post_list = []
         
@@ -83,11 +107,17 @@ class BLOG_SITES:
             }
             post_list.append(post_info)
 
+        r_raw = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=self.HEADERS_RAW)
+
         # Check if historical data file exists
-        if os.path.exists(file_name):
+        # if os.path.exists(file_name):
+        if r_raw.status_code == 200:
             # Load existing historical data
-            with open(file_name, "r", encoding="utf-8") as f:
-                post_data_full = json.load(f)
+            # with open(file_name, "r", encoding="utf-8") as f:
+                # post_data_full = json.load(f)
+            post_data_full = json.loads(r_raw.content)
+
+            r_meta = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=self.HEADERS_META)
 
             # Filter out posts that are already in historical data
             post_list = [i for i in post_list if i['link'] in list(
@@ -105,13 +135,26 @@ class BLOG_SITES:
                 # Append new posts to historical data
                 post_data_full.extend(post_list)
                 post_data_full = sorted(post_data_full, key = lambda x: x['published_date'], reverse=True)
+
+                data = json.dumps({
+                    "message": "Updating data and metadata",
+                    "content": base64.b64encode(json.dumps(post_data_full).encode('cp1252')).decode('ascii'),
+                    "sha": r_meta.json()['sha']
+                })
+                r1 = requests.put(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}?ref=main", headers=self.HEADERS_META, data=data)
         else:
             # If no historical data, use the current post list
             post_data_full = sorted(post_list, key = lambda x: x['published_date'], reverse=True)
 
+            data = json.dumps({
+                "message": "Updating data and metadata",
+                "content": base64.b64encode(json.dumps(post_data_full).encode('cp1252')).decode('ascii')
+            })
+            r1 = requests.put(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}?ref=main", headers=self.HEADERS_META, data=data)
+
         # Save the updated historical data back to the file
-        with open(file_name, "w", encoding="utf-8") as f:    
-            json.dump(post_data_full, f, ensure_ascii=False, indent= 4)    
+        # with open(file_name, "w", encoding="utf-8") as f:    
+            # json.dump(post_data_full, f, ensure_ascii=False, indent= 4)    
 
         return post_list
 
@@ -198,6 +241,8 @@ class BLOG_SITES:
     def workspace_data_get(self):
         """Fetches and processes data from the Google Workspace blog."""
 
+        file_name = "GOOGLE_WORKSPACE_BLOG.json"
+
         # Send a GET request to the blog URL
         r = requests.get(self.GOOGLE_WORKSPACE_BLOG)
 
@@ -210,9 +255,14 @@ class BLOG_SITES:
         # Extract data from each card
         worskpace_data = [self.workspace_data_dict(card) for card in cards]
 
+        r_raw = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=self.HEADERS_RAW)
+
         # Load historical data
-        with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "r", encoding="utf-8") as f:
-            worskpace_data_hist_full = json.load(f)
+        # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "r", encoding="utf-8") as f:
+        #     worskpace_data_hist_full = json.load(f)
+        worskpace_data_hist_full = json.loads(r_raw.content)
+
+        r_meta = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=self.HEADERS_META)
 
         # Filter out already processed posts
         worskpace_data = [i for i in worskpace_data if i['link'] in list(
@@ -238,9 +288,15 @@ class BLOG_SITES:
             worskpace_data_hist_full = sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True)
             
             # Save the updated historical data back to the file
-            with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w", encoding="utf-8") as f:    
-                json.dump(worskpace_data_hist_full, f, ensure_ascii=False, indent= 4)
+            # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w", encoding="utf-8") as f:    
+            #     json.dump(worskpace_data_hist_full, f, ensure_ascii=False, indent= 4)
 
+            data = json.dumps({
+                "message": "Updating data and metadata",
+                "content": base64.b64encode(json.dumps(worskpace_data_hist_full).encode('cp1252')).decode('ascii'),
+                "sha": r_meta.json()['sha']
+            })
+            r1 = requests.put(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}?ref=main", headers=self.HEADERS_META, data=data)
         return worskpace_data
 
     def workspace_hist(self):
@@ -517,16 +573,72 @@ class BLOG_SITES:
         with open(file_name, "w", encoding="utf-8") as f:
             json.dump(sorted(post_data_full, key = lambda x: x['published_date'], reverse=True), f, ensure_ascii=False, indent = 4)
 
+    def generate_random_sha256(self):
+        """Generates a random SHA256 hash."""
+        # 1. Generate 32 cryptographically secure random bytes (256 bits)
+        random_data = secrets.token_bytes(16)
+        
+        # 2. Create a new SHA256 hash object
+        hash_object = hashlib.sha256()
+        
+        # 3. Update the hash object with the random bytes
+        hash_object.update(random_data)
+        
+        # 4. Get the hexadecimal representation (64 characters long)
+        random_sha256_hash = hash_object.hexdigest()
+        
+        return random_sha256_hash
+
+    def update_submodule_direct(self):
+        # 1. Get the latest commit SHA of the branch
+        ref_res = requests.get(f"https://api.github.com/repos/{self.PARENT_OWNER}/{self.PARENT_REPO}/git/ref/heads/{self.BRANCH}", headers=self.HEADERS_META).json()
+        last_commit_sha = ref_res['object']['sha']
+
+        # 2. Create a new Tree that updates the submodule reference
+        # Mode '160000' is the magic code for a Git Submodule
+        tree_payload = {
+            "base_tree": last_commit_sha,
+            "tree": [{
+                "path": self.SUBMODULE_PATH,
+                "mode": "160000",
+                "type": "commit",
+                "sha": hashlib.sha1(self.generate_random_sha256().encode('utf-8')).hexdigest()
+            }]
+        }
+        tree_res = requests.post(f"https://api.github.com/repos/{self.PARENT_OWNER}/{self.PARENT_REPO}/git/trees", headers=self.HEADERS_META, json=tree_payload).json()
+        new_tree_sha = tree_res['sha']
+
+        # 3. Create a new Commit pointing to the new Tree
+        commit_payload = {
+            "message": f"Update submodule {self.SUBMODULE_PATH}",
+            "tree": new_tree_sha,
+            "parents": [last_commit_sha]
+        }
+        commit_res = requests.post(f"https://api.github.com/repos/{self.PARENT_OWNER}/{self.PARENT_REPO}/git/commits", headers=self.HEADERS_META, json=commit_payload).json()
+        new_commit_sha = commit_res['sha']
+
+        # 4. Update the Branch Reference to point to the new Commit
+        ref_update_payload = {"sha": new_commit_sha, "force": False}
+        patch_res = requests.patch(f"https://api.github.com/repos/{self.PARENT_OWNER}/{self.PARENT_REPO}/git/refs/heads/{self.BRANCH}", headers=self.HEADERS_META, json=ref_update_payload)
+
+        if patch_res.status_code == 200:
+            print(f"Successfully pushed: {new_commit_sha[:7]}")
+        else:
+            print("Error:", patch_res.json())
+
 # %%
 
+################################################
+################ Usage Examples ################
+################################################
+
+#### Instantiate the class 
 # blog_sites = BLOG_SITES()
 
-# # %%
-
+#### Get data for the Workspace blog
 # GOOGLE_WORKSPACE_DATA = blog_sites.workspace_data_get()
 
-# # %%
-
+#### Get data for various Google blogs (runs with enrich=True run the Gemini API process to get AI generated data)
 # GOOGLE_APPS_DATA = blog_sites.fetch_and_parse_feed(blog_sites.GOOGLE_APPS_UPDATES, "GOOGLE_APPS_UPDATES", enrich=True)
 # GOOGLE_CLOUD_DATA = blog_sites.fetch_and_parse_feed(blog_sites.GOOGLE_CLOUD_BLOG, "GOOGLE_CLOUD_BLOG")
 # GOOGLE_RESEARCH_DATA = blog_sites.fetch_and_parse_feed(blog_sites.GOOGLE_RESEARCH_BLOG, "GOOGLE_RESEARCH_BLOG")
@@ -535,17 +647,17 @@ class BLOG_SITES:
 # GOOGLE_DEEPMIND_DATA = blog_sites.fetch_and_parse_feed(blog_sites.GOOGLE_DEEPMIND_BLOG, "GOOGLE_DEEPMIND_BLOG")
 # GOOGLE_DEVELOPERS_DATA = blog_sites.fetch_and_parse_feed(blog_sites.GOOGLE_DEVELOPERS_BLOG, "GOOGLE_DEVELOPERS_BLOG")
 
+#### Get full site map for google devs documentation
 # # GOOGLE_DEVS_FULLMAP = blog_sites.get_google_devs_full_map()
-# # %%
 
+#### Get data for Tableau related blogs
 # flerlagetwins = blog_sites.fetch_and_parse_feed("https://www.flerlagetwins.com/feeds/posts/default", "TABLEAU_flerlagetwins")
 # vizwiz = blog_sites.fetch_and_parse_feed("https://www.vizwiz.com/feeds/posts/default", "TABLEAU_vizwiz")
 # storytellingwithdata = blog_sites.fetch_and_parse_feed("https://www.storytellingwithdata.com/blog?format=rss", "TABLEAU_storytellingwithdata")
 # playfairdata = blog_sites.fetch_and_parse_feed("https://playfairdata.com/feed/", "TABLEAU_playfairdata")
 # theinformationlab = blog_sites.fetch_and_parse_feed("https://www.theinformationlab.com/", "TABLEAU_theinformationlab")
 
-# # %%
-
+#### Get data for Google YouTube channels
 # YOUTUBE_GOOGLE_WORKSPACE = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCBmwzQnSoj9b6HzNmFrg_yw", "YOUTUBE_GOOGLE_WORKSPACE")
 # YOUTUBE_GOOGLE_DEVELOPERS = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw", "YOUTUBE_GOOGLE_DEVELOPERS")
 # YOUTUBE_GOOGLE_CREATORS = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCXZNlYNefXV3iMcyzszt_9Q", "YOUTUBE_GOOGLE_CREATORS")
@@ -555,8 +667,7 @@ class BLOG_SITES:
 # YOUTUBE_GOOGLE_QUANTUMAI = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCO5cgpkcYjnsdxZdEDR3Jog", "YOUTUBE_GOOGLE_QUANTUMAI")
 # YOUTUBE_GOOGLE_TALKS = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCbmNph6atAoGfqLoCL_duAg", "YOUTUBE_GOOGLE_TALKS")
 
-# # %%
-
+#### Get data for Tableau related YouTube channels
 # YOUTUBE_TABLEAU_FLERLAGE = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCDyr5VgVvkmfhHpeMUB8ZDA", "YOUTUBE_TABLEAU_FLERLAGE")
 # YOUTUBE_TABLEAU = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCWGrtxO6JrPSDUcgp3Qm_Gw", "YOUTUBE_TABLEAU")
 # YOUTUBE_TABLEAU_TIM = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UC7HYxRWmaNlJux-X7rNLZyw", "YOUTUBE_TABLEAU_TIM")
@@ -564,25 +675,6 @@ class BLOG_SITES:
 # YOUTUBE_TABLEAU_SQLBELLE = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCW2E1sGBVde5WMMxEh5CW4w", "YOUTUBE_TABLEAU_SQLBELLE")
 # YOUTUBE_TABLEAU_DATAFAM = blog_sites.fetch_and_parse_feed("https://www.youtube.com/feeds/videos.xml?channel_id=UCuDUG9ZHa-IlTm6y-2Lko_Q", "YOUTUBE_TABLEAU_DATAFAM")
 
-# %%
-
-# # %%
-# site_name = "GOOGLE_APPS_UPDATES"
-
-# file_name = f"C:\\Users\\Llubr\\Desktop\\Github\\data-playground-data\\{site_name}.json"
-
-# with open(file_name, "r", encoding="utf-8") as f:
-#     post_data_full = json.load(f)
-
-# for i, post in enumerate(post_data_full):
-#     post_data_full[i]['title'] = json.loads(json.dumps(post['title']))
-#     post_data_full[i]['description'] = json.loads(json.dumps(post['description']))
-
-# with open(file_name, "w", encoding="utf-8") as f:    
-#     json.dump(post_data_full, f, ensure_ascii=False, indent= 4) 
-
-# # %%
-
-# with open(file_name, "r", encoding="utf-8") as f:
-#     post_data_full = json.load(f)
+#### Update submodule to get latest updates to data-playground
+# blog_sites.update_submodule_direct()
 # %%

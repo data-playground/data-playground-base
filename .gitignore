@@ -1,0 +1,3 @@
+# Ignores any folder named 'venv' or '.venv' anywhere in the project
+venv/
+.venv/
