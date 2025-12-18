@@ -1,28 +1,28 @@
-from dataclasses import dataclass
 from datetime import datetime
 
 from airflow.decorators import dag, task
 
 
-@dataclass
-class MyClass:
-    value: int
-    
-    def get_value(self):
-        return self.value * 2
-    
-@dag(schedule=None, start_date=datetime(2023, 1, 1), catchup=False)
-def class_instance_dag():
-    @task
-    def create_instance():
-        # Airflow automatically serializes @dataclass objects
-        return MyClass(value=10)
+# 1. Define logic as standalone functions
+def calculate_logic(value):
+    return value * 2
+
+@dag(schedule=None, start_date=datetime(2025, 1, 1), catchup=False)
+def functional_dag():
 
     @task
-    def use_instance(instance: MyClass):
-        # Airflow automatically deserializes it back into a MyClass object
-        print(f"The result is: {instance.get_value()}")
+    def create_data():
+        # Return a simple dictionary (always serializable)
+        return {"value": 10}
 
-    use_instance(create_instance())
+    @task
+    def use_data(data_dict):
+        # Pass the data into your logic function
+        val = data_dict["value"]
+        result = calculate_logic(val)
+        print(f"The result is: {result}")
 
-class_instance_dag()
+    # Flow: Data is passed via XCom automatically
+    use_data(create_data())
+
+functional_dag()
