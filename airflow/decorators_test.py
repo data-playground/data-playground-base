@@ -10,7 +10,7 @@ class MyClass:
     def get_value(self):
         return self.value * 2
 
-@dag(schedule_interval=None, start_date=datetime(2023, 1, 1), catchup=False)
+@dag(schedule=None, start_date=datetime(2023, 1, 1), catchup=False)
 def class_instance_dag():
 
     @task(task_id='class_instance')
