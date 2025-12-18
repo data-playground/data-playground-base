@@ -1,33 +1,28 @@
+from dataclasses import dataclass
 from datetime import datetime
 
 from airflow.decorators import dag, task
 
 
+@dataclass
 class MyClass:
-    def __init__(self, value):
-        self.value = value
-
+    value: int
+    
     def get_value(self):
         return self.value * 2
-
+    
 @dag(schedule=None, start_date=datetime(2023, 1, 1), catchup=False)
 def class_instance_dag():
-
-    @task(task_id='class_instance')
+    @task
     def create_instance():
-        # Instantiate the class and return it (auto-pushed to XCom)
-        instance = MyClass(value=10)
-        return instance
+        # Airflow automatically serializes @dataclass objects
+        return MyClass(value=10)
 
-    @task(task_id="function_run")
-    def use_instance(instance_from_upstream):
-        # The instance is automatically pulled and passed as an argument
-        # Note: The object is deserialized here
-        result = instance_from_upstream.get_value()
-        print(f"The result is: {result}")
+    @task
+    def use_instance(instance: MyClass):
+        # Airflow automatically deserializes it back into a MyClass object
+        print(f"The result is: {instance.get_value()}")
 
-    # Define the workflow
-    instance_obj = create_instance()
-    use_instance(instance_obj)
+    use_instance(create_instance())
 
-decorator_test = class_instance_dag()
+class_instance_dag()
