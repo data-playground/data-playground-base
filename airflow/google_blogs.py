@@ -9,11 +9,11 @@ PROJECT_ROOT = "/home/main-server/Github/data-playground-base/google_blogs"
 PYTHON_BIN = f"{PROJECT_ROOT}/venv/bin/python"
 
 @dag(
-    dag_id="google_blogs",
+    dag_id="google_blogs_v1",
     schedule=None, 
     start_date=datetime(2025, 1, 1), 
     catchup=False,
-    # env in default_args ensures every task gets the PYTHONPATH
+    # env in default_args is kept as a best practice
     default_args={
         "env": {"PYTHONPATH": PROJECT_ROOT}
     }
@@ -21,9 +21,13 @@ PYTHON_BIN = f"{PROJECT_ROOT}/venv/bin/python"
 def google_blogs():
 
     # Task 1: Initialize data
-    # We explicitly define the 'python' path to satisfy Airflow 3 requirements
     @task.external_python(python=PYTHON_BIN, task_id="proc_start")
-    def create_data():
+    def create_data(root_path: str):
+        import sys
+        # Manual path injection to ensure the module is found
+        if root_path not in sys.path:
+            sys.path.append(root_path)
+            
         import data_gathering
         # init() must return a JSON-serializable object (dict/list/str/int)
         return data_gathering.init()
@@ -42,7 +46,11 @@ def google_blogs():
         task_id="gather_individual_blog",
         map_index_template="{{ name }}"
     )
-    def use_data(init: dict, name: str):
+    def use_data(init: dict, name: str, root_path: str):
+        import sys
+        if root_path not in sys.path:
+            sys.path.append(root_path)
+            
         import data_gathering
 
         url = init['WEBSITES'][name]
@@ -57,13 +65,12 @@ def google_blogs():
     # Task Group for Dynamic Mapping
     @task_group(group_id="google_data_group")
     def gather_google_data_group(names_list, init_obj):
-        # .partial defines the constant arguments
-        # .expand defines the iterable to map over
-        use_data.partial(init=init_obj).expand(name=names_list)
+        # We pass PROJECT_ROOT as a constant via .partial()
+        use_data.partial(init=init_obj, root_path=PROJECT_ROOT).expand(name=names_list)
 
     # --- DAG FLOW EXECUTION ---
-    # 1. Start processing and get init object
-    init_obj = create_data()
+    # 1. Start processing and get init object - passing PROJECT_ROOT explicitly
+    init_obj = create_data(PROJECT_ROOT)
     
     # 2. Extract keys from that object
     site_names = get_website_keys(init_obj)
