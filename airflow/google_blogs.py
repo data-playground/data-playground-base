@@ -1,5 +1,3 @@
-import os
-import sys
 from datetime import datetime
 
 from airflow.sdk import dag, task, task_group
@@ -34,6 +32,9 @@ def google_blogs():
         "env": {"PYTHONPATH": folder_to_add}
     })
     def create_data():
+        import sys
+        sys.path.append(folder_to_add)
+
         # Import process script
         import data_gathering
 
@@ -51,6 +52,9 @@ def google_blogs():
         "env": {"PYTHONPATH": folder_to_add}
     })
     def use_data(init, name):
+        import sys
+        sys.path.append(folder_to_add)
+        
         # Import process script
         import data_gathering
 
