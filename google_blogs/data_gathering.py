@@ -21,7 +21,9 @@ from tqdm import tqdm
 
 # class BLOG_SITES:
 
-def init(start_dict):
+def init():
+    start_dict = {}
+
     start_dict['gemini_key'] = get_key("Gemini-API")
     start_dict['github_key'] = get_key("Github-Key")
 
@@ -32,16 +34,37 @@ def init(start_dict):
     start_dict['BRANCH'] = 'main'
     start_dict['SUBMODULE_PATH'] = '_data/data_playground_data' 
 
-    start_dict['GOOGLE_WORKSPACE_BLOG'] = "https://workspace.google.com/blog/"
-    start_dict['GOOGLE_APPS_UPDATES'] = "https://feeds.feedburner.com/GoogleAppsUpdates"
-    start_dict['GOOGLE_CLOUD_BLOG'] = "https://cloudblog.withgoogle.com/rss"
-    start_dict['GOOGLE_RESEARCH_BLOG'] = "https://research.google/blog/rss/"
-    start_dict['GOOGLE_BLOG'] = "https://blog.google/rss/"
-    start_dict['GOOGLE_TECHNOLOGY_BLOG'] = "https://blog.google/technology/rss/"
-    start_dict['GOOGLE_DEEPMIND_BLOG'] = "https://blog.google/technology/google-deepmind/rss/"
-    start_dict['GOOGLE_DEVELOPERS_BLOG'] = "https://developers.googleblog.com/rss/"
-    start_dict['GOOGLE_DEVS_SITEMAP'] = "https://developers.google.com/sitemap.xml"
-
+    start_dict['WEBSITES'] = {
+        'GOOGLE_WORKSPACE_BLOG': "https://workspace.google.com/blog/",
+        'GOOGLE_APPS_UPDATES': "https://feeds.feedburner.com/GoogleAppsUpdates",
+        'GOOGLE_CLOUD_BLOG': "https://cloudblog.withgoogle.com/rss",
+        'GOOGLE_RESEARCH_BLOG': "https://research.google/blog/rss/",
+        'GOOGLE_BLOG': "https://blog.google/rss/",
+        'GOOGLE_TECHNOLOGY_BLOG': "https://blog.google/technology/rss/",
+        'GOOGLE_DEEPMIND_BLOG': "https://blog.google/technology/google-deepmind/rss/",
+        'GOOGLE_DEVELOPERS_BLOG': "https://developers.googleblog.com/rss/",
+        'GOOGLE_DEVS_SITEMAP': "https://developers.google.com/sitemap.xml",
+        'TABLEAU_flerlagetwins': "https://www.flerlagetwins.com/feeds/posts/default",
+        'TABLEAU_vizwiz': "https://www.vizwiz.com/feeds/posts/default",
+        'TABLEAU_storytellingwithdata': "https://www.storytellingwithdata.com/blog?format=rss",
+        'TABLEAU_playfairdata': "https://playfairdata.com/feed/",
+        'TABLEAU_theinformationlab': "https://www.theinformationlab.com/",
+        'YOUTUBE_GOOGLE_WORKSPACE': "https://www.youtube.com/feeds/videos.xml?channel_id=UCBmwzQnSoj9b6HzNmFrg_yw",
+        'YOUTUBE_GOOGLE_DEVELOPERS': "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw",
+        'YOUTUBE_GOOGLE_CREATORS': "https://www.youtube.com/feeds/videos.xml?channel_id=UCXZNlYNefXV3iMcyzszt_9Q",
+        'YOUTUBE_GOOGLE_DEEPMIND': "https://www.youtube.com/feeds/videos.xml?channel_id=UCP7jMXSY2xbc3KCAE0MHQ-A",
+        'YOUTUBE_GOOGLE': "https://www.youtube.com/feeds/videos.xml?channel_id=UCK8sQmJBp8GCxrOtXWBpyEA",
+        'YOUTUBE_GOOGLE_CLOUD': "https://www.youtube.com/feeds/videos.xml?channel_id=UCTMRxtyHoE3LPcrl-kT4AQQ",
+        'YOUTUBE_GOOGLE_QUANTUMAI': "https://www.youtube.com/feeds/videos.xml?channel_id=UCO5cgpkcYjnsdxZdEDR3Jog",
+        'YOUTUBE_GOOGLE_TALKS': "https://www.youtube.com/feeds/videos.xml?channel_id=UCbmNph6atAoGfqLoCL_duAg",
+        'YOUTUBE_TABLEAU_FLERLAGE': "https://www.youtube.com/feeds/videos.xml?channel_id=UCDyr5VgVvkmfhHpeMUB8ZDA",
+        'YOUTUBE_TABLEAU': "https://www.youtube.com/feeds/videos.xml?channel_id=UCWGrtxO6JrPSDUcgp3Qm_Gw",
+        'YOUTUBE_TABLEAU_TIM': "https://www.youtube.com/feeds/videos.xml?channel_id=UC7HYxRWmaNlJux-X7rNLZyw",
+        'YOUTUBE_TABLEAU_VIZWIZ': "https://www.youtube.com/feeds/videos.xml?channel_id=UCTlX7UpqASrldmx5_CpG3CA",
+        'YOUTUBE_TABLEAU_SQLBELLE': "https://www.youtube.com/feeds/videos.xml?channel_id=UCW2E1sGBVde5WMMxEh5CW4w",
+        'YOUTUBE_TABLEAU_DATAFAM': "https://www.youtube.com/feeds/videos.xml?channel_id=UCuDUG9ZHa-IlTm6y-2Lko_Q",
+    }
+    
     start_dict['HEADERS_RAW']={
         "Accept": "application/vnd.github.v3.raw", 
         "Authorization": f"Bearer {start_dict['github_key']}", 
@@ -53,6 +76,8 @@ def init(start_dict):
         "Authorization": f"Bearer {start_dict['github_key']}", 
         "X-GitHub-Api-Version": "2022-11-28"
     }
+
+    return start_dict
 
 def get_key(SECRET_NAME):
     """
@@ -244,7 +269,7 @@ def workspace_data_get(start_dict):
     file_name = "GOOGLE_WORKSPACE_BLOG.json"
 
     # Send a GET request to the blog URL
-    r = requests.get(start_dict['GOOGLE_WORKSPACE_BLOG'])
+    r = requests.get(start_dict['WEBSITES']['GOOGLE_WORKSPACE_BLOG'])
 
     # Parse the HTML content using BeautifulSoup
     soup = BeautifulSoup(r.content)
@@ -306,7 +331,7 @@ def workspace_hist(start_dict):
     driver = webdriver.Chrome()
 
     # Navigate to the Google Workspace blog
-    driver.get(start_dict['GOOGLE_WORKSPACE_BLOG'])
+    driver.get(start_dict['WEBSITES']['GOOGLE_WORKSPACE_BLOG'])
 
     # Prompt user for confirmation to proceed
     if get_user_confirmation():
@@ -368,7 +393,7 @@ def get_google_devs_full_map(start_dict):
     """Fetches the full Google Developers sitemap."""
 
     # Get the initial sitemap map
-    init_map = google_devs_map(start_dict['GOOGLE_DEVS_SITEMAP'])
+    init_map = google_devs_map(start_dict['WEBSITES']['GOOGLE_DEVS_SITEMAP'])
 
     # Initialize an empty list to hold the full sitemap
     full_map = []
