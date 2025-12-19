@@ -75,6 +75,17 @@ def google_blogs():
         # We pass PROJECT_ROOT as a constant via .partial()
         use_data.partial(init=init_obj, root_path=PROJECT_ROOT).expand(name=names_list)
 
+    @task.external_python(python=PYTHON_BIN, task_id="update_submodule")
+    def update_submodule(init: dict, root_path: str):
+        import sys
+        # Manual path injection to ensure the module is found
+        if root_path not in sys.path:
+            sys.path.append(root_path)
+            
+        import data_gathering
+        # init() must return a JSON-serializable object (dict/list/str/int)
+        return data_gathering.update_submodule_direct(init)
+
     # --- DAG FLOW EXECUTION ---
     # 1. Start processing and get init object - passing PROJECT_ROOT explicitly
     init_obj = create_data(PROJECT_ROOT)
@@ -84,6 +95,8 @@ def google_blogs():
     
     # 3. Pass keys and init object to the task group for mapping
     gather_google_data_group(site_names, init_obj)
+
+    update_submodule(init=init_obj, root_path=PROJECT_ROOT)
 
 # Register the DAG
 google_blogs()
