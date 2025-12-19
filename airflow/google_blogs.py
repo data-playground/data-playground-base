@@ -9,7 +9,7 @@ PROJECT_ROOT = "/home/main-server/Github/data-playground-base/google_blogs"
 PYTHON_BIN = f"{PROJECT_ROOT}/venv/bin/python"
 
 @dag(
-    dag_id="google_blogs_v1",
+    dag_id="google_blogs",
     schedule=None, 
     start_date=datetime(2025, 1, 1), 
     catchup=False,
