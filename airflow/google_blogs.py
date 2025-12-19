@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from airflow.sdk import dag, get_current_context, task, task_group
+from airflow.sdk import dag, task, task_group
 
 # --- CONFIGURATION ---
 # Ensure these paths are absolute and accessible by the Airflow worker
@@ -54,7 +54,8 @@ def google_blogs():
         map_index_template="{{ name }}" 
     )
     def use_data(init: dict, name: str, root_path: str):
-        
+        from airflow.sdk import get_current_context
+
         context = get_current_context()
         context["name"] = name
         
