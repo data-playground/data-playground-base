@@ -2,7 +2,7 @@ import os
 import sys
 from datetime import datetime
 
-from airflow.decorators import dag, task, task_group
+from airflow.sdk import dag, task, task_group
 
 # Define the path you want to add
 # Path for local development
