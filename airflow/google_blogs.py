@@ -54,11 +54,6 @@ def google_blogs():
         map_index_template="{{ name }}" 
     )
     def use_data(init: dict, name: str, root_path: str):
-        from airflow.sdk import get_current_context
-
-        context = get_current_context()
-        context["name"] = name
-        
         import sys
         if root_path not in sys.path:
             sys.path.append(root_path)
