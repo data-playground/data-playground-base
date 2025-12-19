@@ -14,7 +14,7 @@ folder_to_add = "/home/main-server/Github/data-playground-base/google_blogs"
 PATH_TO_PYTHON_BINARY = f"{folder_to_add}/venv/bin/python"
 
 # Add folder to system path
-sys.path.append(os.path.abspath(folder_to_add))
+# sys.path.append(os.path.abspath(folder_to_add))
 
 @dag(
     schedule=None, 
@@ -28,7 +28,11 @@ sys.path.append(os.path.abspath(folder_to_add))
 
 def google_blogs():
 
-    @task.external_python(task_id="proc_start", python=PATH_TO_PYTHON_BINARY)
+    @task.external_python(task_id="proc_start", python=PATH_TO_PYTHON_BINARY, 
+    default_args={
+        "python": PATH_TO_PYTHON_BINARY, 
+        "env": {"PYTHONPATH": folder_to_add}
+    })
     def create_data():
         # Import process script
         import data_gathering
@@ -36,12 +40,16 @@ def google_blogs():
         # Return a simple dictionary (always serializable)
         return data_gathering.init()
     
-    @task.external_python(task_id="get_google_keys", python=PATH_TO_PYTHON_BINARY)
+    @task.external_python(task_id="get_google_keys")
     def get_website_keys(init_data):
         return [name for name in init_data['WEBSITES'].keys() 
                 if name.startswith("GOOGLE") and name != 'GOOGLE_DEVS_SITEMAP']
 
-    @task.external_python(task_id = "gather_individual_blog", map_index_template="{{ task.op_kwargs['name'] }}", python=PATH_TO_PYTHON_BINARY)
+    @task.external_python(task_id = "gather_individual_blog", map_index_template="{{ name }}", python=PATH_TO_PYTHON_BINARY, 
+    default_args={
+        "python": PATH_TO_PYTHON_BINARY, 
+        "env": {"PYTHONPATH": folder_to_add}
+    })
     def use_data(init, name):
         # Import process script
         import data_gathering
@@ -50,13 +58,11 @@ def google_blogs():
 
         # Pass the data into your logic function
         if name == "GOOGLE_WORKSPACE_BLOG":
-            data_added = data_gathering.workspace_data_get(init)
+            return data_gathering.workspace_data_get(init)
         elif name in ["GOOGLE_APPS_UPDATES", "GOOGLE_TECHNOLOGY_BLOG"]:
-            data_added = data_gathering.fetch_and_parse_feed(init, url, name, enrich=True)
-        else:
-            data_added = data_gathering.fetch_and_parse_feed(init, url, name, enrich=False)
+            return data_gathering.fetch_and_parse_feed(init, url, name, enrich=True)
 
-        return data_added
+        return data_gathering.fetch_and_parse_feed(init, url, name, enrich=False)
 
     @task_group(group_id="google_data")
     def gather_google_data(names_list, init_obj):
