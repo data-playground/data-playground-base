@@ -75,7 +75,7 @@ def google_blogs():
 
 
     # Execution Flow
-    init_obj = create_data()
+    init_obj = create_data(folder_to_add)
     site_names = get_website_keys(folder_to_add, init_obj)
     
     gather_google_data(folder_to_add, site_names, init_obj)
