@@ -40,7 +40,7 @@ def google_blogs():
         # Return a simple dictionary (always serializable)
         return data_gathering.init()
     
-    @task.external_python(task_id="get_google_keys")
+    @task(task_id="get_google_keys")
     def get_website_keys(init_data):
         return [name for name in init_data['WEBSITES'].keys() 
                 if name.startswith("GOOGLE") and name != 'GOOGLE_DEVS_SITEMAP']
