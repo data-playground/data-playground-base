@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from airflow.sdk import dag, task, task_group
+from airflow.sdk import dag, get_current_context, task, task_group
 
 # --- CONFIGURATION ---
 # Ensure these paths are absolute and accessible by the Airflow worker
@@ -51,9 +51,13 @@ def google_blogs():
     @task.external_python(
         python=PYTHON_BIN, 
         task_id="gather_individual_blog",
-        map_index_template="{{ task.parameters['name'] }}" 
+        map_index_template="{{ name }}" 
     )
     def use_data(init: dict, name: str, root_path: str):
+        
+        context = get_current_context()
+        context["name"] = name
+        
         import sys
         if root_path not in sys.path:
             sys.path.append(root_path)
