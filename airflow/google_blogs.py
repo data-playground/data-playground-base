@@ -8,14 +8,21 @@ from airflow.sdk import dag, task, task_group
 PROJECT_ROOT = "/home/main-server/Github/data-playground-base/google_blogs"
 PYTHON_BIN = f"{PROJECT_ROOT}/venv/bin/python"
 
+# Update this path to point to your actual Google Service Account JSON key
+# This is required to solve the DefaultCredentialsError
+GOOGLE_KEY_PATH = "/home/main-server/keys/impactful-post-292301-ea5136b0da63.json"
+
 @dag(
-    dag_id="google_blogs",
+    dag_id="google_blogs_v1",
     schedule=None, 
     start_date=datetime(2025, 1, 1), 
     catchup=False,
-    # env in default_args is kept as a best practice
+    # Adding the credentials path to the environment of the external processes
     default_args={
-        "env": {"PYTHONPATH": PROJECT_ROOT}
+        "env": {
+            "PYTHONPATH": PROJECT_ROOT,
+            "GOOGLE_APPLICATION_CREDENTIALS": GOOGLE_KEY_PATH
+        }
     }
 )
 def google_blogs():
