@@ -31,7 +31,7 @@ def google_blogs():
         "python": PATH_TO_PYTHON_BINARY, 
         "env": {"PYTHONPATH": folder_to_add}
     })
-    def create_data():
+    def create_data(folder_to_add):
         import sys
         sys.path.append(folder_to_add)
 
@@ -51,10 +51,10 @@ def google_blogs():
         "python": PATH_TO_PYTHON_BINARY, 
         "env": {"PYTHONPATH": folder_to_add}
     })
-    def use_data(init, name):
+    def use_data(folder_to_add, init, name):
         import sys
         sys.path.append(folder_to_add)
-        
+
         # Import process script
         import data_gathering
 
@@ -69,16 +69,16 @@ def google_blogs():
         return data_gathering.fetch_and_parse_feed(init, url, name, enrich=False)
 
     @task_group(group_id="google_data")
-    def gather_google_data(names_list, init_obj):
+    def gather_google_data(folder_to_add, names_list, init_obj):
         # DYNAMIC MAPPING: Creates one 'use_data' task for every name in site_names
-        use_data.partial(init=init_obj).expand(name=names_list)
+        use_data.partial(folder_to_add, init=init_obj).expand(name=names_list)
 
 
     # Execution Flow
     init_obj = create_data()
-    site_names = get_website_keys(init_obj)
+    site_names = get_website_keys(folder_to_add, init_obj)
     
-    gather_google_data(site_names, init_obj)
+    gather_google_data(folder_to_add, site_names, init_obj)
 
 
 google_blogs()
