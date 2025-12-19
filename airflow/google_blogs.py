@@ -51,7 +51,7 @@ def google_blogs():
     @task.external_python(
         python=PYTHON_BIN, 
         task_id="gather_individual_blog",
-        map_index_template="{{ map_value }}"
+        map_index_template="{{ task.parameters['name'] }}" 
     )
     def use_data(init: dict, name: str, root_path: str):
         import sys
