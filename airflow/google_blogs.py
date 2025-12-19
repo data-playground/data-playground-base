@@ -13,7 +13,7 @@ PYTHON_BIN = f"{PROJECT_ROOT}/venv/bin/python"
 GOOGLE_KEY_PATH = "/home/main-server/keys/impactful-post-292301-ea5136b0da63.json"
 
 @dag(
-    dag_id="google_blogs_v1",
+    dag_id="google_blogs",
     schedule=None, 
     start_date=datetime(2025, 1, 1), 
     catchup=False,
