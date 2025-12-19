@@ -8,10 +8,10 @@ from airflow.decorators import dag, task, task_group
 # Path for local development
 # folder_to_add = r"C:\Users\Llubr\Desktop\Github\data-playground-base\google_blogs"
 # Path for airflow
-folder_to_add = ""
+folder_to_add = "/home/main-server/Github/data-playground-base/google_blogs"
 
 # Path to Pyhton virtual environment
-PATH_TO_PYTHON_BINARY = ""
+PATH_TO_PYTHON_BINARY = f"{folder_to_add}/venv/bin/activate"
 
 # Add folder to system path
 sys.path.append(os.path.abspath(folder_to_add))
