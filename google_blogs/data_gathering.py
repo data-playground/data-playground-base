@@ -154,7 +154,7 @@ def fetch_and_parse_feed(start_dict, url, site_name, enrich = False):
             # Enrich new posts with AI-generated summaries and tags
             if enrich:
                 print("Enriching data")
-                gen_ai_data = get_ai_summary_tags([i['link'] for i in post_list if not 'summary' in i.keys()][:100], content_type = 'video' if site_name.upper().startswith('YOUTUBE') else 'article')
+                gen_ai_data = get_ai_summary_tags(start_dict, [i['link'] for i in post_list if not 'summary' in i.keys()][:100], content_type = 'video' if site_name.upper().startswith('YOUTUBE') else 'article')
                 post_list = merge_list_left_join(post_list, gen_ai_data)
             
             # Append new posts to historical data
@@ -301,7 +301,7 @@ def workspace_data_get(start_dict):
             post_detail(post_dict)
 
         # Enrich new posts with AI-generated summaries and tags
-        gen_ai_data = get_ai_summary_tags([i['link'] for i in worskpace_data if not 'summary' in i.keys()][:100], content_type = 'article')
+        gen_ai_data = get_ai_summary_tags(start_dict, [i['link'] for i in worskpace_data if not 'summary' in i.keys()][:100], content_type = 'article')
         
         # Merge AI-generated data with workspace data
         worskpace_data = merge_list_left_join(worskpace_data, gen_ai_data)
@@ -578,7 +578,7 @@ def app_update_hist():
 
     return google_apps_full
 
-def enrich_catchup(site_name, qty):
+def enrich_catchup(start_dict, site_name, qty):
     """Enriches existing data with AI-generated summaries and tags."""
 
     # Construct the file path for the JSON data
@@ -589,7 +589,7 @@ def enrich_catchup(site_name, qty):
         post_data_full = json.load(f)
 
     # Enrich data with AI-generated summaries and tags
-    gen_ai_data = get_ai_summary_tags([i['link'] for i in post_data_full if not 'summary' in i.keys()][:qty], content_type = 'video' if site_name.upper().startswith('YOUTUBE') else 'article')
+    gen_ai_data = get_ai_summary_tags(start_dict, [i['link'] for i in post_data_full if not 'summary' in i.keys()][:qty], content_type = 'video' if site_name.upper().startswith('YOUTUBE') else 'article')
     
     # Merge AI-generated data with existing data
     post_data_full = merge_list_left_join(post_data_full, gen_ai_data)
