@@ -50,8 +50,8 @@ def google_blogs():
     # Task 3: The actual processing task (to be mapped)
     @task.external_python(
         python=PYTHON_BIN, 
-        task_id="gather_individual_blog"# ,
-        # map_index_template="{{ name }}" 
+        task_id="gather_individual_blog",
+        map_index_template="{{ map_value }}" 
     )
     def use_data(init: dict, name: str, root_path: str):
         import sys
