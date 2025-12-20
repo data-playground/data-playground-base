@@ -14,7 +14,7 @@ GOOGLE_KEY_PATH = "/home/main-server/keys/impactful-post-292301-ea5136b0da63.jso
 
 @dag(
     dag_id="google_blogs",
-    schedule=None, 
+	schedule='@daily',
     start_date=datetime(2025, 1, 1), 
     catchup=False,
     # Adding the credentials path to the environment of the external processes
