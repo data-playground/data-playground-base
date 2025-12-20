@@ -615,59 +615,55 @@ def generate_random_sha256():
     return random_sha256_hash
 
 def update_submodule_direct(start_dict):
-    try:
-        # 1. Get the latest commit SHA of the branch
-        ref_res = requests.get(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/ref/heads/{start_dict['BRANCH']}", headers=start_dict['HEADERS_META']).json()
-        ref_res.raise_for_status()
-        last_commit_sha = ref_res['object']['sha']
-        
-        # 1b. Get the Tree SHA from that commit (The "Correct" way for base_tree)
-        commit_res = requests.get(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/commits/{last_commit_sha}", headers=start_dict['HEADERS_META'])
-        parent_tree_sha = commit_res.json()['tree']['sha']
+    # 1. Get the latest commit SHA of the branch
+    ref_res = requests.get(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/ref/heads/{start_dict['BRANCH']}", headers=start_dict['HEADERS_META'])
+    ref_res.raise_for_status()
+    last_commit_sha = ref_res.json()['object']['sha']
+    
+    # 1b. Get the Tree SHA from that commit (The "Correct" way for base_tree)
+    commit_res = requests.get(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/commits/{last_commit_sha}", headers=start_dict['HEADERS_META'])
+    parent_tree_sha = commit_res.json()['tree']['sha']
 
-        # 1c. GET THE REAL SHA FROM THE SUBMODULE REPO
-        # Note: Ensure start_dict['SUBMODULE_BRANCH'] exists or defaults to 'main'
-        sub_branch = start_dict.get('SUBMODULE_BRANCH', start_dict['BRANCH'])
-        sub_ref_res = requests.get(
-            f"https://api.github.com/repos/{start_dict['SUBMODULE_OWNER']}/{start_dict['SUBMODULE_REPO']}/git/ref/heads/{sub_branch}", 
-            headers=start_dict['HEADERS_META']
-        )
-        sub_ref_res.raise_for_status()
-        real_submodule_sha = sub_ref_res.json()['object']['sha']
+    # 1c. GET THE REAL SHA FROM THE SUBMODULE REPO
+    # Note: Ensure start_dict['SUBMODULE_BRANCH'] exists or defaults to 'main'
+    sub_branch = start_dict.get('SUBMODULE_BRANCH', start_dict['BRANCH'])
+    sub_ref_res = requests.get(
+        f"https://api.github.com/repos/{start_dict['SUBMODULE_OWNER']}/{start_dict['SUBMODULE_REPO']}/git/ref/heads/{sub_branch}", 
+        headers=start_dict['HEADERS_META']
+    )
+    sub_ref_res.raise_for_status()
+    real_submodule_sha = sub_ref_res.json()['object']['sha']
 
-        # 2. Create a new Tree pointing to the real submodule commit
-        tree_payload = {
-            "base_tree": parent_tree_sha,
-            "tree": [{
-                "path": start_dict['SUBMODULE_PATH'],
-                "mode": "160000",
-                "type": "commit",
-                "sha": real_submodule_sha
-            }]
-        }
-        tree_post = requests.post(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/trees", headers=start_dict['HEADERS_META'], json=tree_payload)
-        new_tree_sha = tree_post.json()['sha']
+    # 2. Create a new Tree pointing to the real submodule commit
+    tree_payload = {
+        "base_tree": parent_tree_sha,
+        "tree": [{
+            "path": start_dict['SUBMODULE_PATH'],
+            "mode": "160000",
+            "type": "commit",
+            "sha": real_submodule_sha
+        }]
+    }
+    tree_post = requests.post(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/trees", headers=start_dict['HEADERS_META'], json=tree_payload)
+    new_tree_sha = tree_post.json()['sha']
 
-        # 3. Create a new Commit
-        commit_payload = {
-            "message": f"Update submodule {start_dict['SUBMODULE_PATH']} to {real_submodule_sha[:7]}",
-            "tree": new_tree_sha,
-            "parents": [last_commit_sha]
-        }
-        commit_post = requests.post(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/commits", headers=start_dict['HEADERS_META'], json=commit_payload)
-        new_commit_sha = commit_post.json()['sha']
-        
-        # 4. Update the Branch Reference to point to the new Commit
-        ref_update_payload = {"sha": new_commit_sha, "force": False}
-        patch_res = requests.patch(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/refs/heads/{start_dict['BRANCH']}", headers=start_dict['HEADERS_META'], json=ref_update_payload)
-        
-        if patch_res.status_code == 200:
-            print(f"Successfully updated submodule! New parent commit: {new_commit_sha[:7]}")
-        else:
-            print(f"Failed to update ref: {patch_res.text}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    # 3. Create a new Commit
+    commit_payload = {
+        "message": f"Update submodule {start_dict['SUBMODULE_PATH']} to {real_submodule_sha[:7]}",
+        "tree": new_tree_sha,
+        "parents": [last_commit_sha]
+    }
+    commit_post = requests.post(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/commits", headers=start_dict['HEADERS_META'], json=commit_payload)
+    new_commit_sha = commit_post.json()['sha']
+    
+    # 4. Update the Branch Reference to point to the new Commit
+    ref_update_payload = {"sha": new_commit_sha, "force": False}
+    patch_res = requests.patch(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/refs/heads/{start_dict['BRANCH']}", headers=start_dict['HEADERS_META'], json=ref_update_payload)
+    
+    if patch_res.status_code == 200:
+        print(f"Successfully updated submodule! New parent commit: {new_commit_sha[:7]}")
+    else:
+        print(f"Failed to update ref: {patch_res.text}")
 
 # %%
 
