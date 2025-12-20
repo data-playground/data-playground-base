@@ -50,8 +50,8 @@ def google_blogs():
     # Task 3: The actual processing task (to be mapped)
     @task.external_python(
         python=PYTHON_BIN, 
-        task_id="gather_individual_blog",
-        map_index_template="{{ map_value }}" 
+        task_id="gather_individual_blog"#,
+        # map_index_template="{{ map_value }}" 
     )
     def use_data(init: dict, name: str, root_path: str):
         import sys
@@ -76,7 +76,7 @@ def google_blogs():
         use_data.partial(init=init_obj, root_path=PROJECT_ROOT).expand(name=names_list)
 
     @task.external_python(python=PYTHON_BIN, task_id="update_submodule")
-    def update_submodule(init: dict, root_path: str, results):
+    def update_submodule(init: dict, root_path: str):
         import sys
         # Manual path injection to ensure the module is found
         if root_path not in sys.path:
@@ -97,7 +97,7 @@ def google_blogs():
     group_output = gather_google_data_group(site_names, init_obj)
 
     # 4. Update GitHub submodule in main repository
-    update_submodule(init=init_obj, root_path=PROJECT_ROOT, results=group_output)
+    group_output >> update_submodule(init=init_obj, root_path=PROJECT_ROOT)
 
 # Register the DAG
 google_blogs()
