@@ -42,6 +42,8 @@ def nba_daily_proc():
         import sys
         if root_path not in sys.path:
             sys.path.append(root_path)
+
+        print(sys.path)
         
         # Importing the module
         import nba_game_summary
