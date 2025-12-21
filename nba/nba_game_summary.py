@@ -7,6 +7,7 @@ import itertools
 import json
 import operator
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 import lxml.html as LH
@@ -16,6 +17,7 @@ from google.cloud import bigquery
 
 # %%
 
+@dataclass
 class NBA:
 
     def __init__(self, game_date = None, game_set = {}):
@@ -204,6 +206,32 @@ class NBA:
             }
         }
 
+        # Exisitng leagues in the API. The ID might be necessary as a parameter depending which endpoint is selected to run
+        self.LEAGUE_IDS = {
+            "00": "NBA",
+            "10": "WNBA",
+            "12": "Gaming",
+            "13": "Summer League",
+            "15": "Summer League",
+            "16": "Summer League",
+            "20": "G-League",
+        }
+
+        # Default headers for requests calls
+        self.STATS_HEADERS = {
+            "Host": "stats.nba.com",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "x-nba-stats-origin": "stats",
+            "x-nba-stats-token": "true",
+            "Connection": "keep-alive",
+            "Referer": "https://stats.nba.com/",
+            "Pragma": "no-cache",
+            "Cache-Control": "no-cache",
+        }
+
         # print("An NBA Class instance was initiaited. A summary of the data that can be extracted from this object as well as its endpoints are displayed below")
         # print(json.dumps(self.VAR_NAMING_GUIDE, sort_keys=True, indent= 4))
 
@@ -225,31 +253,12 @@ class NBA:
         else:
             raise Exception("Please enter a SET {} of game IDs")
 
-        # Exisitng leagues in the API. The ID might be necessary as a parameter depending which endpoint is selected to run
-    LEAGUE_IDS = {
-        "00": "NBA",
-        "10": "WNBA",
-        "12": "Gaming",
-        "13": "Summer League",
-        "15": "Summer League",
-        "16": "Summer League",
-        "20": "G-League",
-    }
+    def serialize(self) -> dict:
+        return self.__dict__
 
-    # Default headers for requests calls
-    STATS_HEADERS = {
-        "Host": "stats.nba.com",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip, deflate, br",
-        "x-nba-stats-origin": "stats",
-        "x-nba-stats-token": "true",
-        "Connection": "keep-alive",
-        "Referer": "https://stats.nba.com/",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache",
-    }
+    @staticmethod
+    def deserialize(self):
+        return NBA(self.game_date, self.game_set)
 
     def func_filter_data_to_skeleton(self, raw_data, skeleton):
         """
