@@ -12,6 +12,11 @@ PYTHON_BIN = f"{PROJECT_ROOT}/venv/bin/python"
 # Defining the paht for the Google Service Account
 GOOGLE_KEY_PATH = "/home/main-server/keys/impactful-post-292301-ea5136b0da63.json"
 
+# Common environment for all external tasks
+TASK_ENV = {
+    "PYTHONPATH": PROJECT_ROOT,
+    "GOOGLE_APPLICATION_CREDENTIALS": GOOGLE_KEY_PATH
+}
 
 @dag(
     dag_id="nba_daily",
@@ -52,8 +57,8 @@ def nba_daily_proc():
     
     # --- DAG FLOW EXECUTION ---
     # 1. Start processing and get init object - passing PROJECT_ROOT explicitly
-    nba = create_data(PROJECT_ROOT)
-    simple_print(nba)
+    nba_instance = create_data(PROJECT_ROOT)
+    simple_print(nba_instance)
 
 # Register the DAG
 nba_daily_proc()
