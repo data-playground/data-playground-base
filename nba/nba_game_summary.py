@@ -3,17 +3,17 @@
 
 # In[1]:
 
-from datetime import datetime, date, timedelta
 import itertools
 import json
-import time
 import operator
+import time
+from datetime import date, datetime, timedelta
 
-from google.cloud import bigquery
 import lxml.html as LH
 import pandas as pd
 import requests
-    
+from google.cloud import bigquery
+
 # %%
 
 class NBA:
@@ -225,7 +225,7 @@ class NBA:
         else:
             raise Exception("Please enter a SET {} of game IDs")
 
-    # Exisitng leagues in the API. The ID might be necessary as a parameter depending which endpoint is selected to run
+        # Exisitng leagues in the API. The ID might be necessary as a parameter depending which endpoint is selected to run
     LEAGUE_IDS = {
         "00": "NBA",
         "10": "WNBA",

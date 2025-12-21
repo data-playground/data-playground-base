@@ -22,11 +22,19 @@ from tqdm import tqdm
 # class BLOG_SITES:
 
 def init():
+    """Similar to __init__ in a class, this function defines the data that will be used in other functions.
+    The reason this process is not a class is to make is easily usable in Airflow
+    """
+
+    # Intantiate the dictionary
     start_dict = {}
 
+    # Get API key for Gemini
     start_dict['gemini_key'] = get_key("Gemini-API")
+    # Get API key for GitHub
     start_dict['github_key'] = get_key("Github-Key")
 
+    # Define GitHub data to be used when updating repositories
     start_dict['SUBMODULE_OWNER'] = 'data-playground'
     start_dict['SUBMODULE_REPO'] = 'data-playground-data'
     start_dict['PARENT_OWNER'] = 'data-playground'
@@ -34,6 +42,7 @@ def init():
     start_dict['BRANCH'] = 'main'
     start_dict['SUBMODULE_PATH'] = '_data/data_playground_data' 
 
+    # Build a dictionary of website URLs that this process is able to scrape. Others can be tested, but could fail to return any data
     start_dict['WEBSITES'] = {
         'GOOGLE_WORKSPACE_BLOG': "https://workspace.google.com/blog/",
         'GOOGLE_APPS_UPDATES': "https://feeds.feedburner.com/GoogleAppsUpdates",
@@ -65,12 +74,14 @@ def init():
         'YOUTUBE_TABLEAU_DATAFAM': "https://www.youtube.com/feeds/videos.xml?channel_id=UCuDUG9ZHa-IlTm6y-2Lko_Q",
     }
     
+    # Headers to be used to get RAW contents from a file
     start_dict['HEADERS_RAW']={
         "Accept": "application/vnd.github.v3.raw", 
         "Authorization": f"Bearer {start_dict['github_key']}", 
         "X-GitHub-Api-Version": "2022-11-28"
     }
 
+    # Headers to be used to get metadata from a file
     start_dict['HEADERS_META']={
         "Accept": "application/vnd.github+json", 
         "Authorization": f"Bearer {start_dict['github_key']}", 
@@ -104,11 +115,14 @@ def fetch_and_parse_feed(start_dict, url, site_name, enrich = False):
     """Fetches and parses the RSS feed."""
 
     print(f"Fetching feed from: {url}")
+
+    # Parse XML feed
     feed = feedparser.parse(url)
 
-    # file_name = f"C:\\Users\\Llubr\\Desktop\\Github\\data-playground-data\\{site_name}.json"
+    # Define file name
     file_name = f"{site_name}.json"
 
+    # Start empty list for posts
     post_list = []
     
     # Iterate over each entry (blog post)
@@ -132,16 +146,15 @@ def fetch_and_parse_feed(start_dict, url, site_name, enrich = False):
         }
         post_list.append(post_info)
 
+    # Get RAW contents of file
     r_raw = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=start_dict['HEADERS_RAW'])
 
     # Check if historical data file exists
-    # if os.path.exists(file_name):
     if r_raw.status_code == 200:
         # Load existing historical data
-        # with open(file_name, "r", encoding="utf-8") as f:
-            # post_data_full = json.load(f)
         post_data_full = json.loads(r_raw.content)
 
+        # Get metadata of file
         r_meta = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=start_dict['HEADERS_META'])
 
         # Filter out posts that are already in historical data
@@ -161,25 +174,26 @@ def fetch_and_parse_feed(start_dict, url, site_name, enrich = False):
             post_data_full.extend(post_list)
             post_data_full = sorted(post_data_full, key = lambda x: x['published_date'], reverse=True)
 
+            # Build data JSON that will be loaded with new content
             data = json.dumps({
                 "message": "Updating data and metadata",
                 "content": base64.b64encode(json.dumps(post_data_full).encode('cp1252')).decode('ascii'),
                 "sha": r_meta.json()['sha']
             })
+
+            # PUT request to update file
             r1 = requests.put(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}?ref=main", headers=start_dict['HEADERS_META'], data=data)
     else:
         # If no historical data, use the current post list
         post_data_full = sorted(post_list, key = lambda x: x['published_date'], reverse=True)
 
+        # Build data JSON that will be loaded with net new content
         data = json.dumps({
             "message": "Updating data and metadata",
             "content": base64.b64encode(json.dumps(post_data_full).encode('cp1252')).decode('ascii')
         })
+        # PUT request to create file
         r1 = requests.put(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}?ref=main", headers=start_dict['HEADERS_META'], data=data)
-
-    # Save the updated historical data back to the file
-    # with open(file_name, "w", encoding="utf-8") as f:    
-        # json.dump(post_data_full, f, ensure_ascii=False, indent= 4)    
 
     return post_list
 
@@ -283,8 +297,6 @@ def workspace_data_get(start_dict):
     r_raw = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=start_dict['HEADERS_RAW'])
 
     # Load historical data
-    # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "r", encoding="utf-8") as f:
-    #     worskpace_data_hist_full = json.load(f)
     worskpace_data_hist_full = json.loads(r_raw.content)
 
     r_meta = requests.get(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}", headers=start_dict['HEADERS_META'])
@@ -313,9 +325,6 @@ def workspace_data_get(start_dict):
         worskpace_data_hist_full = sorted(worskpace_data_hist_full, key = lambda x: x['published_date'], reverse=True)
         
         # Save the updated historical data back to the file
-        # with open(r"C:\Users\Llubr\Desktop\Github\data-playground-data\GOOGLE_WORKSPACE_BLOG.json", "w", encoding="utf-8") as f:    
-        #     json.dump(worskpace_data_hist_full, f, ensure_ascii=False, indent= 4)
-
         data = json.dumps({
             "message": "Updating data and metadata",
             "content": base64.b64encode(json.dumps(worskpace_data_hist_full).encode('cp1252')).decode('ascii'),
@@ -600,6 +609,7 @@ def enrich_catchup(start_dict, site_name, qty):
 
 def generate_random_sha256():
     """Generates a random SHA256 hash."""
+
     # 1. Generate 32 cryptographically secure random bytes (256 bits)
     random_data = secrets.token_bytes(16)
     
@@ -615,17 +625,18 @@ def generate_random_sha256():
     return random_sha256_hash
 
 def update_submodule_direct(start_dict):
-    # 1. Get the latest commit SHA of the branch
+    """Update the GitHub submodule into the main repository"""
+    
+    # Get the latest commit SHA of the branch
     ref_res = requests.get(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/ref/heads/{start_dict['BRANCH']}", headers=start_dict['HEADERS_META'])
     ref_res.raise_for_status()
     last_commit_sha = ref_res.json()['object']['sha']
     
-    # 1b. Get the Tree SHA from that commit (The "Correct" way for base_tree)
+    # Get the Tree SHA from that commit
     commit_res = requests.get(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/commits/{last_commit_sha}", headers=start_dict['HEADERS_META'])
     parent_tree_sha = commit_res.json()['tree']['sha']
 
-    # 1c. GET THE REAL SHA FROM THE SUBMODULE REPO
-    # Note: Ensure start_dict['SUBMODULE_BRANCH'] exists or defaults to 'main'
+    # Get the real SHA from the submodule repo
     sub_branch = start_dict.get('SUBMODULE_BRANCH', start_dict['BRANCH'])
     sub_ref_res = requests.get(
         f"https://api.github.com/repos/{start_dict['SUBMODULE_OWNER']}/{start_dict['SUBMODULE_REPO']}/git/ref/heads/{sub_branch}", 
@@ -634,7 +645,7 @@ def update_submodule_direct(start_dict):
     sub_ref_res.raise_for_status()
     real_submodule_sha = sub_ref_res.json()['object']['sha']
 
-    # 2. Create a new Tree pointing to the real submodule commit
+    # Create a new Tree pointing to the real submodule commit
     tree_payload = {
         "base_tree": parent_tree_sha,
         "tree": [{
@@ -647,7 +658,7 @@ def update_submodule_direct(start_dict):
     tree_post = requests.post(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/trees", headers=start_dict['HEADERS_META'], json=tree_payload)
     new_tree_sha = tree_post.json()['sha']
 
-    # 3. Create a new Commit
+    # Create a new Commit
     commit_payload = {
         "message": f"Update submodule {start_dict['SUBMODULE_PATH']} to {real_submodule_sha[:7]}",
         "tree": new_tree_sha,
@@ -656,7 +667,7 @@ def update_submodule_direct(start_dict):
     commit_post = requests.post(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/commits", headers=start_dict['HEADERS_META'], json=commit_payload)
     new_commit_sha = commit_post.json()['sha']
     
-    # 4. Update the Branch Reference to point to the new Commit
+    # Update the Branch Reference to point to the new Commit
     ref_update_payload = {"sha": new_commit_sha, "force": False}
     patch_res = requests.patch(f"https://api.github.com/repos/{start_dict['PARENT_OWNER']}/{start_dict['PARENT_REPO']}/git/refs/heads/{start_dict['BRANCH']}", headers=start_dict['HEADERS_META'], json=ref_update_payload)
     
