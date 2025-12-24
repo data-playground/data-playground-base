@@ -48,14 +48,16 @@ def nba_daily_proc():
         # Importing the module
         import nba_game_summary
 
+        nba = nba_game_summary.NBA()
+
         # Returning the result from the init function, which provides all the necessary start data for the process
-        return nba_game_summary.NBA()
+        return nba.__dict__
 
     @task.external_python(python=PYTHON_BIN, task_id="test_task")
     def simple_print(nba):
         """Simple print test from the class defined above"""
 
-        print(f"NBA game date is defined as: {nba.GAME_DATE}")
+        print(f"NBA game date is defined as: {nba['GAME_DATE']}")
     
     # --- DAG FLOW EXECUTION ---
     # 1. Start processing and get init object - passing PROJECT_ROOT explicitly
