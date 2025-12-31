@@ -61,14 +61,16 @@ class NBA:
             'GAME_DATA': {
                 'bigquery_table': 'game_data',
                 'description': 'High-level detail for a game, including broadcaster and arena. Great to be used when trying to get gameId for a specific date',
-                'endpoint': 'https://stats.nba.com/stats/scoreboardv2?',
-                'version': 2,
+                'endpoint': 'https://core-api.nba.com/cp/api/v1.9/feeds/gamecardfeed?',
+                'version': 4,
                 'parameters': {
                     'GameDate': '2024-06-17', 
-                    'LeagueID': '00'
+                    # 'LeagueID': '00'
+                    'platform': 'web'
                 },
                 'table_name': 'GameHeader',
-                'fields': {'GAME_DATE_EST': "STRING",'GAME_SEQUENCE': "INTEGER",'GAME_ID': "STRING",'GAME_STATUS_ID': "INTEGER",'GAME_STATUS_TEXT': "STRING",'NATL_TV_BROADCASTER_ABBREVIATION': "STRING",'HOME_TV_BROADCASTER_ABBREVIATION': "STRING",'AWAY_TV_BROADCASTER_ABBREVIATION': "STRING",'ARENA_NAME': "STRING"},
+                'fields': {'gameTimeEastern': 'STRING','dailyGameRank': 'INTEGER','gameId': 'STRING','gameStatus': 'INTEGER','gameStatusText': 'STRING'},
+                'rename_fields': {'gameTimeEastern': 'GAME_DATE_EST','dailyGameRank': 'GAME_SEQUENCE','gameId': 'GAME_ID','gameStatus': 'GAME_STATUS_ID','gameStatusText': 'GAME_STATUS_TEXT'}
             },
             'BS_SUMMARY': {
                 'bigquery_table': 'boxscore_summary',
@@ -232,6 +234,18 @@ class NBA:
             "Cache-Control": "no-cache",
         }
 
+        self.CORE_API_HEADERS = {
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "en-US,en;q=0.9",
+            "ocp-apim-subscription-key": "747fa6900c6c4e89a58b81b72f36eb96",
+            "Origin": "https://www.nba.com",
+            "priority": "u=1, i",
+            "referer": "https://www.nba.com/",
+            "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+        }
+
         # print("An NBA Class instance was initiaited. A summary of the data that can be extracted from this object as well as its endpoints are displayed below")
         # print(json.dumps(self.VAR_NAMING_GUIDE, sort_keys=True, indent= 4))
 
@@ -247,7 +261,7 @@ class NBA:
 
         # Define game set. If not provided on the class call, gather the games from the game date defined above
         if game_set == {}:
-            self.GAME_SET = set([row['GAME_ID'] for row in self.func_run_proc(self.VAR_NAMING_GUIDE['GAME_DATA'], params = {'GameDate': self.GAME_DATE, 'LeagueID': '00'})])
+            self.GAME_SET = set([row['GAME_ID'] for row in self.func_run_proc(self.VAR_NAMING_GUIDE['GAME_DATA'], params = {'GameDate': self.GAME_DATE, 'platform': 'web'})])
         elif isinstance(game_set, set):
             self.GAME_SET = game_set
         else:
@@ -309,7 +323,26 @@ class NBA:
         result = [dict(zip(headers,list(get_elements(row)))) for id, row in enumerate(results[idx]['rowSet'])]
 
         return result
+    
+    def get_items_in_list_of_dicts(self, results, headers, new_headers):
+        """
+            Loop through list of dictionaries to get a selected subset of the values
+        """
 
+        # Starting empty list
+        result = []
+
+        # Loop through the games dictionaries to get selected fields on each
+        for r in results:
+            # Get values from the results dictionaries
+            get_elements = operator.itemgetter(*headers)(r['cardData'])
+            # Get correct field names as once initially set
+            new_headers_value = operator.itemgetter(*headers)(new_headers)
+            # Append each dictionary to the list initiated above
+            result.append(dict(zip(new_headers_value,list(get_elements))))
+
+        return result
+    
     def func_load_data(self, data, table, schema = [], write_disposition = 'append'):
         '''
             Load data into BigQuery tables
@@ -364,13 +397,18 @@ class NBA:
         # Build the URL, with the correct endpoint and parameters and make the GET request
         url_params = "&".join([f"{key}={value}" for key, value in parameters.items()])
         url = f"{table['endpoint']}{url_params}"
-        r = requests.get(url, headers = self.STATS_HEADERS)
+        if table['bigquery_table'] == 'game_data':
+            r = requests.get(url, headers = self.CORE_API_HEADERS)
+        else:
+            r = requests.get(url, headers = self.STATS_HEADERS)
 
         # Depending on the version of the endpoint (defined on the __init__ function), run the expected function
         if table['version'] == 3:
             final_data = self.func_filter_data_to_skeleton(r.json()[table['table_name']], table['fields'])
         elif table['version'] == 2:
             final_data = self.func_filter_results_by_list(r.json()['resultSets'], list(table['fields'].keys()), table['table_name'])
+        elif table['version'] == 4:
+            final_data = self.get_items_in_list_of_dicts(r.json()['modules'][0]['cards'], list(table['fields'].keys()), table['rename_fields'])
         
         return final_data
     
@@ -483,7 +521,7 @@ class NBA:
     
 # %%
 
-nba = NBA()
+# nba = NBA()
 
 # %%
 

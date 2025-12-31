@@ -118,6 +118,8 @@ def generate_readme(folder):
         context = new_gather_context(folder)
         if not context: 
             return
+        
+        print("🖊 Building README")
 
         # Updated Prompt with Portfolio-specific sections
         prompt = f"""
