@@ -6,13 +6,9 @@
 ![lxml](https://img.shields.io/badge/lxml-parsing-purple.svg)
 ![Google Cloud BigQuery](https://img.shields.io/badge/Google%20Cloud-BigQuery-yellowgreen.svg)
 
----
-
 ## Portfolio Context
 
 This project resides in the `nba` subdirectory of a larger `data-playground-base` repository, demonstrating capabilities in data acquisition, processing, and storage specifically tailored for NBA-related information. It showcases an object-oriented approach to interact with external data sources.
-
----
 
 ## Difficulty Level
 **Intermediate**
