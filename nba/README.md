@@ -1,9 +1,3 @@
-# Portfolio Context
-
-This project resides in the `nba` subdirectory of a larger `data-playground-base` repository, demonstrating capabilities in data acquisition, processing, and storage specifically tailored for NBA-related information. It showcases an object-oriented approach to interact with external data sources.
-
----
-
 # NBA Data Engine
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
@@ -11,6 +5,14 @@ This project resides in the `nba` subdirectory of a larger `data-playground-base
 ![Pandas](https://img.shields.io/badge/Pandas-data%20analysis-orange.svg)
 ![lxml](https://img.shields.io/badge/lxml-parsing-purple.svg)
 ![Google Cloud BigQuery](https://img.shields.io/badge/Google%20Cloud-BigQuery-yellowgreen.svg)
+
+---
+
+## Portfolio Context
+
+This project resides in the `nba` subdirectory of a larger `data-playground-base` repository, demonstrating capabilities in data acquisition, processing, and storage specifically tailored for NBA-related information. It showcases an object-oriented approach to interact with external data sources.
+
+---
 
 ## Difficulty Level
 **Intermediate**
