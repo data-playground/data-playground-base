@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    .google-btn {
+        background-color: #4285F4;
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 0.75rem;
+        font-weight: bold;
+        font-size: 1.125rem;
+        transition: background-color 0.2s;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    }
+    .google-btn:hover {
+        background-color: #3367D6;
+    }
+    .card {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+</style>
+
+<!-- Load Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+
+<div class="container mx-auto p-4 md:p-8 card mt-16">
+    <div class="bg-white p-8 rounded-xl shadow-2xl border border-gray-200 text-center">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-4">Welcome Back!</h1>
+        <p class="text-gray-600 mb-8">Please sign in with Google to contribute books.</p>
+
+        <div id="auth-status" class="mb-6 p-4 rounded-lg font-medium bg-blue-100 text-blue-800">
+            Initializing authentication...
+        </div>
+        
+        <button id="google-sign-in-btn" class="google-btn w-full hidden" onclick="signInWithGoogle()">
+            <svg class="w-6 h-6 mr-3" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#FFC107" d="M43.61 20.083c-.07-.34-.14-.68-.21-1.02H24v8.15h11.4c-.45 2.1-1.8 3.86-3.72 5.04l6.1 4.71c3.56-3.35 5.64-7.98 5.64-13.06 0-1.38-.14-2.73-.41-4z"/>
+                <path fill="#FF3D00" d="M24 44c5.12 0 9.7-1.74 12.93-4.72l-6.1-4.71c-1.68 1.13-3.83 1.79-6.83 1.79-5.22 0-9.66-3.53-11.28-8.32H6.94l-6.1 4.71C4.85 41.54 13.9 44 24 44z"/>
+                <path fill="#4CAF50" d="M12.72 27.67c-.24-.68-.38-1.42-.38-2.17s.14-1.49.38-2.17V19.18H6.94c-.81 1.6-1.26 3.4-1.26 5.32s.45 3.72 1.26 5.32l5.78-4.79z"/>
+                <path fill="#1976D2" d="M24 16.3c2.82 0 5.37 1.05 7.36 2.92l5.44-5.44C33.72 8.35 29.17 6 24 6c-10.1 0-19.15 4.46-23.75 11.66l6.1 4.71c1.62-4.79 6.06-8.32 11.28-8.32z"/>
+            </svg>
+            Sign in with Google
+        </button>
+
+    </div>
+</div>
+<script>
+    let app, auth;
+    const authStatus = document.getElementById('auth-status');
+    const signInBtn = document.getElementById('google-sign-in-btn');
+    
+    // Google Sign-In Function
+    async function signInWithGoogle() {
+        if (!auth) {
+            console.error("Firebase Auth not initialized.");
+            return;
+        }
+        
+        const provider = new firebase.auth.GoogleAuthProvider();
+        
+        try {
+            await firebase.auth().signInWithPopup(provider);
+            // Redirection handled by onAuthStateChanged listener below
+        } catch (error) {
+            console.error("Google Sign-In Error:", error);
+            authStatus.textContent = `Sign-in failed: ${error.code.replace('auth/', '')}. Please try again.`;
+            authStatus.classList.replace('bg-blue-100', 'bg-red-100');
+            authStatus.classList.replace('text-blue-800', 'text-red-800');
+            signInBtn.classList.remove('hidden');
+        }
+    }
+
+    function initFirebaseAndAuth() {
+        try {
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            app = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+            authStatus.textContent = "Error: Firebase configuration missing.";
+            authStatus.classList.replace('bg-blue-100', 'bg-red-100');
+            return;
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user && !user.isAnonymous) {
+                // User is successfully signed in with Google/Email/etc.
+                authStatus.textContent = `Successfully signed in as ${user.displayName || user.email}. Redirecting...`;
+                authStatus.classList.replace('bg-blue-100', 'bg-green-100');
+                authStatus.classList.replace('text-blue-800', 'text-green-800');
+                signInBtn.classList.add('hidden');
+                
+                // Redirect back to the contribution page
+                setTimeout(() => {
+                    window.location.href = '/add_book'; 
+                }, 1000);
+                
+            } else if (user && user.isAnonymous) {
+                // User is signed in anonymously (from __initial_auth_token fallback).
+                // Prompt them to use the real sign-in.
+                 authStatus.textContent = "Ready to sign in with Google.";
+                 authStatus.classList.replace('bg-blue-100', 'bg-gray-100');
+                 authStatus.classList.replace('text-blue-800', 'text-gray-800');
+                 signInBtn.classList.remove('hidden');
+            } else {
+                // No user object (signed out or loading initial state)
+                authStatus.textContent = "Ready to sign in with Google.";
+                authStatus.classList.replace('bg-blue-100', 'bg-gray-100');
+                authStatus.classList.replace('text-blue-800', 'text-gray-800');
+                signInBtn.classList.remove('hidden');
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', initFirebaseAndAuth);
+</script>
+{% endblock content %}

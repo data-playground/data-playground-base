@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block content %}
+	
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>tailwind.config = {darkMode: "class", theme: {extend: {colors: {primary: "#000000", "background-light": "#f7f7f7", "background-dark": "#191919"}, fontFamily: {display: "Work Sans"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}}}};</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+	h1 {
+		display: none;
+	}
+	
+	.container {
+		background: 0;
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0);
+	}
+</style>
+<style>
+    /* Custom styling for the video stream */
+    #interactive.viewport {
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+        border: 2px solid #6366f1; /* Indigo border */
+        border-radius: 0.75rem;
+        overflow: hidden;
+    }
+
+    #interactive.viewport > canvas, 
+    #interactive.viewport > video {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+    
+    .drawingBuffer {
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+
+<main class="">
+	<div class="max-w-2xl mx-auto">
+		<div class="text-center mb-8">
+			<h2 class="text-3xl font-bold text-gray-900 dark:text-white">Add a New Book</h2>
+			<p class="mt-2 text-gray-600 dark:text-gray-400">Add a new book to the library by entering its ISBN or scanning its barcode.</p>
+		</div>
+		<div class="bg-white dark:bg-background-dark p-6 rounded-xl shadow-sm mb-6">
+			<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-1">Step 1: Enter ISBN</h3>
+			<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Use your device's camera to scan the book's barcode, or manually type the 10 or 13-digit ISBN.</p>
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+				<label for="barcode-image-input" id="take-photo-btn" class="bg-primary text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors">
+					<span class="material-symbols-outlined">photo_camera</span>
+					Take Photo
+				</label>
+				<label for="barcode-image-input" id="upload-file-btn" class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+					<span class="material-symbols-outlined">upload_file</span>
+                    Upload Image
+                </label>
+			</div>
+				
+			<!-- Hidden file input (shared by both buttons) -->
+			<input type="file" id="barcode-image-input" class="hidden" accept="image/*">
+
+			<!-- Result/Status Display -->
+			<div id="scanner-result" class="hidden mt-4 p-3 bg-blue-100 text-blue-800 rounded-lg font-medium text-center">
+				Processing image...
+			</div>
+
+<!--
+			<div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-4 min-h-[250px] flex flex-col items-center justify-center text-center">
+				<div class="w-full bg-black rounded-md aspect-video flex items-center justify-center mb-2">
+					<span class="material-symbols-outlined text-gray-500 text-6xl">videocam</span>
+				</div>
+				<div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+					<span class="material-symbols-outlined animate-spin">sync</span>
+					<span>Scanning...</span>
+				</div>
+			</div>
+-->
+		
+			<form method="POST" action="{{ url_for('barcode_lookup') }}">
+				{{ lookup_form.hidden_tag() }}
+				
+				<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Type or scan the 10 or 13-digit ISBN of the book. You can usually find it on the back cover near the barcode.</p>
+				<div class="flex flex-col md:flex-row items-center gap-4">
+					<div class="relative flex-grow">
+						<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">barcode</span>
+						{{ lookup_form.barcode(class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-background-dark focus:ring-primary focus:border-primary text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-lg", placeholder="e.g., 9780743273565") }}
+						{% for error in lookup_form.barcode.errors %}
+							<span class="text-red-500 text-sm block">{{ error }}</span>
+						{% endfor %}
+					</div>
+					
+					<span class="material-symbols-outlined" style="margin-right: -55px; z-index: 9999; color: white;">search</span>
+					{{ lookup_form.lookup_submit(class="bg-primary text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-colors cursor-pointer", style="padding-left: 2.8em;") }}
+				</div>
+			</form>
+		</div>
+		<p class="text-red-500 text-sm mt-2 hidden" id="isbn-error">Please enter a valid ISBN.</p>
+	</div>
+	<div class="bg-white dark:bg-background-dark p-6 rounded-xl shadow-sm hidden max-w-2xl mx-auto" id="book-details-form">
+		<div class="flex justify-between items-center mb-4">
+			<div>
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Step 2: Review and Add Book</h3>
+				<p class="text-sm text-gray-500 dark:text-gray-400">We found the following details. Please review and edit if necessary.</p>
+			</div>
+			<div class="flex items-center gap-2 text-green-600 dark:text-green-400">
+				<span class="material-symbols-outlined">check_circle</span>
+				<span class="font-medium">Success!</span>
+			</div>
+		</div>
+		<form method="POST" class="space-y-4">
+            {{ add_form.hidden_tag() }}
+            
+            <!-- Hidden field to preserve barcode data -->
+            {{ add_form.persisted_barcode() }}
+			
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+				<div class="md:col-span-1 flex justify-center">
+					<img alt="Book Cover" class="w-full h-auto object-cover rounded-lg shadow-md max-w-[200px]" src="https://covers.openlibrary.org/b/id/{{ thumbnail[0] }}-L.jpg"/>
+				</div>
+				<div class="md:col-span-2 space-y-4">
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="title">Title</label>
+						{{ add_form.title(class="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-gray-100", placeholder="Book Title") }}
+					</div>
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="author">Author</label>
+						{{ add_form.author(class="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-gray-100", placeholder="Book Author") }}
+					</div>
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="author">Edition Date</label>
+						{{ add_form.edition_date(class="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-gray-100", disabled=True, placeholder="Edition Release Date") }}
+					</div>
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="author">Publishers</label>
+						{{ add_form.publishers(class="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-gray-100", disabled=True, placeholder="Edition Publishers") }}
+					</div>
+				</div>
+			</div>
+			<div>
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="description">Description</label>
+				{{ add_form.description(class="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-gray-100", disabled=True, placeholder="Book Description", rows="15") }}
+			</div>
+			<div>
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="tags">Tags (comma-separated)</label>
+				{{ add_form.features(class="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 dark:text-gray-100", disabled=True, placeholder="Book Tags") }}
+			</div>
+			<div class="pt-4 flex justify-end items-center">
+				<span class="material-symbols-outlined" style="margin-right: -40px; z-index: 9999; color: white;">add_circle</span>
+				{{ add_form.add_submit(class="bg-primary text-white font-bold py-3 px-8 rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-colors text-lg cursor-pointer", style="padding-left: 2.8em;") }}
+			</div>
+		</form>
+	</div>
+</div>
+</main>
+<script>
+    // Mock script to show the form on button click
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const bookDetailsForm = document.getElementById('book-details-form');
+
+            if (urlParams.has('barcode')) {
+                bookDetailsForm.classList.remove('hidden');
+            } 
+	})
+	
+	document.getElementById('add_submit').addEventListener('submit', function(event) {
+		document.getElementById('title').removeAttribute('disabled');
+		document.getElementById('title').focus();
+		document.getElementById('author').removeAttribute('disabled');
+		document.getElementById('author').focus();
+	})
+
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const takePhotoBtn = document.getElementById('take-photo-btn');
+        const uploadFileBtn = document.getElementById('upload-file-btn');
+        const fileInput = document.getElementById('barcode-image-input');
+        const resultElement = document.getElementById('barcode');
+        const scannerResult = document.getElementById('scanner-result');
+        let submitted = false;
+		
+        // Event listener for when a file is selected
+        fileInput.addEventListener('change', function(event) {
+            if (event.target.files.length > 0) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+
+                // 1. Read the selected file as a Data URL
+                reader.onload = function(e) {
+                    const imageSrc = e.target.result;
+                    
+                    // Display the image
+                    //imageContainer.innerHTML = `<img src="${imageSrc}" alt="Scanned Barcode Image">`;
+                    
+                    // Start the scanning process
+                    scanImage(imageSrc);
+                };
+                
+                reader.readAsDataURL(file);
+				displayResult('Processing image...', false);
+                //resultElement.value = "Processing image...";
+            }
+        });
+
+        // Helper function to reset and display messages
+        function displayResult(message, isError = false) {
+            scannerResult.textContent = message;
+            scannerResult.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800', 'bg-blue-100', 'text-blue-800');
+            
+            if (isError) {
+                scannerResult.classList.add('bg-red-100', 'text-red-800');
+            } else if (message.includes('Processing')) {
+                 scannerResult.classList.add('bg-blue-100', 'text-blue-800');
+            } else {
+                scannerResult.classList.add('bg-green-100', 'text-green-800');
+            }
+        }
+
+        // 1. Handle dynamic 'capture' attribute for camera access
+        takePhotoBtn.addEventListener('click', () => {
+            // Set capture="environment" to force rear camera on mobile
+            fileInput.setAttribute('capture', 'environment');
+        });
+
+        uploadFileBtn.addEventListener('click', () => {
+            // Remove capture attribute for file upload
+            fileInput.removeAttribute('capture');
+        });
+
+        // Function to perform the barcode scan
+        function scanImage(imageSource) {
+            
+            // Call Quagga.decodeSingle() for one-time image processing
+            Quagga.decodeSingle({
+                src: imageSource, 
+                decoder: {
+                    readers: [
+                        "ean_reader", 
+                        "code_128_reader",
+                        "upc_reader",
+                        "code_39_reader"
+                    ]
+                },
+                locate: true // Enables localization to find the barcode in the image
+            }, function(result) {
+                if (result && result.codeResult) {
+                    // Success
+                    resultElement.value = result.codeResult.code;
+                    displayResult("Barcode detected:" + result.codeResult.code, false);
+                    console.log("Barcode detected:", result.codeResult.code);
+                } else {
+                    // Failure
+                    displayResult("No barcode found or unable to decode.", true);
+                    console.log("No barcode detected.");
+                }
+            });
+        }
+        
+        // Ensure input field is cleared for subsequent attempts
+        fileInput.value = ''; 
+    });
+</script>
+
+{% endblock content %}

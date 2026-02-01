@@ -13,7 +13,8 @@ from datetime import date, datetime, timedelta
 import lxml.html as LH
 import pandas as pd
 import requests
-from google.cloud import bigquery
+from google import genai
+from google.cloud import bigquery, secretmanager
 
 # %%
 
@@ -21,6 +22,10 @@ from google.cloud import bigquery
 class NBA:
 
     def __init__(self, game_date = None, game_set = {}):
+
+        # Get API key for Gemini
+        self.GEMINI_KEY = self.get_key("Gemini-API")
+
         # Dictionary to provide default names for expected outputs as well as the description, a default BigQuery table name and schema structure for processes
         self.VAR_NAMING_GUIDE = {
             'PLAYERS': {
@@ -518,6 +523,85 @@ class NBA:
         # Load selected table to BigQuery
         self.func_load_data(result, self.VAR_NAMING_GUIDE[table]['bigquery_table'], schema)
 
+    def get_key(self, SECRET_NAME):
+        """
+            Get API Key from Google Secret Manager
+        """
+        # Initialize the Secret Manager client
+        SMclient = secretmanager.SecretManagerServiceClient()
+
+        # Set the project ID 
+        project_id = "impactful-post-292301"
+
+        # Build the request to access the secret version
+        request = {"name": f"projects/{project_id}/secrets/{SECRET_NAME}/versions/latest"}
+
+        # Access the secret version
+        response = SMclient.access_secret_version(request)
+
+        # Get the secret value
+        SECRET_VALUE = response.payload.data.decode("UTF-8")
+
+        return SECRET_VALUE
+
+    def enrich_results(self, pbp_data):
+        """Generates AI summaries and tags for a list of content URLs using Gemini API.
+        There is still need to figure out how to ensure game accuracy, without dealing with bot blockers
+        """
+
+        # Initialize the Gemini client
+        client = genai.Client(api_key=self.GEMINI_KEY)
+
+        # Prepare the prompt
+        prompt = '''
+### Role
+You are an NBA Data Scientist and Lead Narrative Writer. You specialize in turning raw play-by-play (PBP) logs into compelling, accurate game recaps.
+
+### Task
+Analyze the provided PBP data for the Game ID [INSERT ID]. Your goal is to synthesize the flow of the game, identifying momentum shifts and key scoring runs.
+
+### Analysis Requirements
+1. **Identify the Lead:** Note the final score and the winning team.
+2. **Find the "Turning Point":** Look for a specific run (e.g., a 12-0 run in the 3rd) or a lead change in the final 2 minutes.
+3. **Statistical context:** From the PBP, identify who hit the most impactful shots or had the highest volume of scoring plays.
+4. **Drafting:** Write a punchy headline and a 3-4 sentence narrative summary.
+
+### Style Constraints
+- **Format:** JSON array.
+- **Tone:** Professional sports journalism. 
+- **Language:** Use terms like "clutch," "momentum," "unanswered run," and "defensive stand."
+
+### Output Format
+[
+  {
+    "game_id": "...",
+    "verified_matchup": "Team A vs Team B (Date)",
+    "headline": "1-sentence hook based on the PBP data.",
+    "summary": "3-4 sentence narrative explaining how the game was won, the key performers, and the decisive momentum shift."
+  }
+]
+
+### Input Data (Play-by-Play Logs)
+''' + pbp_data + '''
+        '''
+
+        # Run the prompt above
+        response_1 = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt, 
+        )
+
+        # Close the sync client to release resources.
+        client.close()
+
+        # Attempt to parse the response text as JSON
+        try:
+            result = json.loads(response_1.text.replace('```json', '').replace('```', ''))
+        except Exception as e:
+            print("Error found in JSON transformation: ", e)
+            result = response_1
+
+        return result
     
 # %%
 
