@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+	
+    <meta charset="UTF-8">
+    <title>Login</title>
+	<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+	<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+	<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+	<script>tailwind.config = {darkMode: "class", theme: {extend: {colors: {primary: "#000000", "background-light": "#f7f7f7", "background-dark": "#191919"}, fontFamily: {display: "Work Sans"}, borderRadius: {DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px"}}}};</script>
+	<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+	
+	<div class="max-w-md mx-auto text-center">
+		<div class="mb-10">
+			<h2 class="text-4xl md:text-5xl font-black text-primary dark:text-white mb-4">Welcome Ratchet Street!</h2>
+			<p class="text-lg text-gray-600 dark:text-gray-400">Share your reads, discover new books, and connect with the rest of Ratchet Street book lovers.</p>
+		</div>
+		<a href="{{ url_for('google_login') }}" class="w-full bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-3 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 transform hover:scale-105 shadow-sm">
+			<svg class="w-6 h-6" viewBox="0 0 48 48">
+				<path d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" fill="#4285F4"></path>
+				<path d="M43.611,20.083H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l5.657,5.657C40.078,36.67,44,31.134,44,24C44,22.659,43.862,21.35,43.611,20.083z" fill="#34A853"></path>
+				<path d="M10.218,28.717c-0.781-2.352-1.218-4.88-1.218-7.587s0.437-5.235,1.218-7.587l-5.657-5.657C3.063,12.094,2,17.828,2,24s1.063,11.906,2.561,16.242L10.218,28.717z" fill="#FBBC05"></path>
+				<path d="M24,48c5.421,0,10.237-1.831,13.784-4.816l-5.657-5.657C30.019,39.196,27.211,40,24,40c-4.454,0-8.289-2.344-10.218-5.717l-5.657,5.657C8.323,44.169,15.71,48,24,48z" fill="#EA4335"></path>
+				<path d="M2,2h44v44H2z" fill="none"></path>
+			</svg>
+			<span>Sign in with Google</span>
+		</a>
+		<!--<p class="mt-8 text-sm text-gray-500 dark:text-gray-400">By signing in, you agree to our <a class="font-medium text-primary dark:text-gray-300 hover:underline" href="#">Terms of Service</a> and <a class="font-medium text-primary dark:text-gray-300 hover:underline" href="#">Privacy Policy</a>.</p>-->
+	</div>
+    
+{% endblock content %}
