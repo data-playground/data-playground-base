@@ -24,7 +24,7 @@ services:
       - db
     environment:
       # No passwords here! FastAPI gets them from GCP.
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/impactful-post-292301-17bfe2bceb2c.json
       # We tell the app WHERE the DB is, but not the password
       - DB_HOST=db 
     volumes:
