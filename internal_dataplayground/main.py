@@ -18,7 +18,7 @@ class Base(DeclarativeBase):
     pass
 
 class Job(Base):
-    __tablename__ = "jobs"
+    __tablename__ = "linkedin_jobs"
 
 	# Primary Key
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
