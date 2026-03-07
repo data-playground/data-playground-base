@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     # Fetch the DB URL from GCP
     try:
         mdb_json = json.loads(get_key("MariaDB"))
-        DB_URL = f"mariadb+asyncmy://{mdb_json['user']}:{mdb_json['password']}@{mdb_json['host']}:3306/{mdb_json['database']}"
+        db_url = f"mariadb+asyncmy://{mdb_json['user']}:{mdb_json['password']}@{mdb_json['host']}:3306/{mdb_json['database']}"
         engine = create_async_engine(db_url, echo=True)
         async_session = async_sessionmaker(engine, expire_on_commit=False)
         print("Successfully connected to MariaDB using GCP Secret.")
