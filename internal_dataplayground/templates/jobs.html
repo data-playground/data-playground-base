@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My AI Job Board</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; background: #f4f4f9; }
+        .job-card { background: white; padding: 20px; margin-bottom: 10px; border-radius: 8px; shadow: 2px 2px 5px rgba(0,0,0,0.1); }
+        .fit-high { color: green; font-weight: bold; }
+        .fit-low { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>Latest Job Postings</h1>
+    {% for job in jobs %}
+    <div class="job-card">
+        <h3>{{ job.job_title }}</h3>
+        <p><strong>Company:</strong> {{ job.company_name }}</p>
+        <p><strong>Fit Score:</strong> <span class="{{ 'fit-high' if job.fit_score > 70 else 'fit-low' }}">{{ job.fit_score }}%</span></p>
+        <a href="{{ job.job_link }}" target="_blank">View Job</a>
+    </div>
+    {% endfor %}
+</body>
+</html>
