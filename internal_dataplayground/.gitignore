@@ -1,0 +1,23 @@
+# --- Security & Secrets ---
+.env
+*.json
+!gcp-key-template.json  # (Optional: ignore all JSON except a template)
+gcp-key.json
+
+# --- Docker & Database ---
+mariadb_data/
+*.log
+
+# --- Python Environment ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+.python-version
+
+# --- OS / IDE Specific ---
+.DS_Store
+.vscode/
+.idea/
