@@ -35,9 +35,9 @@ services:
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       # Points to the 'db' service we created earlier
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://python_user:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://data_playground:${DB_PASSWORD}@db:3306/airflow
     # This service runs once to set up the DB tables and then stops
-    command: version && airflow db init && airflow users create --username admin --firstname Pedro --lastname Admin --role Admin --email admin@example.com --password ${DB_PASSWORD}
+    command: version && airflow db init && airflow users create --username admin --firstname Pedro --lastname Mano --role Admin --email data_playground.contact@gmail.com --password ${DB_PASSWORD}
     depends_on:
       - db
 
@@ -51,7 +51,7 @@ services:
       - "8080:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://python_user:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://data_playground:${DB_PASSWORD}@db:3306/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - PYTHONPATH=/home/main-server/Github/data-playground-base/google_blogs
     volumes:
@@ -68,7 +68,7 @@ services:
       - db
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://python_user:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=mysql+mysqlconnector://data_playground:${DB_PASSWORD}@db:3306/airflow
       - PYTHONPATH=/home/main-server/Github/data-playground-base/google_blogs
     volumes:
       - /home/main-server/airflow/dags:/opt/airflow/dags
