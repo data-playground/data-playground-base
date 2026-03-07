@@ -9,7 +9,7 @@ services:
       # These use the variables from your .env file
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: jobs
-      MYSQL_USER: python_user
+      MYSQL_USER: data_playground
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./mariadb_data:/var/lib/mysql
