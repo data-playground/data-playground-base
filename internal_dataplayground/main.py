@@ -114,12 +114,30 @@ async def get_db():
 
 @app.get("/jobs", response_model=List[JobResponse])
 async def list_jobs(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Job))
+    stmt = (
+        select(Job)
+        .order_by(
+            desc(Job.fit_score), 
+            desc(Job.search_date), 
+            desc(Job.post_date)
+        )
+    )
+    
+    result = await db.execute(stmt)
     return result.scalars().all()
     
 @app.get("/", response_class=HTMLResponse)
 async def home_page(request: Request, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Job))
+    stmt = (
+        select(Job)
+        .order_by(
+            desc(Job.fit_score), 
+            desc(Job.search_date), 
+            desc(Job.post_date)
+        )
+    )
+    
+    result = await db.execute(stmt)
     jobs_list = result.scalars().all()
     
     # This sends the "jobs" list from MariaDB to the "jobs.html" file
