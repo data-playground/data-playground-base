@@ -22,6 +22,7 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     environment:
       # No passwords here! FastAPI gets them from GCP.
       - GOOGLE_APPLICATION_CREDENTIALS=/app/impactful-post-292301-17bfe2bceb2c.json
