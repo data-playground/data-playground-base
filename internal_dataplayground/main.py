@@ -2,7 +2,7 @@ import datetime
 from fastapi import FastAPI, Depends, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, BigInteger, String, Boolean, Date, Text, Integer
+from sqlalchemy import select, desc, BigInteger, String, Boolean, Date, Text, Integer
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from typing import List, Optional
