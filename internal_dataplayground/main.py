@@ -107,6 +107,8 @@ class JobResponse(BaseModel):
 
 # Dependency to get database session
 async def get_db():
+    if async_session is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
     async with async_session() as session:
         yield session
 
