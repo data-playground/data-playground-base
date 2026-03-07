@@ -8,6 +8,7 @@ import urllib.parse
 from collections import defaultdict
 from itertools import zip_longest
 
+import mysql.connector
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -44,6 +45,8 @@ class LinkedInJobScraper:
             "Authorization": f"Bearer {self.get_key('Github-Key')}", 
             "X-GitHub-Api-Version": "2022-11-28"
         }
+
+        self.mysql_auth = self.mysql_authentication()
 
     def search_jobs(self, keywords):
         print(keywords)
@@ -594,6 +597,50 @@ class LinkedInJobScraper:
             r1 = requests.put(f"https://api.github.com/repos/data-playground/data-playground-data/contents/{file_name}?ref=main", headers=self.HEADERS_META, data=data)
 
         return r1
+    
+    def mysql_authentication(self):
+        return mysql.connector.connect(
+            host="localhost",
+            user="python_user",
+            password="pedroPythonpass",
+            database="jobs"
+        )
+    
+    def query_mysql(self, query=None):
+        cursor = self.mysql_auth.cursor()
+        if query:
+            cursor.execute(query)
+            results = cursor.fetchall()
+            cursor.close()
+            return results
+        else:
+            sql = "SELECT distinct job_id FROM linkedin_jobs"
+            cursor.execute(sql)
+            results = cursor.fetchall()
+            jobs_ids = [i[0] for i in results]
+            cursor.close()
+            return jobs_ids
+
+    def load_data_to_mysql(self, df):
+        # If your JSON is nested, e.g., {'users': [...]}, use record_path
+        df['remote'] = [1 if i == 'true' else 0 for i in  df['remote']]  # Changes True -> 1 and False -> 0
+
+        cursor = self.mysql_auth.cursor()
+
+        # 3. Create table based on JSON keys (simplified)
+        # Note: You should ideally define column types (INT, VARCHAR, etc.) manually
+        # columns = ", ".join([f"{col} TEXT" for col in df.columns])
+        # cursor.execute(f"CREATE TABLE IF NOT EXISTS json_table ({columns})")
+
+        # 4. Load data into MySQL
+        for _, row in df.iterrows():
+            sql = f"INSERT INTO linkedin_jobs ({', '.join(df.columns)}) VALUES ({', '.join(['%s']*len(row))})"
+            cursor.execute(sql, tuple(row))
+
+        self.mysql_auth.commit()
+
+        cursor.close()
+        print("Data loaded successfully!")
 # %%
 
 job_searches = [
@@ -607,11 +654,15 @@ job_scraper = LinkedInJobScraper()
 
 # %%
 
+jobs_in_df = job_scraper.query_mysql()
+
 jobs = []
 for search in job_searches:
     jobs.extend(job_scraper.search_jobs(search))
 
 jobs = job_scraper.deduplicate_jobs(jobs)
+
+jobs = [i for i in jobs if int(i['job_id']) not in jobs_in_df]
 
 for job in tqdm(jobs):
     job['description'], job['description'] = job_scraper.get_job_details(job['job_link'])
@@ -627,7 +678,12 @@ final_enriched_jobs = job_scraper.clean_job_list(chunks, all_results)
 
 job_scraper.func_load_data(final_enriched_jobs, 'enriched_jobs')
 
-job_scraper.load_to_github('JOBS.json', final_enriched_jobs)
+# job_scraper.load_to_github('JOBS.json', final_enriched_jobs)
+
+job_scraper.load_data_to_mysql(pd.DataFrame([
+    {k: v for k, v in item.items() if k != "ID"}
+    for item in final_enriched_jobs
+]))
 # %%
 
 
