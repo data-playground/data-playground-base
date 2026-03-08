@@ -1,15 +1,18 @@
 # --- Security & Secrets ---
 .env
 *.json
-!gcp-key-template.json  # (Optional: ignore all JSON except a template)
 gcp-key.json
+impactful-post-292301-17bfe2bceb2c.json
 
 # --- Docker & Database ---
 mariadb_data/
 *.log
+migrate_jobs.sql
 
 # --- Python Environment ---
 __pycache__/
+*.pyc
+.pytest_cache/
 *.py[cod]
 *$py.class
 venv/
