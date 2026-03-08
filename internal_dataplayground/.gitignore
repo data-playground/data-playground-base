@@ -8,6 +8,7 @@ impactful-post-292301-17bfe2bceb2c.json
 mariadb_data/
 *.log
 migrate_jobs.sql
+db_backups/
 
 # --- Python Environment ---
 __pycache__/
