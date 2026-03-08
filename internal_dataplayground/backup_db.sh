@@ -5,7 +5,7 @@
 # =============================================================================
 
 # --- Configuration ---
-PROJECT_DIR="$HOME/Github/data-playground-base"
+PROJECT_DIR="$HOME/Github/data-playground-base/internal_dataplayground"
 BACKUP_DIR="$PROJECT_DIR/db_backups"
 GCP_BUCKET="gs://life-os-db-backups"
 DB_CONTAINER="life_os_db"
@@ -33,6 +33,9 @@ log "Running mysqldump on container: $DB_CONTAINER..."
 # We fetch the root password from the .env file so no plaintext credentials
 # are ever inside this script
 source "$PROJECT_DIR/.env"
+
+export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_DIR/impactful-post-292301-17bfe2bceb2c.json"
+gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
 
 docker exec "$DB_CONTAINER" \
     mysqldump -u "$DB_USER" -p"${DB_ROOT_PASSWORD}" \
