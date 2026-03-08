@@ -26,5 +26,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/impactful-post-292301-17bfe2bceb2c.json
       # We tell the app WHERE the DB is, but not the password
       - DB_HOST=db 
+      - APP_ENV=production
     volumes:
       - .:/app
