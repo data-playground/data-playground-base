@@ -1,7 +1,7 @@
 # dags/life_os_db_backup.py
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator, BranchPythonOperator
-from airflow.providers.standard.operators.bash import BashOperator
+# from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from datetime import datetime, timedelta
 import subprocess
@@ -131,6 +131,7 @@ def upload_to_gcs(**context) -> None:
     blob.upload_from_filename(filepath)
 
     log.info(f"[Native] Upload successful: gs://{GCP_BUCKET}/{filename}")
+    return f"gs://{GCP_BUCKET}/{filename}"  # ✅ now xcom_pull will get a truthy value
 
 
 def cleanup_local_backups(**context) -> None:
@@ -161,22 +162,60 @@ def cleanup_local_backups(**context) -> None:
 def check_native_success(**context) -> str:
     """
     BranchPythonOperator logic.
-    Checks if both native tasks succeeded. If yes, skip bash fallback.
-    If either failed, route to the bash fallback task.
+    Checks the actual Airflow task states of native_dump and native_upload.
+    Routes to skip_fallback if both succeeded, bash_fallback otherwise.
     """
+    from airflow.utils.state import TaskInstanceState
+
     ti = context["ti"]
+    dag_run = context["dag_run"]
 
-    dump_state = ti.xcom_pull(task_ids="native_dump")
-    upload_state = ti.xcom_pull(task_ids="native_upload")
+    def get_task_state(task_id: str) -> str:
+        task_instance = dag_run.get_task_instance(task_id)
+        return task_instance.state if task_instance else None
 
-    # If XCom values exist, native path completed successfully
-    if dump_state and upload_state:
+    dump_state = get_task_state("native_dump")
+    upload_state = get_task_state("native_upload")
+
+    log.info(f"[Branch] native_dump state: {dump_state}")
+    log.info(f"[Branch] native_upload state: {upload_state}")
+
+    if (
+        dump_state == TaskInstanceState.SUCCESS
+        and upload_state == TaskInstanceState.SUCCESS
+    ):
         log.info("[Branch] Native strategy succeeded. Skipping bash fallback.")
         return "skip_fallback"
 
-    log.warning("[Branch] Native strategy incomplete. Routing to bash fallback.")
+    log.warning(
+        f"[Branch] Native strategy incomplete "
+        f"(dump={dump_state}, upload={upload_state}). "
+        f"Routing to bash fallback."
+    )
     return "bash_fallback"
 
+def run_bash_fallback(**context) -> None:
+    """
+    Fallback strategy — runs the existing backup_db.sh script directly
+    via subprocess to avoid BashOperator's internal shell PATH issue.
+    """
+    import subprocess
+    log.info("[Fallback] Native strategy failed. Running bash script fallback...")
+
+    result = subprocess.run(
+        [BASH_BIN, str(BASH_SCRIPT_PATH)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout so it all shows in Airflow logs
+    )
+
+    # Print script output into Airflow logs line by line
+    for line in result.stdout.decode().splitlines():
+        log.info(f"[Fallback] {line}")
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Bash fallback script failed with exit code {result.returncode}")
+
+    log.info("[Fallback] Bash fallback completed successfully.")
 
 # =============================================================================
 # DAG DEFINITION
@@ -229,9 +268,9 @@ with DAG(
     # BASH FALLBACK PATH
     # Only runs if native_dump or native_upload failed.
     # ------------------------------------------------------------------
-    bash_fallback = BashOperator(
+    bash_fallback = PythonOperator(
         task_id="bash_fallback",
-        bash_command=f"{BASH_BIN} {BASH_SCRIPT_PATH} ",  # ✅ trailing space prevents Jinja template lookup
+        python_callable=run_bash_fallback,
         trigger_rule="all_done",
     )
 
