@@ -21,9 +21,9 @@ async def create_application_log(
     Accepts form data from HTMX hx-vals and returns an HTML fragment
     of the updated ATS button row so HTMX can swap it in place.
     """
-    form = await request.form()
-    job_id = int(form.get("job_id"))
-    status_raw = form.get("status")
+    body = await request.json()
+    job_id = int(body.get("job_id"))
+    status_raw = body.get("status")
 
     # Validate job exists
     job = await db.get(Job, job_id)
@@ -53,7 +53,7 @@ async def create_application_log(
         {
             "request": request,
             "job": job,
-            "current": current,
+            "current": status.name,  # "APPLIED", "PHONE_SCREEN" etc.
         }
     )
 

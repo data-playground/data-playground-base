@@ -9,42 +9,42 @@
     hx-swap="outerHTML settle:300ms"
 >
     <button
-        class="ats-btn {% if current == 'applied' %}status-applied{% endif %}"
+        class="ats-btn {% if current == 'APPLIED' %}status-applied{% endif %}"
         hx-post="/ats/log"
         hx-vals='{"job_id": {{ job.ID }}, "status": "APPLIED"}'
         onclick="showToast('Marked as Applied')"
     >Applied</button>
 
     <button
-        class="ats-btn {% if current == 'phone_screen' %}status-phone_screen{% endif %}"
+        class="ats-btn {% if current == 'PHONE_SCREEN' %}status-phone_screen{% endif %}"
         hx-post="/ats/log"
         hx-vals='{"job_id": {{ job.ID }}, "status": "PHONE_SCREEN"}'
         onclick="showToast('Marked as Phone Screen')"
     >Phone</button>
 
     <button
-        class="ats-btn {% if current == 'interviewing' %}status-interviewing{% endif %}"
+        class="ats-btn {% if current == 'INTERVIEWING' %}status-interviewing{% endif %}"
         hx-post="/ats/log"
         hx-vals='{"job_id": {{ job.ID }}, "status": "INTERVIEWING"}'
         onclick="showToast('Marked as Interviewing')"
     >Interview</button>
 
     <button
-        class="ats-btn {% if current == 'technical_assessment' %}status-technical{% endif %}"
+        class="ats-btn {% if current == 'TECHNICAL_ASSESSMENT' %}status-technical{% endif %}"
         hx-post="/ats/log"
         hx-vals='{"job_id": {{ job.ID }}, "status": "TECHNICAL_ASSESSMENT"}'
         onclick="showToast('Marked as Technical')"
     >Technical</button>
 
     <button
-        class="ats-btn {% if current == 'rejected' %}status-rejected{% endif %}"
+        class="ats-btn {% if current == 'REJECTED' %}status-rejected{% endif %}"
         hx-post="/ats/log"
         hx-vals='{"job_id": {{ job.ID }}, "status": "REJECTED"}'
         onclick="showToast('Marked as Rejected')"
     >Rejected</button>
 
     <button
-        class="ats-btn {% if current == 'offer' %}status-offer{% endif %}"
+        class="ats-btn {% if current == 'OFFER' %}status-offer{% endif %}"
         hx-post="/ats/log"
         hx-vals='{"job_id": {{ job.ID }}, "status": "OFFER"}'
         onclick="showToast('🎉 Offer logged!')"
