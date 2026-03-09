@@ -37,7 +37,7 @@ source "$PROJECT_DIR/.env"
 export GOOGLE_APPLICATION_CREDENTIALS="$PROJECT_DIR/impactful-post-292301-17bfe2bceb2c.json"
 gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
 
-docker exec "$DB_CONTAINER" \
+/usr/bin/docker exec "$DB_CONTAINER" \
     mysqldump -u "$DB_USER" -p"${DB_ROOT_PASSWORD}" \
     --single-transaction \
     --routines \

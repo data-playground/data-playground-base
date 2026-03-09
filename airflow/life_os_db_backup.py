@@ -1,8 +1,8 @@
 # dags/life_os_db_backup.py
 from airflow import DAG
-from airflow.operators.python import PythonOperator, BranchPythonOperator
-from airflow.operators.bash import BashOperator
-from airflow.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.python import PythonOperator, BranchPythonOperator
+from airflow.providers.standard.operators.bash import BashOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 from datetime import datetime, timedelta
 import subprocess
 import gzip
@@ -67,7 +67,7 @@ def dump_database(**context) -> str:
     log.info(f"[Native] Starting mysqldump for database: {DB_NAME}")
 
     dump_cmd = [
-        "docker", "exec", DB_CONTAINER,
+        "/usr/bin/docker", "exec", DB_CONTAINER,  # ✅ full path, not relying on PATH
         "mysqldump",
         f"-u{DB_USER}",
         f"-p{db_password}",
@@ -227,7 +227,7 @@ with DAG(
     # ------------------------------------------------------------------
     bash_fallback = BashOperator(
         task_id="bash_fallback",
-        bash_command=f"bash {BASH_SCRIPT_PATH}",
+        bash_command=f"bash {BASH_SCRIPT_PATH} ",  # ✅ trailing space prevents Jinja template lookup
         trigger_rule="all_done",
     )
 
