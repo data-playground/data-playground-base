@@ -256,12 +256,12 @@ with DAG(
     native_dump >> native_upload >> branch
     branch >> [skip_fallback, bash_fallback]
     [skip_fallback, bash_fallback] >> cleanup
-```
+    
+"""
 
 ---
 
 ## How the Flow Works
-```
 native_dump → native_upload → check_native_success
                                     │
                     ┌───────────────┴───────────────┐
@@ -272,3 +272,4 @@ native_dump → native_upload → check_native_success
                     └───────────────┬───────────────┘
                                     ▼
                             cleanup_local_backups
+"""
