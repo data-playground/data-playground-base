@@ -193,7 +193,7 @@ with DAG(
     ),
     default_args=default_args,
     start_date=datetime(2026, 3, 8),
-    schedule_interval="0 2 * * *",  # Every night at 2:00 AM
+    schedule="0 2 * * *",  # Every night at 2:00 AM
     catchup=False,
     tags=["life_os", "backup", "infrastructure"],
 ) as dag:
