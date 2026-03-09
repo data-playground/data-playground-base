@@ -26,6 +26,10 @@ DB_NAME = "jobs"
 DB_USER = "root"
 RETAIN_DAYS = 7
 
+BASH_BIN = "/usr/bin/bash"
+DOCKER_BIN = "/usr/bin/docker"   # confirm with `which docker`
+GSUTIL_BIN = "/snap/bin/gsutil"   # confirm with `which gsutil`
+
 log = logging.getLogger(__name__)
 
 # =============================================================================
@@ -67,7 +71,7 @@ def dump_database(**context) -> str:
     log.info(f"[Native] Starting mysqldump for database: {DB_NAME}")
 
     dump_cmd = [
-        "/usr/bin/docker", "exec", DB_CONTAINER,  # ✅ full path, not relying on PATH
+        DOCKER_BIN, "exec", DB_CONTAINER,  # ✅ full path, not relying on PATH
         "mysqldump",
         f"-u{DB_USER}",
         f"-p{db_password}",
@@ -227,7 +231,7 @@ with DAG(
     # ------------------------------------------------------------------
     bash_fallback = BashOperator(
         task_id="bash_fallback",
-        bash_command=f"bash {BASH_SCRIPT_PATH} ",  # ✅ trailing space prevents Jinja template lookup
+        bash_command=f"{BASH_BIN} {BASH_SCRIPT_PATH} ",  # ✅ trailing space prevents Jinja template lookup
         trigger_rule="all_done",
     )
 
