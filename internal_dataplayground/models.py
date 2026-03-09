@@ -25,7 +25,7 @@ class ApplicationStatus(enum.Enum):
 class Job(Base):
     __tablename__ = "linkedin_jobs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    ID: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     job_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     job_title: Mapped[str] = mapped_column(String(255))
     company_name: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -79,7 +79,7 @@ class ApplicationLog(Base):
     # Foreign key linking back to linkedin_jobs
     job_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("linkedin_jobs.id", ondelete="CASCADE"),
+        ForeignKey("linkedin_jobs.ID", ondelete="CASCADE"),
         nullable=False,
         index=True,  # Speeds up lookups like "show me all logs for job X"
     )
