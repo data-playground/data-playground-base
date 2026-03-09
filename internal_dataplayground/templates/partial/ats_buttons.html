@@ -1,0 +1,52 @@
+{# templates/partials/ats_buttons.html
+   Returned by POST /ats/log and swapped in by HTMX.
+   `job` = Job ORM object, `current` = active status string (e.g. "applied")
+#}
+<div
+    class="ats-buttons"
+    id="ats-{{ job.ID }}"
+    hx-target="#ats-{{ job.ID }}"
+    hx-swap="outerHTML settle:300ms"
+>
+    <button
+        class="ats-btn {% if current == 'applied' %}status-applied{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "APPLIED"}'
+        onclick="showToast('Marked as Applied')"
+    >Applied</button>
+
+    <button
+        class="ats-btn {% if current == 'phone_screen' %}status-phone_screen{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "PHONE_SCREEN"}'
+        onclick="showToast('Marked as Phone Screen')"
+    >Phone</button>
+
+    <button
+        class="ats-btn {% if current == 'interviewing' %}status-interviewing{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "INTERVIEWING"}'
+        onclick="showToast('Marked as Interviewing')"
+    >Interview</button>
+
+    <button
+        class="ats-btn {% if current == 'technical_assessment' %}status-technical{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "TECHNICAL_ASSESSMENT"}'
+        onclick="showToast('Marked as Technical')"
+    >Technical</button>
+
+    <button
+        class="ats-btn {% if current == 'rejected' %}status-rejected{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "REJECTED"}'
+        onclick="showToast('Marked as Rejected')"
+    >Rejected</button>
+
+    <button
+        class="ats-btn {% if current == 'offer' %}status-offer{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "OFFER"}'
+        onclick="showToast('🎉 Offer logged!')"
+    >Offer</button>
+</div>

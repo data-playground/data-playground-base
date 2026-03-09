@@ -1,23 +1,775 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="dark">
 <head>
-    <title>My AI Job Board</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life OS — Job Tracker</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: sans-serif; margin: 40px; background: #f4f4f9; }
-        .job-card { background: white; padding: 20px; margin-bottom: 10px; border-radius: 8px; shadow: 2px 2px 5px rgba(0,0,0,0.1); }
-        .fit-high { color: green; font-weight: bold; }
-        .fit-low { color: orange; }
+        /* =============================================
+           CSS VARIABLES — Three themes
+           ============================================= */
+        :root {
+            --transition: 0.25s ease;
+        }
+
+        [data-theme="dark"] {
+            --bg:           #0d0d0f;
+            --bg-card:      #16161a;
+            --bg-hover:     #1e1e24;
+            --border:       #2a2a35;
+            --border-accent:#3d3d52;
+            --text-primary: #e8e8f0;
+            --text-secondary:#8888a8;
+            --text-muted:   #50505f;
+            --accent:       #6c63ff;
+            --accent-dim:   rgba(108, 99, 255, 0.15);
+            --score-high:   #00e5a0;
+            --score-mid:    #ffb020;
+            --score-low:    #ff5050;
+            --tag-bg:       #1e1e28;
+            --shadow:       0 2px 12px rgba(0,0,0,0.4);
+        }
+
+        [data-theme="light"] {
+            --bg:           #f5f4f8;
+            --bg-card:      #ffffff;
+            --bg-hover:     #faf9fd;
+            --border:       #e2e0ec;
+            --border-accent:#c8c4e8;
+            --text-primary: #1a1a2e;
+            --text-secondary:#5a5880;
+            --text-muted:   #9896b0;
+            --accent:       #5548e8;
+            --accent-dim:   rgba(85, 72, 232, 0.08);
+            --score-high:   #00a870;
+            --score-mid:    #d4920a;
+            --score-low:    #d63030;
+            --tag-bg:       #eeecf8;
+            --shadow:       0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        [data-theme="mixed"] {
+            --bg:           #111318;
+            --bg-card:      #f8f7fc;
+            --bg-hover:     #f2f0fa;
+            --border:       #e0ddf0;
+            --border-accent:#c5c0e8;
+            --text-primary: #1c1b2e;
+            --text-secondary:#58567a;
+            --text-muted:   #9896b0;
+            --accent:       #7c6fff;
+            --accent-dim:   rgba(124, 111, 255, 0.1);
+            --score-high:   #00c980;
+            --score-mid:    #e8a020;
+            --score-low:    #f04040;
+            --tag-bg:       #eeeaf8;
+            --shadow:       0 2px 10px rgba(0,0,0,0.08);
+            --sidebar-bg:   #111318;
+            --sidebar-text: #c8c6e0;
+        }
+
+        /* =============================================
+           RESET & BASE
+           ============================================= */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'DM Mono', monospace;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background var(--transition), color var(--transition);
+        }
+
+        /* =============================================
+           LAYOUT
+           ============================================= */
+        .layout {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            grid-template-rows: auto 1fr;
+            min-height: 100vh;
+        }
+
+        /* Mixed theme: sidebar stays dark */
+        [data-theme="mixed"] .sidebar {
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            border-right: 1px solid #2a2a35;
+        }
+
+        [data-theme="mixed"] .sidebar .nav-label,
+        [data-theme="mixed"] .sidebar .os-title {
+            color: #c8c6e0;
+        }
+
+        [data-theme="mixed"] .sidebar .nav-item {
+            color: #9896b8;
+        }
+
+        [data-theme="mixed"] .sidebar .nav-item.active,
+        [data-theme="mixed"] .sidebar .nav-item:hover {
+            background: rgba(255,255,255,0.06);
+            color: #e8e6f8;
+        }
+
+        [data-theme="mixed"] .main-content {
+            background: var(--bg-card);
+        }
+
+        /* =============================================
+           SIDEBAR
+           ============================================= */
+        .sidebar {
+            grid-row: 1 / -1;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 24px 0;
+            display: flex;
+            flex-direction: column;
+            transition: background var(--transition);
+        }
+
+        .os-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--accent);
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .os-title span {
+            display: block;
+            font-size: 10px;
+            font-weight: 400;
+            color: var(--text-muted);
+            letter-spacing: 0.08em;
+            margin-top: 2px;
+        }
+
+        .nav-label {
+            font-size: 9px;
+            font-weight: 500;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0 20px;
+            margin-bottom: 6px;
+            margin-top: 16px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition);
+            text-decoration: none;
+            border-left: 2px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: var(--accent-dim);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border-left-color: var(--accent);
+            font-weight: 500;
+        }
+
+        .nav-item .icon { font-size: 14px; width: 16px; text-align: center; }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 16px 20px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Theme switcher */
+        .theme-label {
+            font-size: 9px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .theme-switcher {
+            display: flex;
+            gap: 6px;
+        }
+
+        .theme-btn {
+            flex: 1;
+            padding: 6px 4px;
+            font-family: 'DM Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.05em;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-muted);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all var(--transition);
+            text-align: center;
+        }
+
+        .theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .theme-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        /* =============================================
+           TOPBAR
+           ============================================= */
+        .topbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 0 28px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background var(--transition);
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+
+        .page-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--text-primary);
+        }
+
+        .job-count {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        /* Filter pills */
+        .filter-bar {
+            display: flex;
+            gap: 6px;
+        }
+
+        .filter-pill {
+            padding: 4px 12px;
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
+        .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        /* =============================================
+           MAIN CONTENT
+           ============================================= */
+        .main-content {
+            background: var(--bg);
+            padding: 20px 28px;
+            overflow-y: auto;
+            transition: background var(--transition);
+        }
+
+        /* =============================================
+           JOB TABLE (compact list view)
+           ============================================= */
+        .jobs-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--bg-card);
+            box-shadow: var(--shadow);
+        }
+
+        .jobs-table thead tr {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .jobs-table th {
+            padding: 10px 14px;
+            font-size: 9px;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .jobs-table tbody tr {
+            border-bottom: 1px solid var(--border);
+            transition: background var(--transition);
+        }
+
+        .jobs-table tbody tr:last-child { border-bottom: none; }
+
+        .jobs-table tbody tr:hover { background: var(--bg-hover); }
+
+        .jobs-table td {
+            padding: 10px 14px;
+            font-size: 11px;
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        /* Score badge */
+        .score-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 22px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.03em;
+        }
+
+        .score-high { background: rgba(0,229,160,0.12); color: var(--score-high); }
+        .score-mid  { background: rgba(255,176,32,0.12); color: var(--score-mid); }
+        .score-low  { background: rgba(255,80,80,0.12);  color: var(--score-low); }
+
+        /* Job title cell */
+        .job-title-cell { max-width: 260px; }
+
+        .job-title-link {
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 12px;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: color var(--transition);
+        }
+
+        .job-title-link:hover { color: var(--accent); }
+
+        .job-company {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Remote tag */
+        .tag {
+            display: inline-block;
+            padding: 2px 7px;
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            border-radius: 3px;
+            background: var(--tag-bg);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .tag-remote { background: rgba(108,99,255,0.12); color: var(--accent); }
+
+        /* =============================================
+           ATS STATUS BUTTONS
+           The core HTMX interaction.
+           ============================================= */
+        .ats-cell {
+            min-width: 320px;
+        }
+
+        .ats-buttons {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .ats-btn {
+            padding: 3px 9px;
+            font-family: 'DM Mono', monospace;
+            font-size: 9px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .ats-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        /* Active state — set by HTMX response */
+        .ats-btn.status-applied       { border-color: #6c63ff; color: #6c63ff; background: rgba(108,99,255,0.1); }
+        .ats-btn.status-phone_screen  { border-color: #00bfff; color: #00bfff; background: rgba(0,191,255,0.1); }
+        .ats-btn.status-interviewing  { border-color: #ffb020; color: #ffb020; background: rgba(255,176,32,0.1); }
+        .ats-btn.status-technical     { border-color: #ff8c42; color: #ff8c42; background: rgba(255,140,66,0.1); }
+        .ats-btn.status-rejected      { border-color: #ff5050; color: #ff5050; background: rgba(255,80,80,0.1); }
+        .ats-btn.status-offer         { border-color: #00e5a0; color: #00e5a0; background: rgba(0,229,160,0.1); }
+
+        /* HTMX loading indicator */
+        .ats-btn.htmx-request {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* Success flash animation */
+        @keyframes flash-success {
+            0%   { background: rgba(0,229,160,0.3); }
+            100% { background: transparent; }
+        }
+
+        .ats-buttons.htmx-settled {
+            animation: flash-success 0.6s ease forwards;
+        }
+
+        /* =============================================
+           EMPTY / LOADING STATES
+           ============================================= */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state .empty-icon { font-size: 32px; margin-bottom: 12px; }
+        .empty-state p { font-size: 12px; }
+
+        /* =============================================
+           TOAST NOTIFICATION
+           ============================================= */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 10px 18px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--score-high);
+            border-radius: 6px;
+            font-size: 11px;
+            color: var(--text-primary);
+            box-shadow: var(--shadow);
+            opacity: 0;
+            transform: translateY(8px);
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* =============================================
+           SCROLLBAR
+           ============================================= */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
     </style>
 </head>
 <body>
-    <h1>Latest Job Postings</h1>
-    {% for job in jobs %}
-    <div class="job-card">
-        <h3>{{ job.job_title }}</h3>
-        <p><strong>Company:</strong> {{ job.company_name }}</p>
-        <p><strong>Fit Score:</strong> <span class="{{ 'fit-high' if job.fit_score > 70 else 'fit-low' }}">{{ job.fit_score }}%</span></p>
-        <a href="{{ job.job_link }}" target="_blank">View Job</a>
-    </div>
-    {% endfor %}
+
+<div class="layout">
+
+    <!-- =============================================
+         SIDEBAR
+         ============================================= -->
+    <aside class="sidebar">
+        <div class="os-title">
+            Life OS
+            <span>v2.0 · personal</span>
+        </div>
+
+        <div class="nav-label">Modules</div>
+        <a class="nav-item active" href="/jobs">
+            <span class="icon">◈</span> Job Tracker
+        </a>
+        <a class="nav-item" href="#">
+            <span class="icon">◎</span> Finance
+        </a>
+        <a class="nav-item" href="#">
+            <span class="icon">◷</span> Workouts
+        </a>
+        <a class="nav-item" href="#">
+            <span class="icon">◻</span> Blog Ideas
+        </a>
+
+        <div class="nav-label">Pipeline</div>
+        <a class="nav-item" href="#">
+            <span class="icon">⊕</span> Add Job Link
+        </a>
+        <a class="nav-item" href="#">
+            <span class="icon">◑</span> Dashboard
+        </a>
+
+        <div class="sidebar-footer">
+            <div class="theme-label">Theme</div>
+            <div class="theme-switcher">
+                <button class="theme-btn active" onclick="setTheme('dark', this)">Dark</button>
+                <button class="theme-btn" onclick="setTheme('light', this)">Light</button>
+                <button class="theme-btn" onclick="setTheme('mixed', this)">Mixed</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- =============================================
+         TOPBAR
+         ============================================= -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <span class="page-title">Job Tracker</span>
+            <span class="job-count">{{ jobs|length }} listings</span>
+        </div>
+        <div class="topbar-right">
+            <div class="filter-bar">
+                <button class="filter-pill active" onclick="filterJobs('all', this)">All</button>
+                <button class="filter-pill" onclick="filterJobs('high', this)">High Fit</button>
+                <button class="filter-pill" onclick="filterJobs('remote', this)">Remote</button>
+                <button class="filter-pill" onclick="filterJobs('applied', this)">Applied</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- =============================================
+         MAIN CONTENT
+         ============================================= -->
+    <main class="main-content">
+
+        {% if jobs %}
+        <table class="jobs-table" id="jobs-table">
+            <thead>
+                <tr>
+                    <th>Score</th>
+                    <th>Role / Company</th>
+                    <th>Location</th>
+                    <th>Posted</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for job in jobs %}
+            <tr
+                data-job-id="{{ job.ID }}"
+                data-score="{{ job.fit_score }}"
+                data-remote="{{ job.remote | lower }}"
+                data-status="{{ job.latest_status | lower | replace(' ', '_') if job.latest_status else 'none' }}"
+            >
+                <!-- Score -->
+                <td>
+                    <span class="score-badge {% if job.fit_score >= 75 %}score-high{% elif job.fit_score >= 50 %}score-mid{% else %}score-low{% endif %}">
+                        {{ job.fit_score }}
+                    </span>
+                </td>
+
+                <!-- Title / Company -->
+                <td class="job-title-cell">
+                    <a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">
+                        {{ job.job_title }}
+                    </a>
+                    <div class="job-company">{{ job.company_name or '—' }}</div>
+                </td>
+
+                <!-- Location -->
+                <td>
+                    <span class="tag {% if job.remote %}tag-remote{% endif %}">
+                        {{ 'Remote' if job.remote else (job.location or '—') }}
+                    </span>
+                </td>
+
+                <!-- Date -->
+                <td style="color: var(--text-muted); font-size: 10px; white-space: nowrap;">
+                    {{ job.post_date.strftime('%b %d') if job.post_date else '—' }}
+                </td>
+
+                <!-- ATS Status Buttons (HTMX) -->
+                <td class="ats-cell">
+                    <div
+                        class="ats-buttons"
+                        id="ats-{{ job.ID }}"
+                        hx-target="#ats-{{ job.ID }}"
+                        hx-swap="outerHTML settle:300ms"
+                    >
+                        {% set current = job.latest_status | lower | replace(' ', '_') if job.latest_status else '' %}
+
+                        <button
+                            class="ats-btn {% if current == 'applied' %}status-applied{% endif %}"
+                            hx-post="/ats/log"
+                            hx-vals='{"job_id": {{ job.ID }}, "status": "APPLIED"}'
+                            hx-include="[name='csrf']"
+                            onclick="showToast('Marked as Applied')"
+                        >Applied</button>
+
+                        <button
+                            class="ats-btn {% if current == 'phone_screen' %}status-phone_screen{% endif %}"
+                            hx-post="/ats/log"
+                            hx-vals='{"job_id": {{ job.ID }}, "status": "PHONE_SCREEN"}'
+                            onclick="showToast('Marked as Phone Screen')"
+                        >Phone</button>
+
+                        <button
+                            class="ats-btn {% if current == 'interviewing' %}status-interviewing{% endif %}"
+                            hx-post="/ats/log"
+                            hx-vals='{"job_id": {{ job.ID }}, "status": "INTERVIEWING"}'
+                            onclick="showToast('Marked as Interviewing')"
+                        >Interview</button>
+
+                        <button
+                            class="ats-btn {% if current == 'technical_assessment' %}status-technical{% endif %}"
+                            hx-post="/ats/log"
+                            hx-vals='{"job_id": {{ job.ID }}, "status": "TECHNICAL_ASSESSMENT"}'
+                            onclick="showToast('Marked as Technical')"
+                        >Technical</button>
+
+                        <button
+                            class="ats-btn {% if current == 'rejected' %}status-rejected{% endif %}"
+                            hx-post="/ats/log"
+                            hx-vals='{"job_id": {{ job.ID }}, "status": "REJECTED"}'
+                            onclick="showToast('Marked as Rejected')"
+                        >Rejected</button>
+
+                        <button
+                            class="ats-btn {% if current == 'offer' %}status-offer{% endif %}"
+                            hx-post="/ats/log"
+                            hx-vals='{"job_id": {{ job.ID }}, "status": "OFFER"}'
+                            onclick="showToast('🎉 Offer logged!')"
+                        >Offer</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">◈</div>
+            <p>No jobs found. Add a link to get started.</p>
+        </div>
+        {% endif %}
+
+    </main>
+</div>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<script>
+    // =============================================
+    // THEME SWITCHER
+    // =============================================
+    function setTheme(theme, btn) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('life-os-theme', theme);
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    // Restore saved theme on load
+    (function() {
+        const saved = localStorage.getItem('life-os-theme');
+        if (saved) {
+            document.documentElement.setAttribute('data-theme', saved);
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase() === saved);
+            });
+        }
+    })();
+
+    // =============================================
+    // FILTER PILLS
+    // =============================================
+    function filterJobs(type, btn) {
+        document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+
+        const rows = document.querySelectorAll('#jobs-table tbody tr');
+        rows.forEach(row => {
+            const score  = parseInt(row.dataset.score);
+            const remote = row.dataset.remote === 'true';
+            const status = row.dataset.status;
+
+            let show = true;
+            if (type === 'high')    show = score >= 75;
+            if (type === 'remote')  show = remote;
+            if (type === 'applied') show = status !== 'none' && status !== '';
+
+            row.style.display = show ? '' : 'none';
+        });
+    }
+
+    // =============================================
+    // TOAST NOTIFICATION
+    // =============================================
+    let toastTimer;
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    // =============================================
+    // HTMX: After ATS button fires, update the
+    // row's data-status attribute for filter pills
+    // =============================================
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        const target = evt.target;
+        if (!target.classList.contains('ats-buttons')) return;
+
+        // Find the active button and update row data attribute
+        const activeBtn = target.querySelector('.ats-btn[class*="status-"]');
+        if (activeBtn) {
+            const row = target.closest('tr');
+            const statusClass = [...activeBtn.classList]
+                .find(c => c.startsWith('status-'))
+                ?.replace('status-', '');
+            if (row && statusClass) row.dataset.status = statusClass;
+        }
+    });
+</script>
 </body>
 </html>
