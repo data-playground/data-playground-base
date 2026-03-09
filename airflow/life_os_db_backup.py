@@ -99,11 +99,12 @@ def dump_database(**context) -> str:
             f"Dump file suspiciously small ({file_size} bytes). "
             "Possible empty dump or Docker connection failure."
         )
-
+        
     log.info(f"[Native] Dump successful: {filename} ({file_size / 1024 / 1024:.2f} MB)")
 
     context["ti"].xcom_push(key="backup_filepath", value=str(filepath))
     context["ti"].xcom_push(key="backup_filename", value=filename)
+    context["ti"].xcom_push(key="status", value="success")  # ✅ explicit status key
 
     return str(filepath)
 
@@ -131,7 +132,9 @@ def upload_to_gcs(**context) -> None:
     blob.upload_from_filename(filepath)
 
     log.info(f"[Native] Upload successful: gs://{GCP_BUCKET}/{filename}")
-    return f"gs://{GCP_BUCKET}/{filename}"  # ✅ now xcom_pull will get a truthy value
+
+    context["ti"].xcom_push(key="status", value="success")  # ✅ explicit status key
+    return f"gs://{GCP_BUCKET}/{filename}"
 
 
 def cleanup_local_backups(**context) -> None:
@@ -162,35 +165,26 @@ def cleanup_local_backups(**context) -> None:
 def check_native_success(**context) -> str:
     """
     BranchPythonOperator logic.
-    Checks the actual Airflow task states of native_dump and native_upload.
+    Checks explicit XCom keys pushed by native_dump and native_upload.
     Routes to skip_fallback if both succeeded, bash_fallback otherwise.
     """
-    from airflow.utils.state import TaskInstanceState
-
     ti = context["ti"]
-    dag_run = context["dag_run"]
 
-    def get_task_state(task_id: str) -> str:
-        task_instance = dag_run.get_task_instance(task_id)
-        return task_instance.state if task_instance else None
+    # Pull the explicit status keys we push at the end of each native task
+    dump_status = ti.xcom_pull(task_ids="native_dump", key="status")
+    upload_status = ti.xcom_pull(task_ids="native_upload", key="status")
 
-    dump_state = get_task_state("native_dump")
-    upload_state = get_task_state("native_upload")
+    log.info(f"[Branch] native_dump status: {dump_status}")
+    log.info(f"[Branch] native_upload status: {upload_status}")
 
-    log.info(f"[Branch] native_dump state: {dump_state}")
-    log.info(f"[Branch] native_upload state: {upload_state}")
-
-    if (
-        dump_state == TaskInstanceState.SUCCESS
-        and upload_state == TaskInstanceState.SUCCESS
-    ):
+    if dump_status == "success" and upload_status == "success":
         log.info("[Branch] Native strategy succeeded. Skipping bash fallback.")
         return "skip_fallback"
 
     log.warning(
         f"[Branch] Native strategy incomplete "
-        f"(dump={dump_state}, upload={upload_state}). "
-        f"Routing to bash fallback."
+        f"(dump={dump_status}, upload={upload_status}). "
+        "Routing to bash fallback."
     )
     return "bash_fallback"
 
