@@ -134,5 +134,63 @@ class ApplicationLogResponse(BaseModel):
         from_attributes = True
 
 
+class StagingJobStatus(enum.Enum):
+    PENDING    = "PENDING"
+    PROCESSING = "PROCESSING"
+    DONE       = "DONE"
+    FAILED     = "FAILED"
+
+
+class StagingJob(Base):
+    """
+    Holds job URLs submitted manually via the UI.
+    Airflow polls for PENDING rows, enriches them, then promotes
+    the result into linkedin_jobs and marks this row as DONE.
+    """
+    __tablename__ = "staging_jobs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    job_link: Mapped[str] = mapped_column(String(511), nullable=False)
+
+    status: Mapped[StagingJobStatus] = mapped_column(
+        Enum(StagingJobStatus),
+        nullable=False,
+        default=StagingJobStatus.PENDING,
+    )
+
+    # Populated after scraping
+    job_id:       Mapped[Optional[str]] = mapped_column(String(64),  nullable=True)
+    job_title:    Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    location:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    post_date:    Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
+    salary:       Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description:  Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Label the user gives the search (e.g. "Senior Data Engineer")
+    job_search:    Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+
+# Pydantic schema for the staging endpoint
+class StagingJobCreate(BaseModel):
+    job_link: str
+    job_search: Optional[str] = None
+
+
+class StagingJobResponse(BaseModel):
+    id: int
+    job_link: str
+    status: StagingJobStatus
+    job_title: Optional[str]
+    company_name: Optional[str]
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
 # --- FUTURE: FINANCE MODULE ---
 # You will simply add 'class Finance(Base):' here later!

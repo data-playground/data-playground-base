@@ -1,0 +1,56 @@
+{# templates/partials/staging_queue.html
+   Returned by GET /jobs/stage — rendered inside #staging-queue-container
+   `staged` = list of StagingJob ORM objects
+#}
+{% if staged %}
+<table class="staging-table" id="staging-queue-table">
+    <thead>
+        <tr>
+            <th>Status</th>
+            <th>Job</th>
+            <th>Label</th>
+            <th>Queued</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for job in staged %}
+    <tr class="staging-row" id="stage-row-{{ job.id }}">
+        <td>
+            <span class="stage-badge stage-{{ job.status.value | lower }}">
+                {% if job.status.value == 'PENDING' %}⏳
+                {% elif job.status.value == 'PROCESSING' %}⚙
+                {% elif job.status.value == 'DONE' %}✓
+                {% else %}✗
+                {% endif %}
+                {{ job.status.value }}
+            </span>
+        </td>
+        <td class="job-title-cell">
+            <a class="job-title-link"
+               href="{{ job.job_link }}"
+               target="_blank"
+               title="{{ job.job_link }}">
+                {{ job.job_title or (job.job_link[:55] ~ '…') }}
+            </a>
+            {% if job.company_name %}
+            <div class="job-company">{{ job.company_name }}</div>
+            {% endif %}
+            {% if job.status.value == 'FAILED' and job.error_message %}
+            <div style="font-size:9px;color:var(--score-low);margin-top:2px;" title="{{ job.error_message }}">
+                {{ job.error_message[:80] }}…
+            </div>
+            {% endif %}
+        </td>
+        <td style="font-size:10px;color:var(--text-muted);white-space:nowrap;">
+            {{ job.job_search or '—' }}
+        </td>
+        <td style="font-size:10px;color:var(--text-muted);white-space:nowrap;">
+            {{ job.created_at.strftime('%b %d, %H:%M') }}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="staging-empty">Queue is empty — paste a LinkedIn URL above to get started.</p>
+{% endif %}

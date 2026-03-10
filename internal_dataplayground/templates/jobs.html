@@ -9,616 +9,194 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 
     <style>
-        /* =============================================
-           CSS VARIABLES — Three themes
-           ============================================= */
         :root { --transition: 0.25s ease; --sidebar-width: 220px; }
 
         [data-theme="dark"] {
-            --bg:            #0d0d0f;
-            --bg-card:       #16161a;
-            --bg-hover:      #1e1e24;
-            --border:        #2a2a35;
-            --border-accent: #3d3d52;
-            --text-primary:  #e8e8f0;
-            --text-secondary:#8888a8;
-            --text-muted:    #50505f;
-            --accent:        #6c63ff;
-            --accent-dim:    rgba(108,99,255,0.15);
-            --score-high:    #00e5a0;
-            --score-mid:     #ffb020;
-            --score-low:     #ff5050;
-            --tag-bg:        #1e1e28;
-            --shadow:        0 2px 12px rgba(0,0,0,0.4);
-            --sidebar-bg:    #16161a;
-            --topbar-bg:     #16161a;
+            --bg:#0d0d0f; --bg-card:#16161a; --bg-hover:#1e1e24;
+            --border:#2a2a35; --border-accent:#3d3d52;
+            --text-primary:#e8e8f0; --text-secondary:#8888a8; --text-muted:#50505f;
+            --accent:#6c63ff; --accent-dim:rgba(108,99,255,0.15);
+            --score-high:#00e5a0; --score-mid:#ffb020; --score-low:#ff5050;
+            --tag-bg:#1e1e28; --shadow:0 2px 12px rgba(0,0,0,0.4);
+            --sidebar-bg:#16161a; --topbar-bg:#16161a;
         }
-
         [data-theme="light"] {
-            --bg:            #f5f4f8;
-            --bg-card:       #ffffff;
-            --bg-hover:      #faf9fd;
-            --border:        #e2e0ec;
-            --border-accent: #c8c4e8;
-            --text-primary:  #1a1a2e;
-            --text-secondary:#5a5880;
-            --text-muted:    #9896b0;
-            --accent:        #5548e8;
-            --accent-dim:    rgba(85,72,232,0.08);
-            --score-high:    #00a870;
-            --score-mid:     #d4920a;
-            --score-low:     #d63030;
-            --tag-bg:        #eeecf8;
-            --shadow:        0 2px 8px rgba(0,0,0,0.06);
-            --sidebar-bg:    #ffffff;
-            --topbar-bg:     #ffffff;
+            --bg:#f5f4f8; --bg-card:#ffffff; --bg-hover:#faf9fd;
+            --border:#e2e0ec; --border-accent:#c8c4e8;
+            --text-primary:#1a1a2e; --text-secondary:#5a5880; --text-muted:#9896b0;
+            --accent:#5548e8; --accent-dim:rgba(85,72,232,0.08);
+            --score-high:#00a870; --score-mid:#d4920a; --score-low:#d63030;
+            --tag-bg:#eeecf8; --shadow:0 2px 8px rgba(0,0,0,0.06);
+            --sidebar-bg:#ffffff; --topbar-bg:#ffffff;
         }
-
         [data-theme="mixed"] {
-            --bg:            #111318;
-            --bg-card:       #f8f7fc;
-            --bg-hover:      #f2f0fa;
-            --border:        #e0ddf0;
-            --border-accent: #c5c0e8;
-            --text-primary:  #1c1b2e;
-            --text-secondary:#58567a;
-            --text-muted:    #9896b0;
-            --accent:        #7c6fff;
-            --accent-dim:    rgba(124,111,255,0.1);
-            --score-high:    #00c980;
-            --score-mid:     #e8a020;
-            --score-low:     #f04040;
-            --tag-bg:        #eeeaf8;
-            --shadow:        0 2px 10px rgba(0,0,0,0.08);
-            --sidebar-bg:    #111318;
-            --topbar-bg:     #f8f7fc;
+            --bg:#111318; --bg-card:#f8f7fc; --bg-hover:#f2f0fa;
+            --border:#e0ddf0; --border-accent:#c5c0e8;
+            --text-primary:#1c1b2e; --text-secondary:#58567a; --text-muted:#9896b0;
+            --accent:#7c6fff; --accent-dim:rgba(124,111,255,0.1);
+            --score-high:#00c980; --score-mid:#e8a020; --score-low:#f04040;
+            --tag-bg:#eeeaf8; --shadow:0 2px 10px rgba(0,0,0,0.08);
+            --sidebar-bg:#111318; --topbar-bg:#f8f7fc;
         }
 
-        /* =============================================
-           RESET & BASE
-           ============================================= */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
-
-        body {
-            font-family: 'DM Mono', monospace;
-            background: var(--bg);
-            color: var(--text-primary);
-            height: 100%;
-            overflow: hidden;
-            transition: background var(--transition), color var(--transition);
-        }
-
-        /* =============================================
-           LAYOUT
-           Key: 3 rows — topbar (fixed) / filter panel (auto) / content (1fr)
-           Sidebar spans all 3 rows via grid-row: 1 / -1
-           ============================================= */
-        .layout {
-            display: grid;
-            grid-template-columns: var(--sidebar-width) 1fr;
-            grid-template-rows: 56px auto 1fr;
-            height: 100vh;
-            transition: grid-template-columns var(--transition);
-        }
-
-        .layout.sidebar-collapsed {
-            grid-template-columns: 48px 1fr;
-        }
-
-        /* =============================================
-           SIDEBAR — spans all 3 rows, always full height
-           ============================================= */
-        .sidebar {
-            grid-column: 1;
-            grid-row: 1 / -1;
-            background: var(--sidebar-bg);
-            border-right: 1px solid #2a2a35;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
-            transition: background var(--transition);
-            z-index: 100;
-        }
-
-        /* Collapsed state */
-        .layout.sidebar-collapsed .sidebar-text,
-        .layout.sidebar-collapsed .os-subtitle,
-        .layout.sidebar-collapsed .nav-label,
-        .layout.sidebar-collapsed .theme-switcher,
-        .layout.sidebar-collapsed .theme-label { display: none; }
-
-        .layout.sidebar-collapsed .os-title {
-            font-size: 10px;
-            padding: 16px 0;
-            text-align: center;
-        }
-
-        .layout.sidebar-collapsed .nav-item {
-            justify-content: center;
-            padding: 10px 0;
-        }
-
-        .layout.sidebar-collapsed .nav-item .icon { width: 100%; text-align: center; font-size: 16px; }
-        .layout.sidebar-collapsed .sidebar-footer { padding: 12px 0; align-items: center; }
-
-        .os-title {
-            font-family: 'Syne', sans-serif;
-            font-weight: 800;
-            font-size: 13px;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            color: var(--accent);
-            padding: 20px 20px 16px;
-            border-bottom: 1px solid #2a2a35;
-            margin-bottom: 8px;
-            flex-shrink: 0;
-        }
-
-        .os-subtitle {
-            display: block;
-            font-size: 10px;
-            font-weight: 400;
-            color: #50505f;
-            letter-spacing: 0.08em;
-            margin-top: 2px;
-        }
-
-        .sidebar-nav {
-            flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-bottom: 8px;
-        }
-
-        .sidebar-nav::-webkit-scrollbar { width: 3px; }
-        .sidebar-nav::-webkit-scrollbar-thumb { background: #2a2a35; border-radius: 2px; }
-
-        .nav-label {
-            font-size: 9px;
-            font-weight: 500;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: #50505f;
-            padding: 0 20px;
-            margin: 16px 0 6px;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 20px;
-            font-size: 12px;
-            color: #9896b8;
-            cursor: pointer;
-            transition: all var(--transition);
-            text-decoration: none;
-            border-left: 2px solid transparent;
-            white-space: nowrap;
-        }
-
-        .nav-item:hover { background: rgba(255,255,255,0.06); color: #e8e6f8; }
-        .nav-item.active { background: rgba(124,111,255,0.12); color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
-        .nav-item .icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
-
-        .sidebar-footer {
-            flex-shrink: 0;
-            padding: 14px 20px;
-            border-top: 1px solid #2a2a35;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .theme-label { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #50505f; }
-        .theme-switcher { display: flex; gap: 5px; }
-
-        .theme-btn {
-            flex: 1;
-            padding: 5px 4px;
-            font-family: 'DM Mono', monospace;
-            font-size: 9px;
-            border: 1px solid #2a2a35;
-            background: transparent;
-            color: #50505f;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all var(--transition);
-        }
-
-        .theme-btn:hover { border-color: var(--accent); color: var(--accent); }
-        .theme-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-        .collapse-btn {
-            background: transparent;
-            border: 1px solid #2a2a35;
-            color: #50505f;
-            border-radius: 4px;
-            padding: 5px 8px;
-            font-size: 11px;
-            cursor: pointer;
-            transition: all var(--transition);
-            align-self: flex-start;
-        }
-
-        .collapse-btn:hover { border-color: var(--accent); color: var(--accent); }
-        .layout.sidebar-collapsed .collapse-btn { align-self: center; }
-
-        /* =============================================
-           TOPBAR — row 1, column 2, fixed 56px
-           ============================================= */
-        .topbar {
-            grid-column: 2;
-            grid-row: 1;
-            background: var(--topbar-bg);
-            border-bottom: 1px solid var(--border);
-            padding: 0 20px;
-            height: 56px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            transition: background var(--transition);
-            overflow: hidden;
-        }
-
-        .topbar-left {
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-
-        .page-title {
-            font-family: 'Syne', sans-serif;
-            font-weight: 700;
-            font-size: 15px;
-            color: var(--text-primary);
-        }
-
-        .job-count { font-size: 10px; color: var(--text-muted); }
-
-        .topbar-right {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex: 1;
-            justify-content: flex-end;
-        }
-
-        .filter-bar { display: flex; gap: 5px; flex-wrap: wrap; }
-
-        .filter-pill {
-            padding: 4px 11px;
-            font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--text-secondary);
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all var(--transition);
-            white-space: nowrap;
-        }
-
-        .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
-        .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .filter-pill.danger:hover { border-color: var(--score-low); color: var(--score-low); }
-        .filter-pill.danger.active { background: var(--score-low); border-color: var(--score-low); color: #fff; }
-
-        /* =============================================
-           FILTER PANEL — row 2, column 2
-           Hidden by default (zero height), expands on open.
-           This is what pushes main content down.
-           ============================================= */
-        .filter-panel {
-            grid-column: 2;
-            grid-row: 2;
-            display: none;
-            background: var(--topbar-bg);
-            border-bottom: 1px solid var(--border);
-            padding: 10px 20px;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            transition: background var(--transition);
-        }
-
-        .filter-panel.open { display: flex; }
-
-        .filter-input {
-            padding: 4px 10px;
-            font-family: 'DM Mono', monospace;
-            font-size: 10px;
-            border: 1px solid var(--border);
-            background: var(--bg-card);
-            color: var(--text-primary);
-            border-radius: 4px;
-            outline: none;
-            transition: border-color var(--transition);
-        }
-
-        .filter-input:focus { border-color: var(--accent); }
-        .filter-input::placeholder { color: var(--text-muted); }
-        #filter-company { width: 150px; }
-        #filter-date-from, #filter-date-to { width: 130px; }
-
-        .filter-clear {
-            font-size: 10px;
-            color: var(--text-muted);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 4px 6px;
-            font-family: 'DM Mono', monospace;
-            transition: color var(--transition);
-        }
-
-        .filter-clear:hover { color: var(--score-low); }
-
-        /* =============================================
-           MAIN CONTENT — row 3, column 2, scrollable
-           ============================================= */
-        .main-content {
-            grid-column: 2;
-            grid-row: 3;
-            background: var(--bg-card);
-            padding: 16px 20px;
-            overflow-y: auto;
-            overflow-x: auto;
-            transition: background var(--transition);
-        }
-
-        [data-theme="dark"] .main-content { background: var(--bg); }
-
-        /* =============================================
-           JOB TABLE
-           ============================================= */
-        .jobs-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            background: var(--bg-card);
-            box-shadow: var(--shadow);
-            min-width: 680px;
-        }
-
-        [data-theme="dark"] .jobs-table { background: var(--bg-card); }
-
-        .jobs-table thead tr {
-            background: var(--bg-hover);
-            border-bottom: 2px solid var(--border);
-        }
-
-        .jobs-table th {
-            padding: 9px 12px;
-            font-size: 9px;
-            font-weight: 500;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            text-align: left;
-            white-space: nowrap;
-        }
-
-        .jobs-table tbody tr {
-            border-bottom: 1px solid var(--border);
-            transition: background var(--transition);
-        }
-
-        .jobs-table tbody tr:last-child { border-bottom: none; }
-        .jobs-table tbody tr:hover { background: var(--bg-hover); }
-
-        .jobs-table td {
-            padding: 9px 12px;
-            font-size: 11px;
-            color: var(--text-primary);
-            vertical-align: middle;
-        }
-
-        .score-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 20px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 500;
-        }
-
-        .score-high { background: rgba(0,201,128,0.12); color: var(--score-high); }
-        .score-mid  { background: rgba(232,160,32,0.12); color: var(--score-mid); }
-        .score-low  { background: rgba(240,64,64,0.12);  color: var(--score-low); }
-
-        .job-title-cell { max-width: 240px; }
-
-        .job-title-link {
-            color: var(--text-primary);
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 11px;
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            transition: color var(--transition);
-        }
-
-        .job-title-link:hover { color: var(--accent); }
-
-        .job-company {
-            font-size: 10px;
-            color: var(--text-muted);
-            margin-top: 1px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .tag {
-            display: inline-block;
-            padding: 2px 7px;
-            font-size: 9px;
-            letter-spacing: 0.06em;
-            border-radius: 3px;
-            background: var(--tag-bg);
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            font-weight: 500;
-        }
-
-        .tag-remote { background: rgba(124,111,255,0.12); color: var(--accent); }
-
-        /* =============================================
-           ATS BUTTONS
-           ============================================= */
-        .ats-cell { min-width: 295px; }
-
-        .ats-buttons {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .ats-btn {
-            padding: 3px 8px;
-            font-family: 'DM Mono', monospace;
-            font-size: 9px;
-            font-weight: 500;
-            letter-spacing: 0.04em;
-            border-radius: 3px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--text-muted);
-            white-space: nowrap;
-        }
-
-        .ats-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-        .ats-btn.htmx-request { opacity: 0.5; pointer-events: none; }
-
-        .ats-btn.status-applied       { border-color: #6c63ff; color: #6c63ff; background: rgba(108,99,255,0.10); }
-        .ats-btn.status-phone_screen  { border-color: #00bfff; color: #00bfff; background: rgba(0,191,255,0.10); }
-        .ats-btn.status-interviewing  { border-color: #ffb020; color: #ffb020; background: rgba(255,176,32,0.10); }
-        .ats-btn.status-technical     { border-color: #ff8c42; color: #ff8c42; background: rgba(255,140,66,0.10); }
-        .ats-btn.status-rejected      { border-color: #ff5050; color: #ff5050; background: rgba(255,80,80,0.10); }
-        .ats-btn.status-offer         { border-color: #00e5a0; color: #00e5a0; background: rgba(0,229,160,0.10); }
-
-        @keyframes flash-success {
-            0%   { background: rgba(0,229,160,0.25); }
-            100% { background: transparent; }
-        }
-        .ats-buttons.htmx-settled { animation: flash-success 0.6s ease forwards; }
-
-        /* =============================================
-           EMPTY STATE
-           ============================================= */
-        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
-        .empty-state .empty-icon { font-size: 32px; margin-bottom: 12px; }
-        .empty-state p { font-size: 12px; }
-
-        /* =============================================
-           TOAST
-           ============================================= */
-        #toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 9px 16px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-left: 3px solid var(--score-high);
-            border-radius: 6px;
-            font-size: 11px;
-            color: var(--text-primary);
-            box-shadow: var(--shadow);
-            opacity: 0;
-            transform: translateY(6px);
-            transition: all 0.2s ease;
-            pointer-events: none;
-            z-index: 999;
-        }
-        #toast.show { opacity: 1; transform: translateY(0); }
-
-        /* =============================================
-           SCROLLBAR
-           ============================================= */
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
-
-        /* =============================================
-           MOBILE
-           ============================================= */
-        .hamburger {
-            display: none;
-            background: none;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 5px 8px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-
-        .sidebar-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 199;
-        }
-        .sidebar-backdrop.visible { display: block; }
-
-        @media (max-width: 768px) {
-            body { overflow: auto; }
-
-            .layout {
-                grid-template-columns: 1fr !important;
-                grid-template-rows: 56px auto 1fr;
-                height: auto;
-                min-height: 100vh;
-            }
-
-            .sidebar {
-                position: fixed;
-                top: 0; left: 0;
-                height: 100vh;
-                width: var(--sidebar-width);
-                transform: translateX(-100%);
-                transition: transform 0.25s ease;
-                z-index: 200;
-                box-shadow: 4px 0 24px rgba(0,0,0,0.5);
-            }
-
-            .sidebar.mobile-open { transform: translateX(0); }
-
-            /* On mobile everything is column 1 */
-            .topbar, .filter-panel, .main-content {
-                grid-column: 1;
-            }
-
-            .hamburger { display: flex !important; }
-            .collapse-btn { display: none; }
-
-            .main-content { padding: 10px; }
-
-            #filter-company, #filter-date-from, #filter-date-to { width: 100%; }
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        html, body { height:100%; }
+        body { font-family:'DM Mono',monospace; background:var(--bg); color:var(--text-primary); height:100%; overflow:hidden; transition:background var(--transition),color var(--transition); }
+
+        .layout { display:grid; grid-template-columns:var(--sidebar-width) 1fr; grid-template-rows:56px auto 1fr; height:100vh; transition:grid-template-columns var(--transition); }
+        .layout.sidebar-collapsed { grid-template-columns:48px 1fr; }
+
+        .sidebar { grid-column:1; grid-row:1 / -1; background:var(--sidebar-bg); border-right:1px solid #2a2a35; display:flex; flex-direction:column; height:100vh; overflow:hidden; transition:background var(--transition); z-index:100; }
+        .layout.sidebar-collapsed .sidebar-text,.layout.sidebar-collapsed .os-subtitle,.layout.sidebar-collapsed .nav-label,.layout.sidebar-collapsed .theme-switcher,.layout.sidebar-collapsed .theme-label { display:none; }
+        .layout.sidebar-collapsed .os-title { font-size:10px; padding:16px 0; text-align:center; }
+        .layout.sidebar-collapsed .nav-item { justify-content:center; padding:10px 0; }
+        .layout.sidebar-collapsed .nav-item .icon { width:100%; text-align:center; font-size:16px; }
+        .layout.sidebar-collapsed .sidebar-footer { padding:12px 0; align-items:center; }
+
+        .os-title { font-family:'Syne',sans-serif; font-weight:800; font-size:13px; letter-spacing:0.15em; text-transform:uppercase; color:var(--accent); padding:20px 20px 16px; border-bottom:1px solid #2a2a35; margin-bottom:8px; flex-shrink:0; }
+        .os-subtitle { display:block; font-size:10px; font-weight:400; color:#50505f; letter-spacing:0.08em; margin-top:2px; }
+        .sidebar-nav { flex:1; overflow-y:auto; overflow-x:hidden; padding-bottom:8px; }
+        .sidebar-nav::-webkit-scrollbar { width:3px; }
+        .sidebar-nav::-webkit-scrollbar-thumb { background:#2a2a35; border-radius:2px; }
+        .nav-label { font-size:9px; font-weight:500; letter-spacing:0.18em; text-transform:uppercase; color:#50505f; padding:0 20px; margin:16px 0 6px; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:8px 20px; font-size:12px; color:#9896b8; cursor:pointer; transition:all var(--transition); text-decoration:none; border-left:2px solid transparent; white-space:nowrap; }
+        .nav-item:hover { background:rgba(255,255,255,0.06); color:#e8e6f8; }
+        .nav-item.active { background:rgba(124,111,255,0.12); color:var(--accent); border-left-color:var(--accent); font-weight:500; }
+        .nav-item .icon { font-size:14px; width:16px; text-align:center; flex-shrink:0; }
+        .sidebar-footer { flex-shrink:0; padding:14px 20px; border-top:1px solid #2a2a35; display:flex; flex-direction:column; gap:8px; }
+        .theme-label { font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:#50505f; }
+        .theme-switcher { display:flex; gap:5px; }
+        .theme-btn { flex:1; padding:5px 4px; font-family:'DM Mono',monospace; font-size:9px; border:1px solid #2a2a35; background:transparent; color:#50505f; border-radius:4px; cursor:pointer; transition:all var(--transition); }
+        .theme-btn:hover { border-color:var(--accent); color:var(--accent); }
+        .theme-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .collapse-btn { background:transparent; border:1px solid #2a2a35; color:#50505f; border-radius:4px; padding:5px 8px; font-size:11px; cursor:pointer; transition:all var(--transition); align-self:flex-start; }
+        .collapse-btn:hover { border-color:var(--accent); color:var(--accent); }
+        .layout.sidebar-collapsed .collapse-btn { align-self:center; }
+
+        .topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 20px; height:56px; display:flex; align-items:center; justify-content:space-between; gap:10px; transition:background var(--transition); overflow:hidden; }
+        .topbar-left { display:flex; align-items:baseline; gap:10px; flex-shrink:0; }
+        .page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; color:var(--text-primary); }
+        .job-count { font-size:10px; color:var(--text-muted); }
+        .topbar-right { display:flex; align-items:center; gap:6px; flex:1; justify-content:flex-end; }
+        .filter-bar { display:flex; gap:5px; flex-wrap:wrap; }
+        .filter-pill { padding:4px 11px; font-family:'DM Mono',monospace; font-size:10px; border:1px solid var(--border); background:transparent; color:var(--text-secondary); border-radius:20px; cursor:pointer; transition:all var(--transition); white-space:nowrap; }
+        .filter-pill:hover { border-color:var(--accent); color:var(--accent); }
+        .filter-pill.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .filter-pill.danger:hover { border-color:var(--score-low); color:var(--score-low); }
+        .filter-pill.danger.active { background:var(--score-low); border-color:var(--score-low); color:#fff; }
+
+        .filter-panel { grid-column:2; grid-row:2; display:none; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:10px 20px; align-items:center; gap:8px; flex-wrap:wrap; transition:background var(--transition); }
+        .filter-panel.open { display:flex; }
+        .filter-input { padding:4px 10px; font-family:'DM Mono',monospace; font-size:10px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); border-radius:4px; outline:none; transition:border-color var(--transition); }
+        .filter-input:focus { border-color:var(--accent); }
+        .filter-input::placeholder { color:var(--text-muted); }
+        #filter-company { width:150px; }
+        #filter-date-from, #filter-date-to { width:130px; }
+        .filter-clear { font-size:10px; color:var(--text-muted); background:none; border:none; cursor:pointer; padding:4px 6px; font-family:'DM Mono',monospace; transition:color var(--transition); }
+        .filter-clear:hover { color:var(--score-low); }
+
+        .main-content { grid-column:2; grid-row:3; background:var(--bg-card); padding:16px 20px; overflow-y:auto; overflow-x:auto; transition:background var(--transition); }
+        [data-theme="dark"] .main-content { background:var(--bg); }
+
+        /* ── STAGING PANEL ── */
+        .staging-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; margin-bottom:20px; overflow:hidden; box-shadow:var(--shadow); }
+        .staging-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--bg-hover); border-bottom:1px solid var(--border); cursor:pointer; user-select:none; }
+        .staging-header-left { display:flex; align-items:center; gap:8px; font-family:'Syne',sans-serif; font-weight:600; font-size:12px; color:var(--text-primary); }
+        .staging-chevron { font-size:10px; color:var(--text-muted); transition:transform var(--transition); }
+        .staging-chevron.open { transform:rotate(180deg); }
+        .staging-body { display:none; padding:14px 16px; }
+        .staging-body.open { display:block; }
+
+        .add-job-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+        .add-job-input { flex:1; min-width:200px; padding:6px 12px; font-family:'DM Mono',monospace; font-size:11px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); border-radius:5px; outline:none; transition:border-color var(--transition); }
+        .add-job-input:focus { border-color:var(--accent); }
+        .add-job-input::placeholder { color:var(--text-muted); }
+        #add-job-search { width:160px; flex:none; }
+        .add-job-btn { padding:6px 14px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; transition:opacity var(--transition); white-space:nowrap; }
+        .add-job-btn:hover { opacity:0.85; }
+        .add-job-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .stage-error { font-size:11px; color:var(--score-low); padding:4px 0; }
+        .stage-success { font-size:11px; color:var(--score-high); padding:4px 0; }
+
+        .staging-table { width:100%; border-collapse:collapse; font-size:11px; }
+        .staging-table th { font-size:9px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted); text-align:left; padding:4px 8px 6px; border-bottom:1px solid var(--border); }
+        .staging-table td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+        .staging-table tbody tr:last-child td { border-bottom:none; }
+        .staging-table tbody tr:hover { background:var(--bg-hover); }
+        .stage-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; }
+        .stage-pending    { background:rgba(124,111,255,0.12); color:var(--accent); }
+        .stage-processing { background:rgba(232,160,32,0.12); color:var(--score-mid); }
+        .stage-done       { background:rgba(0,201,128,0.12); color:var(--score-high); }
+        .stage-failed     { background:rgba(240,64,64,0.12); color:var(--score-low); }
+        .staging-empty { font-size:11px; color:var(--text-muted); padding:8px 0; text-align:center; }
+
+        /* ── JOBS TABLE ── */
+        .jobs-table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--bg-card); box-shadow:var(--shadow); min-width:680px; }
+        [data-theme="dark"] .jobs-table { background:var(--bg-card); }
+        .jobs-table thead tr { background:var(--bg-hover); border-bottom:2px solid var(--border); }
+        .jobs-table th { padding:9px 12px; font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-muted); text-align:left; white-space:nowrap; }
+        .jobs-table tbody tr { border-bottom:1px solid var(--border); transition:background var(--transition); }
+        .jobs-table tbody tr:last-child { border-bottom:none; }
+        .jobs-table tbody tr:hover { background:var(--bg-hover); }
+        .jobs-table td { padding:9px 12px; font-size:11px; color:var(--text-primary); vertical-align:middle; }
+        .score-badge { display:inline-flex; align-items:center; justify-content:center; width:36px; height:20px; border-radius:4px; font-size:10px; font-weight:500; }
+        .score-high { background:rgba(0,201,128,0.12); color:var(--score-high); }
+        .score-mid  { background:rgba(232,160,32,0.12); color:var(--score-mid); }
+        .score-low  { background:rgba(240,64,64,0.12); color:var(--score-low); }
+        .job-title-cell { max-width:240px; }
+        .job-title-link { color:var(--text-primary); text-decoration:none; font-weight:500; font-size:11px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:color var(--transition); }
+        .job-title-link:hover { color:var(--accent); }
+        .job-company { font-size:10px; color:var(--text-muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .tag { display:inline-block; padding:2px 7px; font-size:9px; letter-spacing:0.06em; border-radius:3px; background:var(--tag-bg); color:var(--text-secondary); text-transform:uppercase; font-weight:500; }
+        .tag-remote { background:rgba(124,111,255,0.12); color:var(--accent); }
+
+        /* ── ATS ── */
+        .ats-cell { min-width:295px; }
+        .ats-buttons { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+        .ats-btn { padding:3px 8px; font-family:'DM Mono',monospace; font-size:9px; font-weight:500; letter-spacing:0.04em; border-radius:3px; cursor:pointer; transition:all 0.15s ease; border:1px solid var(--border); background:transparent; color:var(--text-muted); white-space:nowrap; }
+        .ats-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+        .ats-btn.htmx-request { opacity:0.5; pointer-events:none; }
+        .ats-btn.status-applied       { border-color:#6c63ff; color:#6c63ff; background:rgba(108,99,255,0.10); }
+        .ats-btn.status-phone_screen  { border-color:#00bfff; color:#00bfff; background:rgba(0,191,255,0.10); }
+        .ats-btn.status-interviewing  { border-color:#ffb020; color:#ffb020; background:rgba(255,176,32,0.10); }
+        .ats-btn.status-technical     { border-color:#ff8c42; color:#ff8c42; background:rgba(255,140,66,0.10); }
+        .ats-btn.status-rejected      { border-color:#ff5050; color:#ff5050; background:rgba(255,80,80,0.10); }
+        .ats-btn.status-offer         { border-color:#00e5a0; color:#00e5a0; background:rgba(0,229,160,0.10); }
+        @keyframes flash-success { 0%{background:rgba(0,229,160,0.25);}100%{background:transparent;} }
+        .ats-buttons.htmx-settled { animation:flash-success 0.6s ease forwards; }
+
+        .empty-state { text-align:center; padding:60px 20px; color:var(--text-muted); }
+        .empty-state .empty-icon { font-size:32px; margin-bottom:12px; }
+        .empty-state p { font-size:12px; }
+
+        #toast { position:fixed; bottom:20px; right:20px; padding:9px 16px; background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--score-high); border-radius:6px; font-size:11px; color:var(--text-primary); box-shadow:var(--shadow); opacity:0; transform:translateY(6px); transition:all 0.2s ease; pointer-events:none; z-index:999; }
+        #toast.show { opacity:1; transform:translateY(0); }
+
+        ::-webkit-scrollbar { width:5px; height:5px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--border-accent); border-radius:3px; }
+
+        .hamburger { display:none; background:none; border:1px solid var(--border); border-radius:4px; padding:5px 8px; color:var(--text-secondary); cursor:pointer; font-size:14px; flex-shrink:0; }
+        .sidebar-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:199; }
+        .sidebar-backdrop.visible { display:block; }
+
+        @media (max-width:768px) {
+            body { overflow:auto; }
+            .layout { grid-template-columns:1fr !important; grid-template-rows:56px auto 1fr; height:auto; min-height:100vh; }
+            .sidebar { position:fixed; top:0; left:0; height:100vh; width:var(--sidebar-width); transform:translateX(-100%); transition:transform 0.25s ease; z-index:200; box-shadow:4px 0 24px rgba(0,0,0,0.5); }
+            .sidebar.mobile-open { transform:translateX(0); }
+            .topbar,.filter-panel,.main-content { grid-column:1; }
+            .hamburger { display:flex !important; }
+            .collapse-btn { display:none; }
+            .main-content { padding:10px; }
+            #filter-company,#filter-date-from,#filter-date-to { width:100%; }
+            .add-job-form { flex-direction:column; align-items:stretch; }
+            #add-job-search { width:100%; }
         }
     </style>
 </head>
 <body>
-
 <div class="layout" id="layout">
-
     <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
 
     <!-- SIDEBAR -->
@@ -627,51 +205,28 @@
             <span class="sidebar-text">Life OS</span>
             <span class="os-subtitle">v2.0 · personal</span>
         </div>
-
         <div class="sidebar-nav">
             <div class="nav-label">Modules</div>
-            <a class="nav-item active" href="/jobs">
-                <span class="icon">◈</span>
-                <span class="sidebar-text">Job Tracker</span>
-            </a>
-            <a class="nav-item" href="#">
-                <span class="icon">◎</span>
-                <span class="sidebar-text">Finance</span>
-            </a>
-            <a class="nav-item" href="#">
-                <span class="icon">◷</span>
-                <span class="sidebar-text">Workouts</span>
-            </a>
-            <a class="nav-item" href="#">
-                <span class="icon">◻</span>
-                <span class="sidebar-text">Blog Ideas</span>
-            </a>
-
+            <a class="nav-item active" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
+            <a class="nav-item" href="#"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
+            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
+            <a class="nav-item" href="#"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
             <div class="nav-label">Pipeline</div>
-            <a class="nav-item" href="#">
-                <span class="icon">⊕</span>
-                <span class="sidebar-text">Add Job Link</span>
-            </a>
-            <a class="nav-item" href="#">
-                <span class="icon">◑</span>
-                <span class="sidebar-text">Dashboard</span>
-            </a>
+            <a class="nav-item" href="#" onclick="openStagingPanel(); return false;"><span class="icon">⊕</span><span class="sidebar-text">Add Job Link</span></a>
+            <a class="nav-item" href="#"><span class="icon">◑</span><span class="sidebar-text">Dashboard</span></a>
         </div>
-
         <div class="sidebar-footer">
             <div class="theme-label">Theme</div>
             <div class="theme-switcher">
-                <button class="theme-btn" onclick="setTheme('dark', this)">Dark</button>
-                <button class="theme-btn" onclick="setTheme('light', this)">Light</button>
-                <button class="theme-btn active" onclick="setTheme('mixed', this)">Mixed</button>
+                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
+                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
+                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
             </div>
-            <button class="collapse-btn" id="collapse-btn" onclick="toggleSidebar()" title="Toggle sidebar">
-                <span id="collapse-icon">◀</span>
-            </button>
+            <button class="collapse-btn" id="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
         </div>
     </aside>
 
-    <!-- TOPBAR — row 1 -->
+    <!-- TOPBAR -->
     <header class="topbar">
         <div class="topbar-left">
             <button class="hamburger" onclick="openMobileSidebar()">☰</button>
@@ -680,35 +235,66 @@
         </div>
         <div class="topbar-right">
             <div class="filter-bar">
-                <button class="filter-pill active"  onclick="setQuickFilter('all', this)">All</button>
-                <button class="filter-pill"         onclick="setQuickFilter('high', this)">High Fit</button>
-                <button class="filter-pill"         onclick="setQuickFilter('remote', this)">Remote</button>
-                <button class="filter-pill"         onclick="setQuickFilter('applied', this)">Applied</button>
-                <button class="filter-pill danger"  onclick="setQuickFilter('not_applied', this)">Not Applied</button>
+                <button class="filter-pill active" onclick="setQuickFilter('all',this)">All</button>
+                <button class="filter-pill" onclick="setQuickFilter('high',this)">High Fit</button>
+                <button class="filter-pill" onclick="setQuickFilter('remote',this)">Remote</button>
+                <button class="filter-pill" onclick="setQuickFilter('applied',this)">Applied</button>
+                <button class="filter-pill danger" onclick="setQuickFilter('not_applied',this)">Not Applied</button>
             </div>
             <button class="filter-pill" id="adv-toggle" onclick="toggleAdvancedFilters(this)">⚙ Filters</button>
         </div>
     </header>
 
-    <!-- FILTER PANEL — row 2, only visible when open -->
+    <!-- FILTER PANEL -->
     <div class="filter-panel" id="filter-panel">
-        <input class="filter-input" type="text"  id="filter-company"   placeholder="Company…"    oninput="applyAllFilters()">
-        <input class="filter-input" type="date"  id="filter-date-from" title="Posted from"       onchange="applyAllFilters()">
-        <input class="filter-input" type="date"  id="filter-date-to"   title="Posted to"         onchange="applyAllFilters()">
+        <input class="filter-input" type="text" id="filter-company" placeholder="Company…" oninput="applyAllFilters()">
+        <input class="filter-input" type="date" id="filter-date-from" title="Posted from" onchange="applyAllFilters()">
+        <input class="filter-input" type="date" id="filter-date-to" title="Posted to" onchange="applyAllFilters()">
         <button class="filter-clear" onclick="clearAdvancedFilters()">✕ Clear</button>
     </div>
 
-    <!-- MAIN CONTENT — row 3 -->
+    <!-- MAIN CONTENT -->
     <main class="main-content">
+
+        <!-- STAGING PANEL -->
+        <div class="staging-panel" id="staging-panel">
+            <div class="staging-header" onclick="toggleStagingBody()">
+                <div class="staging-header-left">
+                    <span>⊕</span>
+                    <span>Add Job Link</span>
+                    <span id="staging-pending-badge" style="font-size:9px;color:var(--accent);margin-left:4px;"></span>
+                </div>
+                <span class="staging-chevron" id="staging-chevron">▼</span>
+            </div>
+
+            <div class="staging-body" id="staging-body">
+                <!-- Add Job Form -->
+                <div class="add-job-form">
+                    <input class="add-job-input" type="url" id="add-job-link" name="job_link"
+                        placeholder="https://www.linkedin.com/jobs/view/…">
+                    <input class="add-job-input" id="add-job-search" name="job_search"
+                        placeholder="Label (e.g. Senior DE)" style="width:160px;flex:none;">
+                    <button class="add-job-btn" id="stage-submit-btn" onclick="submitStageForm()">+ Queue Job</button>
+                </div>
+                <div id="staging-form-feedback"></div>
+
+                <!-- Queue — auto-polls every 10s while panel is open -->
+                <div id="staging-queue-container"
+                    hx-get="/jobs/stage"
+                    hx-trigger="load, every 10s"
+                    hx-target="#staging-queue-container"
+                    hx-swap="innerHTML">
+                    <p class="staging-empty">Loading queue…</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- JOBS TABLE -->
         {% if jobs %}
         <table class="jobs-table" id="jobs-table">
             <thead>
                 <tr>
-                    <th>Score</th>
-                    <th>Role / Company</th>
-                    <th>Location</th>
-                    <th>Posted</th>
-                    <th>Status</th>
+                    <th>Score</th><th>Role / Company</th><th>Location</th><th>Posted</th><th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -726,79 +312,37 @@
                         {{ job.fit_score }}
                     </span>
                 </td>
-
                 <td class="job-title-cell">
-                    <a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">
-                        {{ job.job_title }}
-                    </a>
+                    <a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">{{ job.job_title }}</a>
                     <div class="job-company">{{ job.company_name or '—' }}</div>
                 </td>
-
                 <td>
                     <span class="tag {% if job.remote %}tag-remote{% endif %}">
                         {{ 'Remote' if job.remote else (job.location or '—') }}
                     </span>
                 </td>
-
-                <td style="color: var(--text-muted); font-size: 10px; white-space: nowrap;">
+                <td style="color:var(--text-muted);font-size:10px;white-space:nowrap;">
                     {{ job.post_date.strftime('%b %d') if job.post_date else '—' }}
                 </td>
-
                 <td class="ats-cell">
-                    <div
-                        class="ats-buttons"
-                        id="ats-{{ job.ID }}"
-                        hx-target="#ats-{{ job.ID }}"
-                        hx-swap="outerHTML settle:300ms"
-                    >
+                    <div class="ats-buttons" id="ats-{{ job.ID }}" hx-target="#ats-{{ job.ID }}" hx-swap="outerHTML settle:300ms">
                         {% set current = job.latest_status | upper | replace(' ', '_') if job.latest_status else '' %}
-
-                        <button class="ats-btn {% if current == 'APPLIED' %}status-applied{% endif %}"
-                            hx-post="/ats/log"
-                            hx-vals='{"job_id": {{ job.ID }}, "status": "APPLIED"}'
-                            onclick="showToast('Marked as Applied')"
-                        >Applied</button>
-
-                        <button class="ats-btn {% if current == 'PHONE_SCREEN' %}status-phone_screen{% endif %}"
-                            hx-post="/ats/log"
-                            hx-vals='{"job_id": {{ job.ID }}, "status": "PHONE_SCREEN"}'
-                            onclick="showToast('Marked as Phone Screen')"
-                        >Phone</button>
-
-                        <button class="ats-btn {% if current == 'INTERVIEWING' %}status-interviewing{% endif %}"
-                            hx-post="/ats/log"
-                            hx-vals='{"job_id": {{ job.ID }}, "status": "INTERVIEWING"}'
-                            onclick="showToast('Marked as Interviewing')"
-                        >Interview</button>
-
-                        <button class="ats-btn {% if current == 'TECHNICAL_ASSESSMENT' %}status-technical{% endif %}"
-                            hx-post="/ats/log"
-                            hx-vals='{"job_id": {{ job.ID }}, "status": "TECHNICAL_ASSESSMENT"}'
-                            onclick="showToast('Marked as Technical')"
-                        >Technical</button>
-
-                        <button class="ats-btn {% if current == 'REJECTED' %}status-rejected{% endif %}"
-                            hx-post="/ats/log"
-                            hx-vals='{"job_id": {{ job.ID }}, "status": "REJECTED"}'
-                            onclick="showToast('Marked as Rejected')"
-                        >Rejected</button>
-
-                        <button class="ats-btn {% if current == 'OFFER' %}status-offer{% endif %}"
-                            hx-post="/ats/log"
-                            hx-vals='{"job_id": {{ job.ID }}, "status": "OFFER"}'
-                            onclick="showToast('🎉 Offer logged!')"
-                        >Offer</button>
+                        <button class="ats-btn {% if current == 'APPLIED' %}status-applied{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"APPLIED"}' onclick="showToast('Marked as Applied')">Applied</button>
+                        <button class="ats-btn {% if current == 'PHONE_SCREEN' %}status-phone_screen{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"PHONE_SCREEN"}' onclick="showToast('Marked as Phone Screen')">Phone</button>
+                        <button class="ats-btn {% if current == 'INTERVIEWING' %}status-interviewing{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"INTERVIEWING"}' onclick="showToast('Marked as Interviewing')">Interview</button>
+                        <button class="ats-btn {% if current == 'TECHNICAL_ASSESSMENT' %}status-technical{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"TECHNICAL_ASSESSMENT"}' onclick="showToast('Marked as Technical')">Technical</button>
+                        <button class="ats-btn {% if current == 'REJECTED' %}status-rejected{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"REJECTED"}' onclick="showToast('Marked as Rejected')">Rejected</button>
+                        <button class="ats-btn {% if current == 'OFFER' %}status-offer{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"OFFER"}' onclick="showToast('🎉 Offer logged!')">Offer</button>
                     </div>
                 </td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
-
         {% else %}
         <div class="empty-state">
             <div class="empty-icon">◈</div>
-            <p>No jobs found. Add a link to get started.</p>
+            <p>No jobs found. Use the Add Job panel above to get started.</p>
         </div>
         {% endif %}
     </main>
@@ -807,139 +351,118 @@
 <div id="toast"></div>
 
 <script>
-    // =============================================
-    // THEME — default: mixed
-    // =============================================
-    function setTheme(theme, btn) {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('life-os-theme', theme);
-        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+    // THEME
+    function setTheme(theme,btn){document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('life-os-theme',theme);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+    (function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
+
+    // SIDEBAR
+    let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
+    function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;localStorage.setItem('sidebar-collapsed',sidebarCollapsed);applyCollapsed();}
+    function applyCollapsed(){document.getElementById('layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);document.getElementById('collapse-icon').textContent=sidebarCollapsed?'▶':'◀';}
+    function openMobileSidebar(){document.getElementById('sidebar').classList.add('mobile-open');document.getElementById('sidebar-backdrop').classList.add('visible');}
+    function closeMobileSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebar-backdrop').classList.remove('visible');}
+    if(window.innerWidth>768)applyCollapsed();
+
+    // STAGING PANEL
+    function toggleStagingBody(){
+        const body=document.getElementById('staging-body');
+        const chevron=document.getElementById('staging-chevron');
+        const open=body.classList.toggle('open');
+        chevron.classList.toggle('open',open);
+    }
+    function openStagingPanel(){
+        const body=document.getElementById('staging-body');
+        const chevron=document.getElementById('staging-chevron');
+        body.classList.add('open');
+        chevron.classList.add('open');
+        document.getElementById('staging-panel').scrollIntoView({behavior:'smooth'});
+        setTimeout(()=>document.getElementById('add-job-link').focus(),300);
     }
 
-    (function initTheme() {
-        const saved = localStorage.getItem('life-os-theme') || 'mixed';
-        document.documentElement.setAttribute('data-theme', saved);
-        document.querySelectorAll('.theme-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.textContent.toLowerCase() === saved);
-        });
-    })();
+    async function submitStageForm(){
+        const link=document.getElementById('add-job-link').value.trim();
+        const label=document.getElementById('add-job-search').value.trim();
+        const feedback=document.getElementById('staging-form-feedback');
+        const btn=document.getElementById('stage-submit-btn');
 
-    // =============================================
-    // SIDEBAR — desktop collapse
-    // =============================================
-    let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+        if(!link){feedback.innerHTML='<p class="stage-error">⚠ Paste a LinkedIn job URL first.</p>';return;}
+        if(!link.includes('linkedin.com/jobs')){feedback.innerHTML='<p class="stage-error">⚠ URL must be a LinkedIn job link.</p>';return;}
 
-    function toggleSidebar() {
-        sidebarCollapsed = !sidebarCollapsed;
-        localStorage.setItem('sidebar-collapsed', sidebarCollapsed);
-        applyCollapsed();
-    }
+        btn.disabled=true;btn.textContent='Queuing…';
 
-    function applyCollapsed() {
-        document.getElementById('layout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
-        document.getElementById('collapse-icon').textContent = sidebarCollapsed ? '▶' : '◀';
-    }
+        const body=new FormData();
+        body.append('job_link',link);
+        if(label)body.append('job_search',label);
 
-    // =============================================
-    // SIDEBAR — mobile
-    // =============================================
-    function openMobileSidebar() {
-        document.getElementById('sidebar').classList.add('mobile-open');
-        document.getElementById('sidebar-backdrop').classList.add('visible');
-    }
-
-    function closeMobileSidebar() {
-        document.getElementById('sidebar').classList.remove('mobile-open');
-        document.getElementById('sidebar-backdrop').classList.remove('visible');
-    }
-
-    if (window.innerWidth > 768) applyCollapsed();
-
-    // =============================================
-    // QUICK FILTER PILLS
-    // =============================================
-    let activeQuickFilter = 'all';
-
-    function setQuickFilter(type, btn) {
-        document.querySelectorAll('.filter-pill:not(#adv-toggle)').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        activeQuickFilter = type;
-        applyAllFilters();
-    }
-
-    // =============================================
-    // ADVANCED FILTERS
-    // =============================================
-    function toggleAdvancedFilters(btn) {
-        const panel = document.getElementById('filter-panel');
-        const open  = panel.classList.toggle('open');
-        btn.classList.toggle('active', open);
-    }
-
-    function clearAdvancedFilters() {
-        document.getElementById('filter-company').value   = '';
-        document.getElementById('filter-date-from').value = '';
-        document.getElementById('filter-date-to').value   = '';
-        applyAllFilters();
-    }
-
-    // =============================================
-    // MASTER FILTER
-    // =============================================
-    function applyAllFilters() {
-        const company  = document.getElementById('filter-company').value.toLowerCase().trim();
-        const dateFrom = document.getElementById('filter-date-from').value;
-        const dateTo   = document.getElementById('filter-date-to').value;
-
-        document.querySelectorAll('#jobs-table tbody tr').forEach(row => {
-            const score      = parseInt(row.dataset.score);
-            const remote     = row.dataset.remote === 'true';
-            const status     = row.dataset.status;
-            const rowCompany = row.dataset.company;
-            const rowDate    = row.dataset.postdate;
-
-            let quickPass = true;
-            if (activeQuickFilter === 'high')        quickPass = score >= 75;
-            if (activeQuickFilter === 'remote')      quickPass = remote;
-            if (activeQuickFilter === 'applied')     quickPass = status !== 'NONE' && status !== '';
-            if (activeQuickFilter === 'not_applied') quickPass = status === 'NONE' || status === '';
-
-            const companyPass = !company || rowCompany.includes(company);
-
-            let datePass = true;
-            if (dateFrom && rowDate) datePass = datePass && rowDate >= dateFrom;
-            if (dateTo   && rowDate) datePass = datePass && rowDate <= dateTo;
-
-            row.style.display = (quickPass && companyPass && datePass) ? '' : 'none';
-        });
-    }
-
-    // =============================================
-    // TOAST
-    // =============================================
-    let toastTimer;
-    function showToast(msg) {
-        const toast = document.getElementById('toast');
-        toast.textContent = msg;
-        toast.classList.add('show');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
-    }
-
-    // =============================================
-    // HTMX: sync row data-status after ATS swap
-    // =============================================
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-        const target = evt.target;
-        if (!target.classList.contains('ats-buttons')) return;
-
-        const activeBtn = target.querySelector('.ats-btn[class*="status-"]');
-        const row = target.closest('tr');
-        if (activeBtn && row) {
-            const cls = [...activeBtn.classList].find(c => c.startsWith('status-'));
-            if (cls) row.dataset.status = cls.replace('status-', '').toUpperCase();
+        try{
+            const res=await fetch('/jobs/stage',{method:'POST',body});
+            const html=await res.text();
+            if(res.ok){
+                feedback.innerHTML='<p class="stage-success">✓ Queued! Airflow will enrich within 5 minutes.</p>';
+                document.getElementById('add-job-link').value='';
+                // Refresh the queue
+                htmx.trigger('#staging-queue-container','load');
+                setTimeout(()=>feedback.innerHTML='',4000);
+            } else {
+                feedback.innerHTML=html;
+            }
+        } catch(e){
+            feedback.innerHTML='<p class="stage-error">⚠ Network error. Try again.</p>';
+        } finally {
+            btn.disabled=false;btn.textContent='+ Queue Job';
         }
+    }
+
+    // Allow Enter key in URL field to submit
+    document.addEventListener('DOMContentLoaded',()=>{
+        document.getElementById('add-job-link').addEventListener('keydown',e=>{
+            if(e.key==='Enter')submitStageForm();
+        });
+    });
+
+    // QUICK FILTERS
+    let activeQuickFilter='all';
+    function setQuickFilter(type,btn){document.querySelectorAll('.filter-pill:not(#adv-toggle)').forEach(p=>p.classList.remove('active'));btn.classList.add('active');activeQuickFilter=type;applyAllFilters();}
+
+    // ADVANCED FILTERS
+    function toggleAdvancedFilters(btn){const panel=document.getElementById('filter-panel');const open=panel.classList.toggle('open');btn.classList.toggle('active',open);}
+    function clearAdvancedFilters(){document.getElementById('filter-company').value='';document.getElementById('filter-date-from').value='';document.getElementById('filter-date-to').value='';applyAllFilters();}
+
+    // MASTER FILTER
+    function applyAllFilters(){
+        const company=document.getElementById('filter-company').value.toLowerCase().trim();
+        const dateFrom=document.getElementById('filter-date-from').value;
+        const dateTo=document.getElementById('filter-date-to').value;
+        document.querySelectorAll('#jobs-table tbody tr').forEach(row=>{
+            const score=parseInt(row.dataset.score);
+            const remote=row.dataset.remote==='true';
+            const status=row.dataset.status;
+            const rowCompany=row.dataset.company;
+            const rowDate=row.dataset.postdate;
+            let quickPass=true;
+            if(activeQuickFilter==='high')quickPass=score>=75;
+            if(activeQuickFilter==='remote')quickPass=remote;
+            if(activeQuickFilter==='applied')quickPass=status!=='NONE'&&status!=='';
+            if(activeQuickFilter==='not_applied')quickPass=status==='NONE'||status==='';
+            const companyPass=!company||rowCompany.includes(company);
+            let datePass=true;
+            if(dateFrom&&rowDate)datePass=datePass&&rowDate>=dateFrom;
+            if(dateTo&&rowDate)datePass=datePass&&rowDate<=dateTo;
+            row.style.display=(quickPass&&companyPass&&datePass)?'':'none';
+        });
+    }
+
+    // TOAST
+    let toastTimer;
+    function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+
+    // HTMX: sync ATS status on row
+    document.body.addEventListener('htmx:afterSwap',function(evt){
+        const target=evt.target;
+        if(!target.classList.contains('ats-buttons'))return;
+        const activeBtn=target.querySelector('.ats-btn[class*="status-"]');
+        const row=target.closest('tr');
+        if(activeBtn&&row){const cls=[...activeBtn.classList].find(c=>c.startsWith('status-'));if(cls)row.dataset.status=cls.replace('status-','').toUpperCase();}
     });
 </script>
 </body>
