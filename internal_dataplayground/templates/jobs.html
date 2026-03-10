@@ -31,7 +31,6 @@
             --tag-bg:        #1e1e28;
             --shadow:        0 2px 12px rgba(0,0,0,0.4);
             --sidebar-bg:    #16161a;
-            --sidebar-text:  #e8e8f0;
             --topbar-bg:     #16161a;
         }
 
@@ -52,7 +51,6 @@
             --tag-bg:        #eeecf8;
             --shadow:        0 2px 8px rgba(0,0,0,0.06);
             --sidebar-bg:    #ffffff;
-            --sidebar-text:  #1a1a2e;
             --topbar-bg:     #ffffff;
         }
 
@@ -73,7 +71,6 @@
             --tag-bg:        #eeeaf8;
             --shadow:        0 2px 10px rgba(0,0,0,0.08);
             --sidebar-bg:    #111318;
-            --sidebar-text:  #c8c6e0;
             --topbar-bg:     #f8f7fc;
         }
 
@@ -94,11 +91,13 @@
 
         /* =============================================
            LAYOUT
+           Key: 3 rows — topbar (fixed) / filter panel (auto) / content (1fr)
+           Sidebar spans all 3 rows via grid-row: 1 / -1
            ============================================= */
         .layout {
             display: grid;
             grid-template-columns: var(--sidebar-width) 1fr;
-            grid-template-rows: 56px 1fr;
+            grid-template-rows: 56px auto 1fr;
             height: 100vh;
             transition: grid-template-columns var(--transition);
         }
@@ -108,9 +107,10 @@
         }
 
         /* =============================================
-           SIDEBAR
+           SIDEBAR — spans all 3 rows, always full height
            ============================================= */
         .sidebar {
+            grid-column: 1;
             grid-row: 1 / -1;
             background: var(--sidebar-bg);
             border-right: 1px solid #2a2a35;
@@ -119,11 +119,10 @@
             height: 100vh;
             overflow: hidden;
             transition: background var(--transition);
-            position: relative;
             z-index: 100;
         }
 
-        /* Hide text when collapsed */
+        /* Collapsed state */
         .layout.sidebar-collapsed .sidebar-text,
         .layout.sidebar-collapsed .os-subtitle,
         .layout.sidebar-collapsed .nav-label,
@@ -134,7 +133,6 @@
             font-size: 10px;
             padding: 16px 0;
             text-align: center;
-            letter-spacing: 0.05em;
         }
 
         .layout.sidebar-collapsed .nav-item {
@@ -167,7 +165,6 @@
             margin-top: 2px;
         }
 
-        /* Scrollable nav section */
         .sidebar-nav {
             flex: 1;
             overflow-y: auto;
@@ -206,7 +203,6 @@
         .nav-item.active { background: rgba(124,111,255,0.12); color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
         .nav-item .icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
 
-        /* Footer — always pinned to bottom */
         .sidebar-footer {
             flex-shrink: 0;
             padding: 14px 20px;
@@ -216,13 +212,7 @@
             gap: 8px;
         }
 
-        .theme-label {
-            font-size: 9px;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            color: #50505f;
-        }
-
+        .theme-label { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: #50505f; }
         .theme-switcher { display: flex; gap: 5px; }
 
         .theme-btn {
@@ -230,7 +220,6 @@
             padding: 5px 4px;
             font-family: 'DM Mono', monospace;
             font-size: 9px;
-            letter-spacing: 0.05em;
             border: 1px solid #2a2a35;
             background: transparent;
             color: #50505f;
@@ -258,9 +247,11 @@
         .layout.sidebar-collapsed .collapse-btn { align-self: center; }
 
         /* =============================================
-           TOPBAR
+           TOPBAR — row 1, column 2, fixed 56px
            ============================================= */
         .topbar {
+            grid-column: 2;
+            grid-row: 1;
             background: var(--topbar-bg);
             border-bottom: 1px solid var(--border);
             padding: 0 20px;
@@ -270,8 +261,7 @@
             justify-content: space-between;
             gap: 10px;
             transition: background var(--transition);
-            flex-wrap: wrap;
-            overflow: visible;
+            overflow: hidden;
         }
 
         .topbar-left {
@@ -296,7 +286,6 @@
             gap: 6px;
             flex: 1;
             justify-content: flex-end;
-            flex-wrap: wrap;
         }
 
         .filter-bar { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -316,20 +305,25 @@
 
         .filter-pill:hover { border-color: var(--accent); color: var(--accent); }
         .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-
-        /* Not Applied pill — highlights red when active */
         .filter-pill.danger:hover { border-color: var(--score-low); color: var(--score-low); }
         .filter-pill.danger.active { background: var(--score-low); border-color: var(--score-low); color: #fff; }
 
-        /* Advanced filter panel */
+        /* =============================================
+           FILTER PANEL — row 2, column 2
+           Hidden by default (zero height), expands on open.
+           This is what pushes main content down.
+           ============================================= */
         .filter-panel {
+            grid-column: 2;
+            grid-row: 2;
             display: none;
-            width: 100%;
+            background: var(--topbar-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
-            padding: 8px 0 4px;
-            border-top: 1px solid var(--border);
+            transition: background var(--transition);
         }
 
         .filter-panel.open { display: flex; }
@@ -365,9 +359,11 @@
         .filter-clear:hover { color: var(--score-low); }
 
         /* =============================================
-           MAIN CONTENT
+           MAIN CONTENT — row 3, column 2, scrollable
            ============================================= */
         .main-content {
+            grid-column: 2;
+            grid-row: 3;
             background: var(--bg-card);
             padding: 16px 20px;
             overflow-y: auto;
@@ -587,7 +583,7 @@
 
             .layout {
                 grid-template-columns: 1fr !important;
-                grid-template-rows: auto 1fr;
+                grid-template-rows: 56px auto 1fr;
                 height: auto;
                 min-height: 100vh;
             }
@@ -605,22 +601,16 @@
 
             .sidebar.mobile-open { transform: translateX(0); }
 
+            /* On mobile everything is column 1 */
+            .topbar, .filter-panel, .main-content {
+                grid-column: 1;
+            }
+
             .hamburger { display: flex !important; }
             .collapse-btn { display: none; }
 
-            .topbar {
-                grid-column: 1;
-                height: auto;
-                padding: 10px 14px;
-                gap: 8px;
-                flex-wrap: wrap;
-            }
+            .main-content { padding: 10px; }
 
-            .topbar-right { width: 100%; justify-content: flex-start; }
-            .filter-panel.open { width: 100%; }
-            .main-content { padding: 10px; height: auto; }
-
-            /* Stack filter inputs on mobile */
             #filter-company, #filter-date-from, #filter-date-to { width: 100%; }
         }
     </style>
@@ -631,9 +621,7 @@
 
     <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
 
-    <!-- =============================================
-         SIDEBAR
-         ============================================= -->
+    <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
         <div class="os-title">
             <span class="sidebar-text">Life OS</span>
@@ -683,16 +671,13 @@
         </div>
     </aside>
 
-    <!-- =============================================
-         TOPBAR
-         ============================================= -->
+    <!-- TOPBAR — row 1 -->
     <header class="topbar">
         <div class="topbar-left">
             <button class="hamburger" onclick="openMobileSidebar()">☰</button>
             <span class="page-title">Job Tracker</span>
             <span class="job-count">{{ jobs|length }} listings</span>
         </div>
-
         <div class="topbar-right">
             <div class="filter-bar">
                 <button class="filter-pill active"  onclick="setQuickFilter('all', this)">All</button>
@@ -703,18 +688,17 @@
             </div>
             <button class="filter-pill" id="adv-toggle" onclick="toggleAdvancedFilters(this)">⚙ Filters</button>
         </div>
-
-        <div class="filter-panel" id="filter-panel">
-            <input class="filter-input" type="text"  id="filter-company"   placeholder="Company…"    oninput="applyAllFilters()">
-            <input class="filter-input" type="date"  id="filter-date-from" title="Posted from"       onchange="applyAllFilters()">
-            <input class="filter-input" type="date"  id="filter-date-to"   title="Posted to"         onchange="applyAllFilters()">
-            <button class="filter-clear" onclick="clearAdvancedFilters()">✕ Clear</button>
-        </div>
     </header>
 
-    <!-- =============================================
-         MAIN CONTENT
-         ============================================= -->
+    <!-- FILTER PANEL — row 2, only visible when open -->
+    <div class="filter-panel" id="filter-panel">
+        <input class="filter-input" type="text"  id="filter-company"   placeholder="Company…"    oninput="applyAllFilters()">
+        <input class="filter-input" type="date"  id="filter-date-from" title="Posted from"       onchange="applyAllFilters()">
+        <input class="filter-input" type="date"  id="filter-date-to"   title="Posted to"         onchange="applyAllFilters()">
+        <button class="filter-clear" onclick="clearAdvancedFilters()">✕ Clear</button>
+    </div>
+
+    <!-- MAIN CONTENT — row 3 -->
     <main class="main-content">
         {% if jobs %}
         <table class="jobs-table" id="jobs-table">
@@ -824,7 +808,7 @@
 
 <script>
     // =============================================
-    // THEME — default: mixed, persists via localStorage
+    // THEME — default: mixed
     // =============================================
     function setTheme(theme, btn) {
         document.documentElement.setAttribute('data-theme', theme);
@@ -858,7 +842,7 @@
     }
 
     // =============================================
-    // SIDEBAR — mobile slide-over
+    // SIDEBAR — mobile
     // =============================================
     function openMobileSidebar() {
         document.getElementById('sidebar').classList.add('mobile-open');
@@ -870,7 +854,6 @@
         document.getElementById('sidebar-backdrop').classList.remove('visible');
     }
 
-    // Init on desktop only
     if (window.innerWidth > 768) applyCollapsed();
 
     // =============================================
@@ -879,7 +862,6 @@
     let activeQuickFilter = 'all';
 
     function setQuickFilter(type, btn) {
-        // Deactivate all pills except the adv-toggle
         document.querySelectorAll('.filter-pill:not(#adv-toggle)').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
         activeQuickFilter = type;
@@ -903,7 +885,7 @@
     }
 
     // =============================================
-    // MASTER FILTER — combines quick + advanced
+    // MASTER FILTER
     // =============================================
     function applyAllFilters() {
         const company  = document.getElementById('filter-company').value.toLowerCase().trim();
@@ -913,21 +895,18 @@
         document.querySelectorAll('#jobs-table tbody tr').forEach(row => {
             const score      = parseInt(row.dataset.score);
             const remote     = row.dataset.remote === 'true';
-            const status     = row.dataset.status;  // "APPLIED", "NONE", etc.
+            const status     = row.dataset.status;
             const rowCompany = row.dataset.company;
             const rowDate    = row.dataset.postdate;
 
-            // Quick filter
             let quickPass = true;
             if (activeQuickFilter === 'high')        quickPass = score >= 75;
             if (activeQuickFilter === 'remote')      quickPass = remote;
             if (activeQuickFilter === 'applied')     quickPass = status !== 'NONE' && status !== '';
             if (activeQuickFilter === 'not_applied') quickPass = status === 'NONE' || status === '';
 
-            // Company filter (case-insensitive partial match)
             const companyPass = !company || rowCompany.includes(company);
 
-            // Date range filter (ISO date strings compare lexicographically)
             let datePass = true;
             if (dateFrom && rowDate) datePass = datePass && rowDate >= dateFrom;
             if (dateTo   && rowDate) datePass = datePass && rowDate <= dateTo;
