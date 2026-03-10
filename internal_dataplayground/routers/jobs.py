@@ -9,7 +9,7 @@ from sqlalchemy import select, desc
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 templates = Jinja2Templates(directory="templates")
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("", response_class=HTMLResponse)
 async def list_jobs_ui(request: Request, db: AsyncSession = Depends(get_db)):
     stmt = select(Job).order_by(desc(Job.fit_score))
     result = await db.execute(stmt)
