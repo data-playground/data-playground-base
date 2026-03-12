@@ -1,6 +1,8 @@
 services:
   db:
     image: mariadb:10.11
+    ports:
+      - "3307:3306" # Host 3307 maps to Container 3306
     container_name: life_os_db
     restart: always
     environment:
