@@ -527,7 +527,7 @@ class LinkedInJobScraper:
 
         print(f'Loaded table {table}')
 
-    def run_batch_job_analysis(self, chunk):
+    def run_batch_job_analysis(self, chunk, i):
         print(f"Processing Batch {i+1}...")
         
         # Format the chunk into a string
@@ -674,7 +674,7 @@ if __name__ == "__main__":
 
     all_results = []
     for i, chunk in enumerate(chunks):
-        result = job_scraper.run_batch_job_analysis(chunk)
+        result = job_scraper.run_batch_job_analysis(chunk, i)
         all_results.extend(result)
 
     final_enriched_jobs = job_scraper.clean_job_list(chunks, all_results)
