@@ -628,6 +628,7 @@ class LinkedInJobScraper:
         # If your JSON is nested, e.g., {'users': [...]}, use record_path
         df['remote'] = [1 if i == 'true' else 0 for i in  df['remote']]  # Changes True -> 1 and False -> 0
 
+        df_to_save = df.replace({pd.NA: None, float('nan'): None})
         cursor = self.mysql_auth.cursor()
 
         # 3. Create table based on JSON keys (simplified)
@@ -635,15 +636,23 @@ class LinkedInJobScraper:
         # columns = ", ".join([f"{col} TEXT" for col in df.columns])
         # cursor.execute(f"CREATE TABLE IF NOT EXISTS json_table ({columns})")
 
-        # 4. Load data into MySQL
-        for _, row in df.iterrows():
-            sql = f"INSERT INTO linkedin_jobs ({', '.join(df.columns)}) VALUES ({', '.join(['%s']*len(row))})"
-            cursor.execute(sql, tuple(row))
+        columns = ", ".join(df_to_save.columns)
+        placeholders = ", ".join(["%s"] * len(df_to_save.columns))
+        
+        sql = f"INSERT INTO linkedin_jobs ({columns}) VALUES ({placeholders})"
+        
+        data = [tuple(row) for row in df.values]
 
-        self.mysql_auth.commit()
+        try:
+            cursor.executemany(sql, data)
+            self.mysql_auth.commit()
+            cursor.close()
 
-        cursor.close()
-        print("Data loaded successfully!")
+            print(f"Successfully inserted {cursor.rowcount} jobs.")
+        except Exception as e:
+            self.mysql_auth.rollback()
+            print(f"Error during bulk insert: {e}")
+            
 # %%
 
 if __name__ == "__main__":
