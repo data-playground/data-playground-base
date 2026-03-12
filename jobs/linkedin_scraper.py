@@ -46,7 +46,7 @@ class LinkedInJobScraper:
             "X-GitHub-Api-Version": "2022-11-28"
         }
 
-        self.mysql_auth = self.mysql_authentication()
+        # self.mysql_auth = self.mysql_authentication()
 
     def search_jobs(self, keywords):
         print(keywords)
