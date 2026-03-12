@@ -600,7 +600,7 @@ class LinkedInJobScraper:
     
     def mysql_authentication(self):
         maria_db = json.loads(self.get_key('MariaDB'))
-        
+
         return mysql.connector.connect(
             host="127.0.0.1", # Use IP to avoid socket issues on some Linux setups
             port=3306,
@@ -647,46 +647,45 @@ class LinkedInJobScraper:
 # %%
 
 if __name__ == "__main__":
-job_searches = [
-    "Senior Analytics Engineer", "AI Solutions Architect", "Senior BI Engineer", "Senior Data Analyst", "Senior Data Scientist", "Senior Data Engineer", "Senior Machine Learning Engineer", "Senior AI Engineer", "Senior Analytics Manager",
-    "Data Engineer (GCP), Solutions Engineer (Vertex AI), Analytics Architect",
-    "Revenue Operations Engineer", "Product Data Scientist",
-    "Senior Data Engineer AND (GCP OR BigQuery) AND Full-time", "(AI Architect OR Analytics Engineer) AND (Vertex OR GenAI) -Contract", "(Analytics Engineer OR Data Engineer) AND (Python AND SQL) AND Senior"
-]
+    job_searches = [
+        "Senior Analytics Engineer", "AI Solutions Architect", "Senior BI Engineer", "Senior Data Analyst", "Senior Data Scientist", "Senior Data Engineer", "Senior Machine Learning Engineer", "Senior AI Engineer", "Senior Analytics Manager",
+        "Data Engineer (GCP), Solutions Engineer (Vertex AI), Analytics Architect",
+        "Revenue Operations Engineer", "Product Data Scientist",
+        "Senior Data Engineer AND (GCP OR BigQuery) AND Full-time", "(AI Architect OR Analytics Engineer) AND (Vertex OR GenAI) -Contract", "(Analytics Engineer OR Data Engineer) AND (Python AND SQL) AND Senior"
+    ]
 
-job_scraper = LinkedInJobScraper()
+    job_scraper = LinkedInJobScraper()
 
 
-jobs_in_df = job_scraper.query_mysql()
+    jobs_in_df = job_scraper.query_mysql()
 
-jobs = []
-for search in job_searches:
-    jobs.extend(job_scraper.search_jobs(search))
+    jobs = []
+    for search in job_searches:
+        jobs.extend(job_scraper.search_jobs(search))
 
-jobs = job_scraper.deduplicate_jobs(jobs)
+    jobs = job_scraper.deduplicate_jobs(jobs)
 
-jobs = [i for i in jobs if int(i['job_id']) not in jobs_in_df]
+    jobs = [i for i in jobs if int(i['job_id']) not in jobs_in_df]
 
-for job in tqdm(jobs):
-    job['description'], job['salary'] = job_scraper.get_job_details(job['job_link'])
+    for job in tqdm(jobs):
+        job['description'], job['salary'] = job_scraper.get_job_details(job['job_link'])
 
-chunks = job_scraper.get_job_search_chunks(jobs)
+    chunks = job_scraper.get_job_search_chunks(jobs)
 
-all_results = []
-for i, chunk in enumerate(chunks):
-    result = job_scraper.run_batch_job_analysis(chunk)
-    all_results.extend(result)
+    all_results = []
+    for i, chunk in enumerate(chunks):
+        result = job_scraper.run_batch_job_analysis(chunk)
+        all_results.extend(result)
 
-final_enriched_jobs = job_scraper.clean_job_list(chunks, all_results)
+    final_enriched_jobs = job_scraper.clean_job_list(chunks, all_results)
 
-job_scraper.func_load_data(final_enriched_jobs, 'enriched_jobs')
+    job_scraper.func_load_data(final_enriched_jobs, 'enriched_jobs')
 
-# job_scraper.load_to_github('JOBS.json', final_enriched_jobs)
+    # job_scraper.load_to_github('JOBS.json', final_enriched_jobs)
 
-job_scraper.load_data_to_mysql(pd.DataFrame([
-    {k: v for k, v in item.items() if k != "ID"}
-    for item in final_enriched_jobs
-]))
-# %%
+    job_scraper.load_data_to_mysql(pd.DataFrame([
+        {k: v for k, v in item.items() if k != "ID"}
+        for item in final_enriched_jobs
+    ]))
 
 
