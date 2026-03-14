@@ -9,6 +9,7 @@ from collections import defaultdict
 from itertools import zip_longest
 
 import mysql.connector
+import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -499,7 +500,7 @@ class LinkedInJobScraper:
         '''
 
         # Create BigQuery client
-        client = bigquery.Client()
+        client = bigquery.Client.from_service_account_json("/home/main-server/Github/data-playground-base/internal_dataplayground/impactful-post-292301-17bfe2bceb2c.json")
 
         # Setup BigQuery load configurations
         job_config = bigquery.LoadJobConfig()
@@ -603,7 +604,7 @@ class LinkedInJobScraper:
 
         return mysql.connector.connect(
             host="127.0.0.1", # Use IP to avoid socket issues on some Linux setups
-            port=3306,
+            port=3307,
             user=maria_db['user'],
             password=maria_db['password'],
             database=maria_db['database']
@@ -652,7 +653,7 @@ class LinkedInJobScraper:
         except Exception as e:
             self.mysql_auth.rollback()
             print(f"Error during bulk insert: {e}")
-            
+
 # %%
 
 if __name__ == "__main__":
@@ -695,6 +696,6 @@ if __name__ == "__main__":
     job_scraper.load_data_to_mysql(pd.DataFrame([
         {k: v for k, v in item.items() if k != "ID"}
         for item in final_enriched_jobs
-    ]))
+    ]).replace({np.nan: None}))
 
 
