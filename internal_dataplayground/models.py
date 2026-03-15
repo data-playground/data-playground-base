@@ -20,6 +20,7 @@ class ApplicationStatus(enum.Enum):
     INTERVIEWING         = "Interviewing"
     TECHNICAL_ASSESSMENT = "Technical Assessment"
     REJECTED             = "Rejected"
+    CLOSED               = "Closed"
     OFFER                = "Offer"
     
 class Job(Base):

@@ -49,4 +49,11 @@
         hx-vals='{"job_id": {{ job.ID }}, "status": "OFFER"}'
         onclick="showToast('🎉 Offer logged!')"
     >Offer</button>
+
+    <button
+        class="ats-btn {% if current == 'CLOSED' %}status-closed{% endif %}"
+        hx-post="/ats/log"
+        hx-vals='{"job_id": {{ job.ID }}, "status": "CLOSED"}'
+        onclick="showToast('Marked as Closed')"
+    >Closed</button>
 </div>
