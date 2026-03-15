@@ -290,6 +290,8 @@
             </div>
         </div>
 
+		<div id="job-detail-panel" class="detail-drawer">
+		</div>
         <!-- JOBS TABLE -->
         {% if jobs %}
         <table class="jobs-table" id="jobs-table">
@@ -314,7 +316,8 @@
                     </span>
                 </td>
                 <td class="job-title-cell">
-                    <a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">{{ job.job_title }}</a>
+                    <!--<a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">{{ job.job_title }}</a>-->
+					<a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel">{{ job.job_title }}</a>
                     <div class="job-company">{{ job.company_name or '—' }}</div>
                 </td>
                 <td>

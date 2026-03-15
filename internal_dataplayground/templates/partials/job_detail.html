@@ -1,0 +1,37 @@
+<div class="detail-content p-6 bg-card border-l border-border h-full overflow-y-auto">
+    <div class="flex justify-between items-start mb-6">
+        <div>
+            <h2 class="text-2xl font-bold font-syne">{{ job.job_title }}</h2>
+            <p class="text-secondary">{{ job.company_name }} • {{ job.location }}</p>
+        </div>
+        <button onclick="document.getElementById('job-detail-panel').classList.remove('open')" class="text-muted hover:text-primary">✕ Close</button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-8">
+        <div class="p-4 bg-bg border border-border rounded">
+            <span class="text-xs uppercase tracking-widest text-muted">Fit Score</span>
+            <div class="text-2xl font-bold {% if job.fit_score >= 75 %}text-score-high{% else %}text-score-mid{% endif %}">
+                {{ job.fit_score }}%
+            </div>
+        </div>
+        <div class="p-4 bg-bg border border-border rounded">
+            <span class="text-xs uppercase tracking-widest text-muted">Salary Range</span>
+            <div class="text-sm font-mono mt-1">{{ job.salary or 'Not Listed' }}</div>
+        </div>
+    </div>
+
+    <h3 class="text-sm uppercase tracking-widest text-accent mb-3">AI Qualification Analysis</h3>
+    <p class="text-sm leading-relaxed mb-6">{{ job.qualification_analysis }}</p>
+
+    <h3 class="text-sm uppercase tracking-widest text-score-low mb-3">Skill Gaps Identified</h3>
+    <div class="flex flex-wrap gap-2 mb-8">
+        {% for gap in job.skill_gaps.split(',') %}
+            <span class="tag border border-score-low/30">{{ gap.strip() }}</span>
+        {% endfor %}
+    </div>
+
+    <h3 class="text-sm uppercase tracking-widest text-muted mb-3">Job Description</h3>
+    <div class="text-xs text-secondary whitespace-pre-wrap font-mono bg-bg-hover p-4 rounded">
+        {{ job.description }}
+    </div>
+</div>
