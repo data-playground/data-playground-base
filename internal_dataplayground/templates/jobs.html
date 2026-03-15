@@ -262,8 +262,8 @@
         </div>
         <div class="topbar-right">
             <div class="filter-bar">
-                <button class="filter-pill active" onclick="setQuickFilter('all',this)">All</button>
-                <button class="filter-pill" onclick="setQuickFilter('high',this)">High Fit</button>
+                <button class="filter-pill" onclick="setQuickFilter('all',this)">All</button>
+                <button class="filter-pill active" onclick="setQuickFilter('high',this)">High Fit</button>
                 <button class="filter-pill" onclick="setQuickFilter('remote',this)">Remote</button>
                 <button class="filter-pill" onclick="setQuickFilter('applied',this)">Applied</button>
                 <button class="filter-pill danger" onclick="setQuickFilter('not_applied',this)">Not Applied</button>
@@ -335,7 +335,7 @@
                 data-remote="{{ job.remote | lower }}"
                 data-status="{{ job.latest_status | upper | replace(' ', '_') if job.latest_status else 'NONE' }}"
                 data-company="{{ job.company_name | lower if job.company_name else '' }}"
-                data-postdate="{{ job.post_date.strftime('%Y-%m-%d') if job.post_date else '' }}"
+                data-postdate="{{ job.search_date.strftime('%Y-%m-%d') if job.search_date else '' }}"
             >
                 <td>
                     <span class="score-badge {% if job.fit_score >= 75 %}score-high{% elif job.fit_score >= 50 %}score-mid{% else %}score-low{% endif %}">
@@ -355,7 +355,7 @@
                     </span>
                 </td>
                 <td style="color:var(--text-muted);font-size:10px;white-space:nowrap;">
-                    {{ job.post_date.strftime('%b %d') if job.post_date else '—' }}
+                    {{ job.search_date.strftime('%b %d') if job.search_date else '—' }}
                 </td>
                 <td class="ats-cell">
                     <div class="ats-buttons" id="ats-{{ job.ID }}" hx-target="#ats-{{ job.ID }}" hx-swap="outerHTML settle:300ms">
@@ -396,6 +396,21 @@
     function openMobileSidebar(){document.getElementById('sidebar').classList.add('mobile-open');document.getElementById('sidebar-backdrop').classList.add('visible');}
     function closeMobileSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebar-backdrop').classList.remove('visible');}
     if(window.innerWidth>768)applyCollapsed();
+
+	// Default: High Fit + last 10 days
+	(function(){
+		activeQuickFilter = 'high';
+		const today = new Date();
+		const tenDaysAgo = new Date(today);
+		tenDaysAgo.setDate(today.getDate() - 10);
+		const fmt = d => d.toISOString().split('T')[0];
+		document.getElementById('filter-date-from').value = fmt(tenDaysAgo);
+		document.getElementById('filter-date-to').value = fmt(today);
+		// Open the advanced filter panel so the dates are visible
+		document.getElementById('filter-panel').classList.add('open');
+		document.getElementById('adv-toggle').classList.add('active');
+		applyAllFilters();
+	})();
 
     // STAGING PANEL
     function toggleStagingBody(){
@@ -502,10 +517,21 @@
 	function openDetailPanel() {
 		document.getElementById('job-detail-panel').classList.add('open');
 		document.getElementById('detail-overlay').classList.add('visible');
+		// Slight delay so the open click doesn't immediately retrigger close
+		setTimeout(() => {
+			document.addEventListener('click', outsideDrawerHandler);
+		}, 50);
 	}
 	function closeDetailPanel() {
 		document.getElementById('job-detail-panel').classList.remove('open');
 		document.getElementById('detail-overlay').classList.remove('visible');
+		document.removeEventListener('click', outsideDrawerHandler);
+	}
+	function outsideDrawerHandler(e) {
+		const panel = document.getElementById('job-detail-panel');
+		if (!panel.contains(e.target)) {
+			closeDetailPanel();
+		}
 	}
 	document.addEventListener('keydown', e => {
 		if (e.key === 'Escape') closeDetailPanel();
