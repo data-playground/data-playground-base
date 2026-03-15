@@ -580,7 +580,112 @@
         hideApplied    = document.getElementById('hide-applied-toggle').checked;
 
         let visible = 0;
-        document.querySelectorAll('#jobs
+        document.querySelectorAll('#jobs-table tbody tr').forEach(row=>{
+            const score   = parseInt(row.dataset.score);
+            const remote  = row.dataset.remote==='true';
+            const status  = row.dataset.status; // e.g. "APPLIED", "NONE"
+            const rowComp = row.dataset.company;
+            const rowDate = row.dataset.postdate;
+
+            // Quick filter
+            let quickPass = true;
+            if(activeQuickFilter==='high')   quickPass = score>=75;
+            if(activeQuickFilter==='remote') quickPass = remote;
+            if(activeQuickFilter==='applied')    quickPass = status!=='NONE'&&status!=='';
+            if(activeQuickFilter==='not_applied')quickPass = status==='NONE'||status==='';
+
+            // Score slider
+            const scorePass = score >= scoreMin;
+
+            // Company text
+            const companyPass = !company || rowComp.includes(company);
+
+            // Date range
+            let datePass = true;
+            if(dateFrom && rowDate) datePass = datePass && rowDate>=dateFrom;
+            if(dateTo   && rowDate) datePass = datePass && rowDate<=dateTo;
+
+            // Status multi-select
+            const statusPass = activeStatuses.size===0 || activeStatuses.has(status);
+
+            // Hide applied toggle
+            const appliedPass = !hideApplied || (status==='NONE'||status==='');
+
+            const show = quickPass && scorePass && companyPass && datePass && statusPass && appliedPass;
+            row.style.display = show ? '' : 'none';
+            if(show) visible++;
+        });
+
+        // Update count label
+        const countEl = document.querySelector('.job-count');
+        if(countEl){
+            const total = document.querySelectorAll('#jobs-table tbody tr').length;
+            countEl.textContent = visible===total ? `${total} listings` : `${visible} of ${total}`;
+        }
+    }
+
+    // TOAST
+    let toastTimer;
+    function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+
+    // HTMX: sync ATS status on row after swap
+    document.body.addEventListener('htmx:afterSwap',function(evt){
+        const target=evt.target;
+        if(!target.classList.contains('ats-buttons'))return;
+        const activeBtn=target.querySelector('.ats-btn[class*="status-"]');
+        const row=target.closest('tr');
+        if(activeBtn&&row){const cls=[...activeBtn.classList].find(c=>c.startsWith('status-'));if(cls)row.dataset.status=cls.replace('status-','').toUpperCase();}
+    });
+
+    // DETAIL PANEL
+    function openDetailPanel(){
+        document.getElementById('job-detail-panel').classList.add('open');
+        document.getElementById('detail-overlay').classList.add('visible');
+        setTimeout(()=>{ document.addEventListener('click', outsideDrawerHandler); }, 50);
+    }
+    function closeDetailPanel(){
+        document.getElementById('job-detail-panel').classList.remove('open');
+        document.getElementById('detail-overlay').classList.remove('visible');
+        document.removeEventListener('click', outsideDrawerHandler);
+    }
+    function outsideDrawerHandler(e){
+        const panel=document.getElementById('job-detail-panel');
+        if(panel && !panel.contains(e.target)) closeDetailPanel();
+    }
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDetailPanel(); });
+
+    // INIT — runs after DOM + all declarations are ready
+    document.addEventListener('DOMContentLoaded', ()=>{
+        // Wire Enter key on staging URL input
+        document.getElementById('add-job-link').addEventListener('keydown',e=>{
+            if(e.key==='Enter') submitStageForm();
+        });
+
+        // Default date range: last 10 days
+        const today = new Date();
+        const tenDaysAgo = new Date();
+        tenDaysAgo.setDate(today.getDate()-10);
+        const fmt = d => d.toISOString().split('T')[0];
+        document.getElementById('filter-date-from').value = fmt(tenDaysAgo);
+        document.getElementById('filter-date-to').value   = fmt(today);
+
+        // Open advanced panel so dates are visible
+        document.getElementById('filter-panel').classList.add('open');
+        document.getElementById('adv-toggle').classList.add('active');
+
+        // Default: hide applied
+        document.getElementById('hide-applied-toggle').checked = true;
+
+        // Sync High Fit pill to active state
+        document.querySelectorAll('.filter-pill:not(#adv-toggle)').forEach(p=>p.classList.remove('active'));
+        document.querySelector('.filter-pill[onclick*="high"]').classList.add('active');
+
+        // Init status dropdown
+        renderStatusDropdown();
+
+        // Run filters
+        applyAllFilters();
+    });
 </script>
 </body>
 </html>
