@@ -308,9 +308,9 @@
 		<!-- Score slider -->
 		<div style="display:flex;align-items:center;gap:6px;">
 			<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">Score ≥</span>
-			<input type="range" id="filter-score-min" min="0" max="100" value="0" style="width:80px;"
+			<input type="range" id="filter-score-min" min="0" max="100" value="90" style="width:80px;"
 				oninput="document.getElementById('score-min-label').textContent=this.value;applyAllFilters()">
-			<span id="score-min-label" style="font-size:10px;color:var(--text-secondary);min-width:20px;">0</span>
+			<span id="score-min-label" style="font-size:10px;color:var(--text-secondary);min-width:20px;">90</span>
 		</div>
 
 		<!-- Status multi-select -->
@@ -392,7 +392,7 @@
                 data-postdate="{{ job.search_date.strftime('%Y-%m-%d') if job.search_date else '' }}"
             >
                 <td>
-                    <span class="score-badge {% if job.fit_score >= 75 %}score-high{% elif job.fit_score >= 50 %}score-mid{% else %}score-low{% endif %}">
+                    <span class="score-badge {% if job.fit_score >= 90 %}score-high{% elif job.fit_score >= 50 %}score-mid{% else %}score-low{% endif %}">
                         {{ job.fit_score }}
                     </span>
                 </td>
@@ -517,9 +517,9 @@
     }
 
     function clearAdvancedFilters(){
-        document.getElementById('filter-company').value='';
-        document.getElementById('filter-score-min').value='0';
-        document.getElementById('score-min-label').textContent='0';
+        document.getElementById('filter-company').value=''; 
+		document.getElementById('filter-score-min').value = '90';
+		document.getElementById('score-min-label').textContent = '90';
         document.getElementById('filter-date-from').value='';
         document.getElementById('filter-date-to').value='';
         activeStatuses.clear();
@@ -589,7 +589,7 @@
 
             // Quick filter
             let quickPass = true;
-            if(activeQuickFilter==='high')   quickPass = score>=75;
+            if(activeQuickFilter==='high')   quickPass = score>=90;
             if(activeQuickFilter==='remote') quickPass = remote;
             if(activeQuickFilter==='applied')    quickPass = status!=='NONE'&&status!=='';
             if(activeQuickFilter==='not_applied')quickPass = status==='NONE'||status==='';
