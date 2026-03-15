@@ -86,7 +86,7 @@ class ApplicationLog(Base):
     )
 
     status: Mapped[ApplicationStatus] = mapped_column(
-        Enum(ApplicationStatus),
+        Enum(ApplicationStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
 
