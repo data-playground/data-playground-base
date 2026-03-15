@@ -194,6 +194,32 @@
             .add-job-form { flex-direction:column; align-items:stretch; }
             #add-job-search { width:100%; }
         }
+		
+		/* ── JOB DETAIL DRAWER ── */
+		.detail-drawer {
+			position: fixed;
+			top: 0;
+			right: -480px;
+			width: 480px;
+			height: 100vh;
+			background: var(--bg-card);
+			border-left: 1px solid var(--border);
+			box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+			z-index: 300;
+			overflow-y: auto;
+			transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		}
+		.detail-drawer.open {
+			right: 0;
+		}
+		.detail-overlay {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: rgba(0,0,0,0.3);
+			z-index: 299;
+		}
+		.detail-overlay.visible { display: block; }
     </style>
 </head>
 <body>
@@ -291,6 +317,7 @@
         </div>
 
 		<div id="job-detail-panel" class="detail-drawer">
+			<div class="detail-overlay" id="detail-overlay" onclick="closeDetailPanel()"></div>
 		</div>
         <!-- JOBS TABLE -->
         {% if jobs %}
@@ -317,7 +344,9 @@
                 </td>
                 <td class="job-title-cell">
                     <!--<a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">{{ job.job_title }}</a>-->
-					<a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel">{{ job.job_title }}</a>
+					<!--<a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel">{{ job.job_title }}</a>-->
+					<a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel" hx-swap="innerHTML" hx-on::after-request="openDetailPanel()">{{ job.job_title }}</a>
+
                     <div class="job-company">{{ job.company_name or '—' }}</div>
                 </td>
                 <td>
@@ -469,6 +498,18 @@
         const row=target.closest('tr');
         if(activeBtn&&row){const cls=[...activeBtn.classList].find(c=>c.startsWith('status-'));if(cls)row.dataset.status=cls.replace('status-','').toUpperCase();}
     });
+	
+	function openDetailPanel() {
+		document.getElementById('job-detail-panel').classList.add('open');
+		document.getElementById('detail-overlay').classList.add('visible');
+	}
+	function closeDetailPanel() {
+		document.getElementById('job-detail-panel').classList.remove('open');
+		document.getElementById('detail-overlay').classList.remove('visible');
+	}
+	document.addEventListener('keydown', e => {
+		if (e.key === 'Escape') closeDetailPanel();
+	});
 </script>
 </body>
 </html>

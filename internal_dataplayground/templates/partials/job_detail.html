@@ -4,7 +4,7 @@
             <h2 class="text-2xl font-bold font-syne">{{ job.job_title }}</h2>
             <p class="text-secondary">{{ job.company_name }} • {{ job.location }}</p>
         </div>
-        <button onclick="document.getElementById('job-detail-panel').classList.remove('open')" class="text-muted hover:text-primary">✕ Close</button>
+        <button onclick="closeDetailPanel()" class="text-muted hover:text-primary">✕ Close</button>
     </div>
 
     <div class="grid grid-cols-2 gap-4 mb-8">
