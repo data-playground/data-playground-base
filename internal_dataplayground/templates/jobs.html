@@ -162,6 +162,7 @@
         .ats-btn.status-technical     { border-color:#ff8c42; color:#ff8c42; background:rgba(255,140,66,0.10); }
         .ats-btn.status-rejected      { border-color:#ff5050; color:#ff5050; background:rgba(255,80,80,0.10); }
         .ats-btn.status-offer         { border-color:#00e5a0; color:#00e5a0; background:rgba(0,229,160,0.10); }
+		.ats-btn.status-closed        { border-color:#8888a8; color:#8888a8; background:rgba(136,136,168,0.10); }
         @keyframes flash-success { 0%{background:rgba(0,229,160,0.25);}100%{background:transparent;} }
         .ats-buttons.htmx-settled { animation:flash-success 0.6s ease forwards; }
 
@@ -333,6 +334,7 @@
                         <button class="ats-btn {% if current == 'TECHNICAL_ASSESSMENT' %}status-technical{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"TECHNICAL_ASSESSMENT"}' onclick="showToast('Marked as Technical')">Technical</button>
                         <button class="ats-btn {% if current == 'REJECTED' %}status-rejected{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"REJECTED"}' onclick="showToast('Marked as Rejected')">Rejected</button>
                         <button class="ats-btn {% if current == 'OFFER' %}status-offer{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"OFFER"}' onclick="showToast('🎉 Offer logged!')">Offer</button>
+                        <button class="ats-btn {% if current == 'CLOSED' %}status-closed{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"CLOSED"}' onclick="showToast('Marked as Closed')">Closed</button>
                     </div>
                 </td>
             </tr>
