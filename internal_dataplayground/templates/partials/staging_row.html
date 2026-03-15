@@ -1,0 +1,26 @@
+{# templates/partials/staging_row.html
+   Returned by POST /jobs/stage and prepended into #staging-queue by HTMX.
+   `job` = StagingJob ORM object
+#}
+<tr class="staging-row stage-{{ job.status.value | lower }}" id="stage-row-{{ job.id }}">
+    <td class="stage-status">
+        <span class="stage-badge stage-{{ job.status.value | lower }}">
+            {% if job.status.value == 'PENDING' %}⏳{% elif job.status.value == 'PROCESSING' %}⚙{% elif job.status.value == 'DONE' %}✓{% else %}✗{% endif %}
+            {{ job.status.value }}
+        </span>
+    </td>
+    <td class="stage-link">
+        <a href="{{ job.job_link }}" target="_blank" class="job-title-link" title="{{ job.job_link }}">
+            {{ job.job_title or job.job_link | truncate(60) }}
+        </a>
+        {% if job.company_name %}
+        <div class="job-company">{{ job.company_name }}</div>
+        {% endif %}
+    </td>
+    <td style="font-size:10px; color: var(--text-muted); white-space: nowrap;">
+        {{ job.job_search or '—' }}
+    </td>
+    <td style="font-size:10px; color: var(--text-muted); white-space: nowrap;">
+        {{ job.created_at.strftime('%b %d, %H:%M') }}
+    </td>
+</tr>
