@@ -19,12 +19,15 @@ import logging
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, extract, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from pydantic import BaseModel
 
 from database import get_db, get_key
 from models import Account, AccountCreate, AccountType, Transaction, TransactionCategory
@@ -38,29 +41,28 @@ CATEGORIES = [c.value for c in TransactionCategory]
 
 # ── Gemini helper ──────────────────────────────────────────────────────────────
 
-def _get_gemini_model():
-    api_key = get_key("GeminiAPIKey")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash-lite")
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
 
+class CategoryBatch(BaseModel):
+    categories: list[str]
+
+def _get_client():
+    return genai.Client(api_key=get_key("GeminiAPIKey"))
 
 def _categorise_batch(rows: list[dict]) -> list[str]:
-    """
-    Send up to 200 (description, amount) pairs to Gemini.
-    Returns a parallel list of category strings.
-    Falls back to 'Other' on any error.
-    """
     if not rows:
         return []
 
-    model = _get_gemini_model()
+    client = _get_client()
     numbered = "\n".join(
         f"{i+1}. description=\"{r['description']}\" amount={r['amount']}"
         for i, r in enumerate(rows)
     )
     prompt = f"""You are a personal finance categoriser.
 Assign each transaction exactly one category from this list:
-{", ".join(CATEGORIES)}
+Housing, Food & Dining, Transport, Subscriptions, Health, Entertainment, Savings Transfer, Income, Other
 
 Rules:
 - Negative amounts are expenses; positive amounts are income or transfers.
@@ -68,26 +70,38 @@ Rules:
 - Rent/mortgage/utilities → Housing
 - Restaurants/groceries/coffee → Food & Dining
 - Uber/Lyft/gas/subway/parking → Transport
-- Netflix/Spotify/gym memberships/recurring SaaS → Subscriptions
+- Netflix/Spotify/gym memberships → Subscriptions
 - Doctor/pharmacy/insurance → Health
 - Movies/concerts/hobbies → Entertainment
-- Transfers to savings or investment accounts → Savings Transfer
-- Anything that does not fit → Other
+- Transfers to savings → Savings Transfer
+- Anything else → Other
+
+Return a `categories` list with exactly {len(rows)} strings, one per transaction in order.
 
 Transactions:
-{numbered}
-
-Respond ONLY with a JSON array of {len(rows)} strings in the same order, e.g.:
-["Food & Dining", "Transport", ...]
-No explanations, no markdown, no extra text."""
+{numbered}"""
 
     try:
-        response = model.generate_content(prompt)
-        raw = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        categories = json.loads(raw)
-        # Validate every returned value
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-lite",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=CategoryBatch,
+            ),
+        )
+        result = CategoryBatch.model_validate_json(response.text)
+        
+        # Guard: if Gemini returned wrong count, fall back the whole batch
+        if len(result.categories) != len(rows):
+            log.warning(
+                "Gemini returned %d categories for %d rows — falling back",
+                len(result.categories), len(rows)
+            )
+            return ["Other"] * len(rows)
+
         valid = {c.value for c in TransactionCategory}
-        return [c if c in valid else "Other" for c in categories]
+        return [c if c in valid else "Other" for c in result.categories]
     except Exception as exc:
         log.warning("Gemini categorisation failed: %s", exc)
         return ["Other"] * len(rows)
