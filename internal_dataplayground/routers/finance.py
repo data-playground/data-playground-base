@@ -49,7 +49,7 @@ class CategoryBatch(BaseModel):
     categories: list[str]
 
 def _get_client():
-    return genai.Client(api_key=get_key("GeminiAPIKey"))
+    return genai.Client(api_key=get_key("Gemini-API"))
 
 def _categorise_batch(rows: list[dict]) -> list[str]:
     if not rows:
