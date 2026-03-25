@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from database import init_db
-from routers import jobs, ats, staging
+from routers import jobs, ats, staging, finance
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,6 +16,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(jobs.router)
 app.include_router(ats.router)
 app.include_router(staging.router)
+app.include_router(finance.router)
 
 @app.get("/")
 async def root():

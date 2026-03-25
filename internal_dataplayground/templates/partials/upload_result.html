@@ -1,0 +1,12 @@
+{# templates/partials/upload_result.html #}
+<div class="result-box">
+    <div class="result-title">✓ Import Complete</div>
+    <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">
+        Imported <strong>{{ imported }}</strong> transaction{{ 's' if imported != 1 else '' }}
+        into <strong>{{ account_name }}</strong> via Gemini categorisation.
+        {% if skipped %}<br><span style="color:var(--red);">⚠ {{ skipped }} row{{ 's' if skipped != 1 else '' }} skipped (unparseable amount or date).</span>{% endif %}
+    </p>
+    <a href="/finance/ledger" style="font-size:11px;color:var(--accent);text-decoration:none;">View in Ledger →</a>
+    &nbsp;&nbsp;
+    <a href="/finance" style="font-size:11px;color:var(--accent);text-decoration:none;">Go to Summary →</a>
+</div>

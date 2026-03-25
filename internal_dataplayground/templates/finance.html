@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mixed">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life OS — Finance</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── THEME TOKENS (matches jobs.html) ── */
+        :root { --transition:0.25s ease; --sidebar-width:220px; }
+        [data-theme="dark"] {
+            --bg:#0d0d0f; --bg-card:#16161a; --bg-hover:#1e1e24;
+            --border:#2a2a35; --border-accent:#3d3d52;
+            --text-primary:#e8e8f0; --text-secondary:#8888a8; --text-muted:#50505f;
+            --accent:#6c63ff; --accent-dim:rgba(108,99,255,0.15);
+            --green:#00e5a0; --red:#ff5050; --yellow:#ffb020;
+            --tag-bg:#1e1e28; --shadow:0 2px 12px rgba(0,0,0,0.4);
+            --sidebar-bg:#16161a; --topbar-bg:#16161a;
+        }
+        [data-theme="light"] {
+            --bg:#f5f4f8; --bg-card:#ffffff; --bg-hover:#faf9fd;
+            --border:#e2e0ec; --border-accent:#c8c4e8;
+            --text-primary:#1a1a2e; --text-secondary:#5a5880; --text-muted:#9896b0;
+            --accent:#5548e8; --accent-dim:rgba(85,72,232,0.08);
+            --green:#00a870; --red:#d63030; --yellow:#d4920a;
+            --tag-bg:#eeecf8; --shadow:0 2px 8px rgba(0,0,0,0.06);
+            --sidebar-bg:#ffffff; --topbar-bg:#ffffff;
+        }
+        [data-theme="mixed"] {
+            --bg:#111318; --bg-card:#f8f7fc; --bg-hover:#f2f0fa;
+            --border:#e0ddf0; --border-accent:#c5c0e8;
+            --text-primary:#1c1b2e; --text-secondary:#58567a; --text-muted:#9896b0;
+            --accent:#7c6fff; --accent-dim:rgba(124,111,255,0.1);
+            --green:#00c980; --red:#f04040; --yellow:#e8a020;
+            --tag-bg:#eeeaf8; --shadow:0 2px 10px rgba(0,0,0,0.08);
+            --sidebar-bg:#111318; --topbar-bg:#f8f7fc;
+        }
+
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        html, body { height:100%; }
+        body { font-family:'DM Mono',monospace; background:var(--bg); color:var(--text-primary); overflow:hidden; transition:background var(--transition),color var(--transition); }
+
+        /* ── LAYOUT ── */
+        .layout { display:grid; grid-template-columns:var(--sidebar-width) 1fr; grid-template-rows:56px 1fr; height:100vh; }
+        .layout.sidebar-collapsed { grid-template-columns:48px 1fr; }
+
+        /* ── SIDEBAR (identical to jobs.html) ── */
+        .sidebar { grid-column:1; grid-row:1/-1; background:var(--sidebar-bg); border-right:1px solid #2a2a35; display:flex; flex-direction:column; height:100vh; overflow:hidden; z-index:100; }
+        .layout.sidebar-collapsed .sidebar-text,.layout.sidebar-collapsed .os-subtitle,.layout.sidebar-collapsed .nav-label,.layout.sidebar-collapsed .theme-switcher,.layout.sidebar-collapsed .theme-label { display:none; }
+        .layout.sidebar-collapsed .os-title { font-size:10px; padding:16px 0; text-align:center; }
+        .layout.sidebar-collapsed .nav-item { justify-content:center; padding:10px 0; }
+        .layout.sidebar-collapsed .nav-item .icon { width:100%; text-align:center; }
+        .layout.sidebar-collapsed .sidebar-footer { padding:12px 0; align-items:center; }
+        .os-title { font-family:'Syne',sans-serif; font-weight:800; font-size:13px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); padding:20px 20px 16px; border-bottom:1px solid #2a2a35; margin-bottom:8px; flex-shrink:0; }
+        .os-subtitle { display:block; font-size:10px; font-weight:400; color:#50505f; letter-spacing:.08em; margin-top:2px; }
+        .sidebar-nav { flex:1; overflow-y:auto; padding-bottom:8px; }
+        .nav-label { font-size:9px; font-weight:500; letter-spacing:.18em; text-transform:uppercase; color:#50505f; padding:0 20px; margin:16px 0 6px; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:8px 20px; font-size:12px; color:#9896b8; cursor:pointer; transition:all var(--transition); text-decoration:none; border-left:2px solid transparent; white-space:nowrap; }
+        .nav-item:hover { background:rgba(255,255,255,0.06); color:#e8e6f8; }
+        .nav-item.active { background:rgba(124,111,255,0.12); color:var(--accent); border-left-color:var(--accent); font-weight:500; }
+        .nav-item .icon { font-size:14px; width:16px; text-align:center; flex-shrink:0; }
+        .sidebar-footer { flex-shrink:0; padding:14px 20px; border-top:1px solid #2a2a35; display:flex; flex-direction:column; gap:8px; }
+        .theme-label { font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:#50505f; }
+        .theme-switcher { display:flex; gap:5px; }
+        .theme-btn { flex:1; padding:5px 4px; font-family:'DM Mono',monospace; font-size:9px; border:1px solid #2a2a35; background:transparent; color:#50505f; border-radius:4px; cursor:pointer; transition:all var(--transition); }
+        .theme-btn:hover { border-color:var(--accent); color:var(--accent); }
+        .theme-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .collapse-btn { background:transparent; border:1px solid #2a2a35; color:#50505f; border-radius:4px; padding:5px 8px; font-size:11px; cursor:pointer; transition:all var(--transition); align-self:flex-start; }
+        .collapse-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+        /* ── TOPBAR ── */
+        .topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 24px; display:flex; align-items:center; justify-content:space-between; }
+        .page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+        .topbar-actions { display:flex; gap:8px; }
+        .btn { padding:5px 14px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; border-radius:4px; cursor:pointer; transition:all var(--transition); text-decoration:none; border:1px solid var(--border); color:var(--text-secondary); background:transparent; }
+        .btn:hover { border-color:var(--accent); color:var(--accent); }
+        .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .btn-primary:hover { opacity:.85; color:#fff; }
+
+        /* ── MAIN ── */
+        .main-content { grid-column:2; grid-row:2; padding:20px 24px; overflow-y:auto; background:var(--bg-card); }
+        [data-theme="dark"] .main-content { background:var(--bg); }
+
+        /* ── MONTH PICKER ── */
+        .month-nav { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+        .month-nav select { font-family:'DM Mono',monospace; font-size:11px; padding:4px 10px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); border-radius:4px; outline:none; cursor:pointer; }
+        .month-nav select:focus { border-color:var(--accent); }
+        .month-nav label { font-size:10px; color:var(--text-muted); }
+
+        /* ── KPI CARDS ── */
+        .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+        .kpi-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; box-shadow:var(--shadow); }
+        [data-theme="dark"] .kpi-card { background:var(--bg-card); }
+        .kpi-label { font-size:9px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
+        .kpi-value { font-family:'Syne',sans-serif; font-size:24px; font-weight:700; }
+        .kpi-income { color:var(--green); }
+        .kpi-expense { color:var(--red); }
+        .kpi-net-pos { color:var(--green); }
+        .kpi-net-neg { color:var(--red); }
+
+        /* ── TWO-COL GRID ── */
+        .dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+        .panel { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; box-shadow:var(--shadow); }
+        [data-theme="dark"] .panel { background:var(--bg-card); }
+        .panel-title { font-size:10px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); margin-bottom:14px; }
+
+        /* ── CATEGORY BREAKDOWN ── */
+        .cat-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .cat-name { font-size:11px; color:var(--text-secondary); width:130px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .cat-bar-wrap { flex:1; background:var(--bg-hover); border-radius:3px; height:6px; }
+        .cat-bar { height:6px; border-radius:3px; background:var(--accent); transition:width .4s ease; }
+        .cat-bar.expense { background:var(--red); }
+        .cat-bar.income  { background:var(--green); }
+        .cat-amount { font-size:10px; color:var(--text-muted); width:80px; text-align:right; flex-shrink:0; }
+
+        /* ── RECENT TRANSACTIONS ── */
+        .txn-table { width:100%; border-collapse:collapse; font-size:11px; }
+        .txn-table th { font-size:9px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); text-align:left; padding:4px 8px 8px; border-bottom:1px solid var(--border); }
+        .txn-table td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+        .txn-table tbody tr:last-child td { border-bottom:none; }
+        .txn-table tbody tr:hover { background:var(--bg-hover); }
+        .txn-amount-pos { color:var(--green); font-weight:500; }
+        .txn-amount-neg { color:var(--red); font-weight:500; }
+
+        .cat-badge { display:inline-block; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:500; letter-spacing:.05em; text-transform:uppercase; }
+        .cat-housing          { background:rgba(108,99,255,0.12); color:#7c6fff; }
+        .cat-food-dining      { background:rgba(255,176,32,0.12); color:#e8a020; }
+        .cat-transport        { background:rgba(0,191,255,0.12); color:#00bfff; }
+        .cat-subscriptions    { background:rgba(255,140,66,0.12); color:#ff8c42; }
+        .cat-health           { background:rgba(0,201,128,0.12); color:#00c980; }
+        .cat-entertainment    { background:rgba(240,64,64,0.12); color:#f04040; }
+        .cat-savings-transfer { background:rgba(100,200,100,0.12); color:#64c864; }
+        .cat-income           { background:rgba(0,229,160,0.12); color:#00e5a0; }
+        .cat-other            { background:rgba(136,136,168,0.12); color:#8888a8; }
+
+        .empty-note { font-size:12px; color:var(--text-muted); padding:20px 0; text-align:center; }
+    </style>
+</head>
+<body>
+<div class="layout" id="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="os-title">
+            <span class="sidebar-text">Life OS</span>
+            <span class="os-subtitle">v2.0 · personal</span>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Modules</div>
+            <a class="nav-item" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
+            <a class="nav-item active" href="/finance"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
+            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
+            <a class="nav-item" href="#"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
+            <div class="nav-label">Finance</div>
+            <a class="nav-item" href="/finance/ledger"><span class="icon">⊟</span><span class="sidebar-text">Ledger</span></a>
+            <a class="nav-item" href="/finance/upload"><span class="icon">⊕</span><span class="sidebar-text">Import CSV</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="theme-label">Theme</div>
+            <div class="theme-switcher">
+                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
+                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
+                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
+            </div>
+            <button class="collapse-btn" id="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
+        </div>
+    </aside>
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+        <span class="page-title">Finance</span>
+        <div class="topbar-actions">
+            <a class="btn" href="/finance/ledger">Ledger →</a>
+            <a class="btn btn-primary" href="/finance/upload">Import CSV</a>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="main-content">
+
+        <!-- Month picker -->
+        <form class="month-nav" method="get" action="/finance">
+            <label>Month</label>
+            <select name="month" onchange="this.form.submit()">
+                {% for m in range(1,13) %}
+                <option value="{{ m }}" {% if m == sel_month %}selected{% endif %}>
+                    {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] }}
+                </option>
+                {% endfor %}
+            </select>
+            <select name="year" onchange="this.form.submit()">
+                {% for y in range(sel_year - 2, sel_year + 2) %}
+                <option value="{{ y }}" {% if y == sel_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <!-- KPI cards -->
+        <div class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-label">Income</div>
+                <div class="kpi-value kpi-income">+${{ "%.2f"|format(total_income) }}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Expenses</div>
+                <div class="kpi-value kpi-expense">${{ "%.2f"|format(total_expenses) }}</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Net</div>
+                <div class="kpi-value {% if net >= 0 %}kpi-net-pos{% else %}kpi-net-neg{% endif %}">
+                    {% if net >= 0 %}+{% endif %}${{ "%.2f"|format(net) }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart + category breakdown -->
+        <div class="dash-grid">
+            <!-- Donut chart -->
+            <div class="panel">
+                <div class="panel-title">Spending by Category</div>
+                {% if category_totals %}
+                <canvas id="catChart" height="220"></canvas>
+                {% else %}
+                <p class="empty-note">No transactions this month.</p>
+                {% endif %}
+            </div>
+
+            <!-- Bar breakdown -->
+            <div class="panel">
+                <div class="panel-title">Category Detail</div>
+                {% if category_totals %}
+                    {% set max_abs = category_totals.values()|map('abs')|max %}
+                    {% for cat, amt in category_totals.items()|sort(attribute='1') %}
+                    <div class="cat-row">
+                        <div class="cat-name">{{ cat }}</div>
+                        <div class="cat-bar-wrap">
+                            <div class="cat-bar {% if amt > 0 %}income{% else %}expense{% endif %}"
+                                 style="width:{{ ((amt|abs / max_abs) * 100)|round }}%"></div>
+                        </div>
+                        <div class="cat-amount {% if amt > 0 %}txn-amount-pos{% else %}txn-amount-neg{% endif %}">
+                            {% if amt > 0 %}+{% endif %}${{ "%.0f"|format(amt|abs) }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <p class="empty-note">Import a CSV to get started.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recent transactions -->
+        <div class="panel">
+            <div class="panel-title">Recent Transactions</div>
+            {% if recent_txns %}
+            <table class="txn-table">
+                <thead>
+                    <tr><th>Date</th><th>Description</th><th>Category</th><th style="text-align:right">Amount</th></tr>
+                </thead>
+                <tbody>
+                {% for t in recent_txns %}
+                <tr>
+                    <td style="color:var(--text-muted);white-space:nowrap;">{{ t.date.strftime('%b %d') }}</td>
+                    <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.description }}</td>
+                    <td>
+                        {% set slug = t.category.value.lower().replace(' ', '-').replace('&', '').replace('--','-') %}
+                        <span class="cat-badge cat-{{ slug }}">{{ t.category.value }}</span>
+                    </td>
+                    <td style="text-align:right">
+                        <span class="{% if t.amount > 0 %}txn-amount-pos{% else %}txn-amount-neg{% endif %}">
+                            {% if t.amount > 0 %}+{% endif %}${{ "%.2f"|format(t.amount|abs) }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-note">No transactions yet. <a href="/finance/upload" style="color:var(--accent)">Import a CSV →</a></p>
+            {% endif %}
+        </div>
+
+    </main>
+</div>
+
+<script>
+// Theme
+function setTheme(t,btn){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('life-os-theme',t);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
+
+// Sidebar collapse
+let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
+function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;localStorage.setItem('sidebar-collapsed',sidebarCollapsed);applyCollapsed();}
+function applyCollapsed(){document.getElementById('layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);document.getElementById('collapse-icon').textContent=sidebarCollapsed?'▶':'◀';}
+if(window.innerWidth>768)applyCollapsed();
+
+// Donut chart
+{% if category_totals %}
+const ctx = document.getElementById('catChart');
+if (ctx) {
+    const labels = {{ category_totals.keys()|list|tojson }};
+    const values = {{ category_totals.values()|list|map('abs')|list|tojson }};
+    const palette = ['#7c6fff','#e8a020','#00bfff','#ff8c42','#00c980','#f04040','#64c864','#00e5a0','#8888a8'];
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{ data: values, backgroundColor: palette, borderWidth: 0, hoverOffset: 4 }]
+        },
+        options: {
+            cutout: '68%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { family: "'DM Mono', monospace", size: 10 }, color: '#8888a8', padding: 12 }
+                }
+            }
+        }
+    });
+}
+{% endif %}
+</script>
+</body>
+</html>

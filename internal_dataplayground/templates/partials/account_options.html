@@ -1,0 +1,5 @@
+{# templates/partials/account_options.html #}
+<option value="">— choose —</option>
+{% for acct in accounts %}
+<option value="{{ acct.id }}">{{ acct.name }}{% if acct.last_four %} ····{{ acct.last_four }}{% endif %} ({{ acct.account_type.value }})</option>
+{% endfor %}

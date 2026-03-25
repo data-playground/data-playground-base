@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mixed">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life OS — Ledger</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --transition:0.25s ease; --sidebar-width:220px; }
+        [data-theme="dark"] { --bg:#0d0d0f; --bg-card:#16161a; --bg-hover:#1e1e24; --border:#2a2a35; --text-primary:#e8e8f0; --text-secondary:#8888a8; --text-muted:#50505f; --accent:#6c63ff; --green:#00e5a0; --red:#ff5050; --shadow:0 2px 12px rgba(0,0,0,0.4); --sidebar-bg:#16161a; --topbar-bg:#16161a; }
+        [data-theme="light"] { --bg:#f5f4f8; --bg-card:#ffffff; --bg-hover:#faf9fd; --border:#e2e0ec; --text-primary:#1a1a2e; --text-secondary:#5a5880; --text-muted:#9896b0; --accent:#5548e8; --green:#00a870; --red:#d63030; --shadow:0 2px 8px rgba(0,0,0,0.06); --sidebar-bg:#ffffff; --topbar-bg:#ffffff; }
+        [data-theme="mixed"] { --bg:#111318; --bg-card:#f8f7fc; --bg-hover:#f2f0fa; --border:#e0ddf0; --text-primary:#1c1b2e; --text-secondary:#58567a; --text-muted:#9896b0; --accent:#7c6fff; --green:#00c980; --red:#f04040; --shadow:0 2px 10px rgba(0,0,0,0.08); --sidebar-bg:#111318; --topbar-bg:#f8f7fc; }
+
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        html,body{height:100%;}
+        body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text-primary);overflow:hidden;transition:background var(--transition),color var(--transition);}
+
+        .layout{display:grid;grid-template-columns:var(--sidebar-width) 1fr;grid-template-rows:56px 1fr;height:100vh;}
+        .layout.sidebar-collapsed{grid-template-columns:48px 1fr;}
+
+        .sidebar{grid-column:1;grid-row:1/-1;background:var(--sidebar-bg);border-right:1px solid #2a2a35;display:flex;flex-direction:column;height:100vh;overflow:hidden;z-index:100;}
+        .layout.sidebar-collapsed .sidebar-text,.layout.sidebar-collapsed .os-subtitle,.layout.sidebar-collapsed .nav-label,.layout.sidebar-collapsed .theme-switcher,.layout.sidebar-collapsed .theme-label{display:none;}
+        .layout.sidebar-collapsed .os-title{font-size:10px;padding:16px 0;text-align:center;}
+        .layout.sidebar-collapsed .nav-item{justify-content:center;padding:10px 0;}
+        .layout.sidebar-collapsed .nav-item .icon{width:100%;text-align:center;}
+        .layout.sidebar-collapsed .sidebar-footer{padding:12px 0;align-items:center;}
+        .os-title{font-family:'Syne',sans-serif;font-weight:800;font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);padding:20px 20px 16px;border-bottom:1px solid #2a2a35;margin-bottom:8px;flex-shrink:0;}
+        .os-subtitle{display:block;font-size:10px;font-weight:400;color:#50505f;letter-spacing:.08em;margin-top:2px;}
+        .sidebar-nav{flex:1;overflow-y:auto;padding-bottom:8px;}
+        .nav-label{font-size:9px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:#50505f;padding:0 20px;margin:16px 0 6px;}
+        .nav-item{display:flex;align-items:center;gap:10px;padding:8px 20px;font-size:12px;color:#9896b8;cursor:pointer;transition:all var(--transition);text-decoration:none;border-left:2px solid transparent;white-space:nowrap;}
+        .nav-item:hover{background:rgba(255,255,255,0.06);color:#e8e6f8;}
+        .nav-item.active{background:rgba(124,111,255,0.12);color:var(--accent);border-left-color:var(--accent);font-weight:500;}
+        .nav-item .icon{font-size:14px;width:16px;text-align:center;flex-shrink:0;}
+        .sidebar-footer{flex-shrink:0;padding:14px 20px;border-top:1px solid #2a2a35;display:flex;flex-direction:column;gap:8px;}
+        .theme-label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#50505f;}
+        .theme-switcher{display:flex;gap:5px;}
+        .theme-btn{flex:1;padding:5px 4px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid #2a2a35;background:transparent;color:#50505f;border-radius:4px;cursor:pointer;transition:all var(--transition);}
+        .theme-btn:hover{border-color:var(--accent);color:var(--accent);}
+        .theme-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+        .collapse-btn{background:transparent;border:1px solid #2a2a35;color:#50505f;border-radius:4px;padding:5px 8px;font-size:11px;cursor:pointer;transition:all var(--transition);align-self:flex-start;}
+        .collapse-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+        .topbar{grid-column:2;grid-row:1;background:var(--topbar-bg);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;}
+        .page-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;}
+        .btn{padding:5px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;border-radius:4px;cursor:pointer;transition:all var(--transition);text-decoration:none;border:1px solid var(--border);color:var(--text-secondary);background:transparent;}
+        .btn:hover{border-color:var(--accent);color:var(--accent);}
+        .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+        .btn-primary:hover{opacity:.85;color:#fff;}
+
+        .main-content{grid-column:2;grid-row:2;padding:20px 24px;overflow-y:auto;background:var(--bg-card);}
+        [data-theme="dark"] .main-content{background:var(--bg);}
+
+        /* Filters */
+        .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+        .f-select,.f-input{font-family:'DM Mono',monospace;font-size:10px;padding:5px 10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);border-radius:4px;outline:none;cursor:pointer;}
+        .f-select:focus,.f-input:focus{border-color:var(--accent);}
+        .f-label{font-size:9px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;}
+        .filter-apply{padding:5px 12px;font-family:'DM Mono',monospace;font-size:10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;}
+
+        /* Table */
+        .ledger-table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:11px;min-width:640px;}
+        .ledger-table thead tr{background:var(--bg-hover);border-bottom:2px solid var(--border);}
+        .ledger-table th{padding:8px 12px;font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);text-align:left;white-space:nowrap;}
+        .ledger-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+        .ledger-table tbody tr:last-child td{border-bottom:none;}
+        .ledger-table tbody tr:hover{background:var(--bg-hover);}
+
+        .txn-amount-pos{color:var(--green);font-weight:500;}
+        .txn-amount-neg{color:var(--red);font-weight:500;}
+
+        .cat-badge{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;}
+        .cat-housing{background:rgba(108,99,255,0.12);color:#7c6fff;}
+        .cat-food-dining{background:rgba(255,176,32,0.12);color:#e8a020;}
+        .cat-transport{background:rgba(0,191,255,0.12);color:#00bfff;}
+        .cat-subscriptions{background:rgba(255,140,66,0.12);color:#ff8c42;}
+        .cat-health{background:rgba(0,201,128,0.12);color:#00c980;}
+        .cat-entertainment{background:rgba(240,64,64,0.12);color:#f04040;}
+        .cat-savings-transfer{background:rgba(100,200,100,0.12);color:#64c864;}
+        .cat-income{background:rgba(0,229,160,0.12);color:#00e5a0;}
+        .cat-other{background:rgba(136,136,168,0.12);color:#8888a8;}
+
+        /* Inline category editor */
+        .cat-cell{cursor:pointer;}
+        .cat-cell:hover .cat-badge{opacity:.75;}
+        .cat-edit-select{font-family:'DM Mono',monospace;font-size:9px;padding:2px 6px;border:1px solid var(--accent);border-radius:3px;background:var(--bg-card);color:var(--text-primary);outline:none;}
+
+        .summary-row{display:flex;gap:16px;font-size:11px;color:var(--text-muted);margin-bottom:12px;}
+        .summary-row span{color:var(--text-primary);}
+        .empty-note{font-size:12px;color:var(--text-muted);padding:40px;text-align:center;}
+    </style>
+</head>
+<body>
+<div class="layout" id="layout">
+    <aside class="sidebar" id="sidebar">
+        <div class="os-title">
+            <span class="sidebar-text">Life OS</span>
+            <span class="os-subtitle">v2.0 · personal</span>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Modules</div>
+            <a class="nav-item" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
+            <a class="nav-item" href="/finance"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
+            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
+            <a class="nav-item" href="#"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
+            <div class="nav-label">Finance</div>
+            <a class="nav-item active" href="/finance/ledger"><span class="icon">⊟</span><span class="sidebar-text">Ledger</span></a>
+            <a class="nav-item" href="/finance/upload"><span class="icon">⊕</span><span class="sidebar-text">Import CSV</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="theme-label">Theme</div>
+            <div class="theme-switcher">
+                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
+                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
+                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
+            </div>
+            <button class="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
+        </div>
+    </aside>
+
+    <header class="topbar">
+        <span class="page-title">Ledger</span>
+        <div style="display:flex;gap:8px;">
+            <a class="btn" href="/finance">← Summary</a>
+            <a class="btn btn-primary" href="/finance/upload">Import CSV</a>
+        </div>
+    </header>
+
+    <main class="main-content">
+
+        <!-- Filters -->
+        <form class="filter-row" method="get" action="/finance/ledger">
+            <span class="f-label">Account</span>
+            <select class="f-select" name="account_id">
+                <option value="">All Accounts</option>
+                {% for acct in accounts %}
+                <option value="{{ acct.id }}" {% if sel_account == acct.id %}selected{% endif %}>
+                    {{ acct.name }}{% if acct.last_four %} ····{{ acct.last_four }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+
+            <span class="f-label">Category</span>
+            <select class="f-select" name="category">
+                <option value="">All</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if sel_category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+
+            <span class="f-label">Month</span>
+            <select class="f-select" name="month">
+                {% for m in range(1,13) %}
+                <option value="{{ m }}" {% if m == sel_month %}selected{% endif %}>
+                    {{ ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] }}
+                </option>
+                {% endfor %}
+            </select>
+            <select class="f-select" name="year">
+                {% for y in range(sel_year-2, sel_year+2) %}
+                <option value="{{ y }}" {% if y == sel_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" class="filter-apply">Filter</button>
+            <a href="/finance/ledger" style="font-size:10px;color:var(--text-muted);padding:5px 6px;text-decoration:none;">✕ Clear</a>
+        </form>
+
+        <!-- Summary counts -->
+        {% if transactions %}
+        {% set total_pos = transactions|selectattr('amount','gt',0)|map(attribute='amount')|sum %}
+        {% set total_neg = transactions|selectattr('amount','lt',0)|map(attribute='amount')|sum %}
+        <div class="summary-row">
+            <div>Rows: <span>{{ transactions|length }}</span></div>
+            <div>Income: <span style="color:var(--green)">+${{ "%.2f"|format(total_pos) }}</span></div>
+            <div>Expenses: <span style="color:var(--red)">${{ "%.2f"|format(total_neg) }}</span></div>
+        </div>
+        {% endif %}
+
+        {% if transactions %}
+        <div style="overflow-x:auto;">
+        <table class="ledger-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Account</th>
+                    <th>Category</th>
+                    <th style="text-align:right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in transactions %}
+            <tr>
+                <td style="color:var(--text-muted);white-space:nowrap;">{{ t.date.strftime('%Y-%m-%d') }}</td>
+                <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ t.description }}">
+                    {{ t.description }}
+                </td>
+                <td style="color:var(--text-muted);white-space:nowrap;">
+                    {{ t.account.name }}{% if t.account.last_four %} ····{{ t.account.last_four }}{% endif %}
+                </td>
+
+                {# Inline category editor — click badge → dropdown → auto-PATCH #}
+                <td class="cat-cell" id="cat-{{ t.id }}" onclick="editCat({{ t.id }}, this)">
+                    {% set slug = t.category.value.lower().replace(' ', '-').replace('&', '').replace('--','-') %}
+                    <span class="cat-badge cat-{{ slug }}">{{ t.category.value }}</span>
+                </td>
+
+                <td style="text-align:right;white-space:nowrap;">
+                    <span class="{% if t.amount > 0 %}txn-amount-pos{% else %}txn-amount-neg{% endif %}">
+                        {% if t.amount > 0 %}+{% endif %}${{ "%.2f"|format(t.amount|abs) }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty-note">No transactions match these filters. <a href="/finance/upload" style="color:var(--accent)">Import a CSV →</a></div>
+        {% endif %}
+
+    </main>
+</div>
+
+<script>
+// Theme + sidebar (same as other pages)
+function setTheme(t,btn){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('life-os-theme',t);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
+let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
+function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;localStorage.setItem('sidebar-collapsed',sidebarCollapsed);applyCollapsed();}
+function applyCollapsed(){document.getElementById('layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);document.getElementById('collapse-icon').textContent=sidebarCollapsed?'▶':'◀';}
+if(window.innerWidth>768)applyCollapsed();
+
+// Inline category editor
+const CATEGORIES = {{ categories|tojson }};
+
+async function editCat(txnId, cell) {
+    // Prevent double-render
+    if (cell.querySelector('select')) return;
+
+    const current = cell.querySelector('.cat-badge').textContent.trim();
+    const sel = document.createElement('select');
+    sel.className = 'cat-edit-select';
+    CATEGORIES.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        if (c === current) opt.selected = true;
+        sel.appendChild(opt);
+    });
+
+    cell.innerHTML = '';
+    cell.appendChild(sel);
+    sel.focus();
+
+    sel.addEventListener('change', async () => {
+        const newCat = sel.value;
+        const fd = new FormData();
+        fd.append('category', newCat);
+        const resp = await fetch(`/finance/transactions/${txnId}/category`, { method: 'PATCH', body: fd });
+        if (resp.ok) {
+            cell.outerHTML = await resp.text();
+        } else {
+            cell.innerHTML = `<span class="cat-badge cat-other">${current}</span>`;
+        }
+    });
+
+    sel.addEventListener('blur', () => {
+        // Restore badge if user clicks away without changing
+        setTimeout(() => {
+            if (cell.querySelector('select')) {
+                const slug = current.toLowerCase().replace(/ /g,'-').replace('&','').replace('--','-');
+                cell.innerHTML = `<span class="cat-badge cat-${slug}">${current}</span>`;
+                cell.onclick = (e) => editCat(txnId, cell);
+            }
+        }, 200);
+    });
+}
+</script>
+</body>
+</html>
