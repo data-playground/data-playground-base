@@ -264,8 +264,8 @@
                     <td style="color:var(--text-muted);white-space:nowrap;">{{ t.date.strftime('%b %d') }}</td>
                     <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.description }}</td>
                     <td>
-                        {% set slug = t.category.value.lower().replace(' ', '-').replace('&', '').replace('--','-') %}
-                        <span class="cat-badge cat-{{ slug }}">{{ t.category.value }}</span>
+                        {% set slug = t.category.lower().replace(' ', '-').replace('&', '').replace('--','-') %}
+                        <span class="cat-badge cat-{{ slug }}">{{ t.category }}</span>
                     </td>
                     <td style="text-align:right">
                         <span class="{% if t.amount > 0 %}txn-amount-pos{% else %}txn-amount-neg{% endif %}">
