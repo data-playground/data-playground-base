@@ -88,7 +88,7 @@ Example: ["Food & Dining", "Transport", "Income"]
 No explanation, no markdown, no code blocks. Raw JSON array only."""
 
     try:
-        response = _get_client().models.generate_content(
+        response = client.models.generate_content(
             model="gemma-3-27b-it",
             contents=prompt,
         )
