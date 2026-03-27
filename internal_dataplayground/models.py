@@ -195,11 +195,9 @@ class StagingJobResponse(BaseModel):
         from_attributes = True
         
 """
-FINANCE MODULE — append these classes to the bottom of models.py
+FINANCE MODULE — updated models for dynamic categories.
+Replace the existing finance section in models.py with this.
 """
-
-# ── Re-uses the Base already declared at the top of models.py ──
-
 
 class AccountType(enum.Enum):
     CHECKING     = "Checking"
@@ -207,16 +205,16 @@ class AccountType(enum.Enum):
     SAVINGS      = "Savings"
 
 
-class TransactionCategory(enum.Enum):
-    HOUSING          = "Housing"
-    FOOD_DINING      = "Food & Dining"
-    TRANSPORT        = "Transport"
-    SUBSCRIPTIONS    = "Subscriptions"
-    HEALTH           = "Health"
-    ENTERTAINMENT    = "Entertainment"
-    SAVINGS_TRANSFER = "Savings Transfer"
-    INCOME           = "Income"
-    OTHER            = "Other"
+# ── Dynamic category — no longer an Enum, now a DB-backed table ──
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 
 class Account(Base):
@@ -246,11 +244,8 @@ class Transaction(Base):
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False, index=True)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    category: Mapped[TransactionCategory] = mapped_column(
-        Enum(TransactionCategory, values_callable=lambda x: [e.value for e in x]),
-        nullable=False,
-        default=TransactionCategory.OTHER,
-    )
+    # category is now a plain string referencing categories.name
+    category: Mapped[str] = mapped_column(String(100), nullable=False, default="Other")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
@@ -275,13 +270,28 @@ class AccountResponse(BaseModel):
         from_attributes = True
 
 
+class CategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 class TransactionResponse(BaseModel):
     id: int
     account_id: int
     date: datetime.date
     description: str
     amount: Decimal
-    category: TransactionCategory
+    category: str
     notes: Optional[str]
 
     class Config:

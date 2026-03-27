@@ -1,0 +1,16 @@
+{# templates/partials/account_list.html #}
+<div class="item-list">
+{% for acct in accounts %}
+<div class="item-row" id="acct-{{ acct.id }}">
+    <div>
+        <div class="item-name">{{ acct.name }}{% if acct.last_four %} ····{{ acct.last_four }}{% endif %}</div>
+        <div class="item-sub">{{ acct.account_type.value }}</div>
+    </div>
+    <div class="item-actions">
+        <button class="action-btn danger" onclick="deleteAccount({{ acct.id }})">Delete</button>
+    </div>
+</div>
+{% else %}
+<p style="font-size:11px;color:var(--text-muted);padding:8px 0;">No accounts yet.</p>
+{% endfor %}
+</div>

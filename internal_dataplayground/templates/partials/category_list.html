@@ -1,0 +1,28 @@
+{# templates/partials/category_list.html #}
+<div class="item-list">
+{% for cat in categories %}
+<div class="item-row {% if not cat.is_active %}inactive{% endif %}" id="cat-row-{{ cat.id }}">
+    <div>
+        <div class="item-name">
+            {{ cat.name }}
+            {% if cat.is_active %}
+            <span class="badge-active">active</span>
+            {% else %}
+            <span class="badge-inactive">inactive</span>
+            {% endif %}
+        </div>
+        {% if cat.description %}
+        <div class="item-sub">{{ cat.description }}</div>
+        {% endif %}
+    </div>
+    <div class="item-actions">
+        <button class="action-btn {% if cat.is_active %}danger{% endif %}"
+                onclick="toggleCategory({{ cat.id }})">
+            {{ 'Disable' if cat.is_active else 'Enable' }}
+        </button>
+    </div>
+</div>
+{% else %}
+<p style="font-size:11px;color:var(--text-muted);padding:8px 0;">No categories yet.</p>
+{% endfor %}
+</div>
