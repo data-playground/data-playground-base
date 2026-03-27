@@ -79,29 +79,38 @@ Rules:
 Return a `categories` list with exactly {len(rows)} strings, one per transaction in order.
 
 Transactions:
-{numbered}"""
+{numbered}
+
+Respond ONLY with a JSON array of exactly {len(rows)} strings, one per transaction in order.
+Example: ["Food & Dining", "Transport", "Income"]
+No explanation, no markdown, no code blocks. Raw JSON array only."""
 
     try:
         response = client.models.generate_content(
             model="gemma-3-27b-it",
             contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=CategoryBatch,
-            ),
         )
-        result = CategoryBatch.model_validate_json(response.text)
-        
-        # Guard: if Gemini returned wrong count, fall back the whole batch
-        if len(result.categories) != len(rows):
-            log.warning(
-                "Gemini returned %d categories for %d rows — falling back",
-                len(result.categories), len(rows)
-            )
+        raw = response.text.strip()
+
+        # Strip markdown code blocks if Gemma wraps it anyway
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+
+        categories = json.loads(raw)
+
+        if not isinstance(categories, list):
+            raise ValueError("Response is not a list")
+
+        if len(categories) != len(rows):
+            log.warning("Gemma returned %d categories for %d rows — falling back", len(categories), len(rows))
             return ["Other"] * len(rows)
 
         valid = {c.value for c in TransactionCategory}
-        return [c if c in valid else "Other" for c in result.categories]
+        return [c if c in valid else "Other" for c in categories]
+
     except Exception as exc:
         log.warning("Gemini categorisation failed: %s", exc)
         return ["Other"] * len(rows)
