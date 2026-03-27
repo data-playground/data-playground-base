@@ -204,7 +204,7 @@
 
                 {# Inline category editor — click badge → dropdown → auto-PATCH #}
                 <td class="cat-cell" id="cat-{{ t.id }}" onclick="editCat({{ t.id }}, this)">
-                    {% set slug = t.category.value.lower().replace(' ', '-').replace('&', '').replace('--','-') %}
+                    {% set slug = t.category.lower().replace(' ', '-').replace('&', '').replace('--','-') %}
                     <span class="cat-badge cat-{{ slug }}">{{ t.category.value }}</span>
                 </td>
 
