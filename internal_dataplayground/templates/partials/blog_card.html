@@ -1,0 +1,25 @@
+{# templates/partials/blog_card.html
+   Used in the kanban board columns and returned by POST /blog/ideas
+   `idea` = BlogIdea ORM object
+#}
+<div class="idea-card" id="blog-card-{{ idea.id }}" onclick="openDetail({{ idea.id }})">
+    <div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% else %}badge-new{% endif %}">
+        {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
+    </div>
+    <div class="card-title">{{ idea.title_concept }}</div>
+    {% if idea.the_narrative %}
+    <div class="card-narrative">{{ idea.the_narrative }}</div>
+    {% endif %}
+    <div class="card-footer">
+        <span class="card-status">
+            <span class="status-pip
+                {% if idea.status.value == 'writing_in_progress' %}pip-writing
+                {% elif idea.status.value in ('waiting_for_review', 'review_completed') %}pip-review
+                {% elif idea.status.value in ('ready_to_publish', 'published') %}pip-done
+                {% endif %}
+            "></span>
+            {{ idea.status.label }}
+        </span>
+        <span class="card-date">{{ idea.created_at.strftime('%b %d') }}</span>
+    </div>
+</div>

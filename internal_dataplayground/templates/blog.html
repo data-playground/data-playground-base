@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mixed">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life OS — Blog Ideas</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --transition:0.25s ease; --sidebar-width:220px; }
+        [data-theme="dark"] {
+            --bg:#0d0d0f; --bg-card:#16161a; --bg-hover:#1e1e24;
+            --border:#2a2a35; --text-primary:#e8e8f0; --text-secondary:#8888a8; --text-muted:#50505f;
+            --accent:#6c63ff; --accent-dim:rgba(108,99,255,0.15);
+            --green:#00e5a0; --red:#ff5050; --yellow:#ffb020; --blue:#00bfff;
+            --shadow:0 2px 12px rgba(0,0,0,0.4); --sidebar-bg:#16161a; --topbar-bg:#16161a;
+            --col-bg:#16161a;
+        }
+        [data-theme="light"] {
+            --bg:#f5f4f8; --bg-card:#ffffff; --bg-hover:#faf9fd;
+            --border:#e2e0ec; --text-primary:#1a1a2e; --text-secondary:#5a5880; --text-muted:#9896b0;
+            --accent:#5548e8; --accent-dim:rgba(85,72,232,0.08);
+            --green:#00a870; --red:#d63030; --yellow:#d4920a; --blue:#0080cc;
+            --shadow:0 2px 8px rgba(0,0,0,0.06); --sidebar-bg:#ffffff; --topbar-bg:#ffffff;
+            --col-bg:#f0eef8;
+        }
+        [data-theme="mixed"] {
+            --bg:#111318; --bg-card:#f8f7fc; --bg-hover:#f2f0fa;
+            --border:#e0ddf0; --text-primary:#1c1b2e; --text-secondary:#58567a; --text-muted:#9896b0;
+            --accent:#7c6fff; --accent-dim:rgba(124,111,255,0.1);
+            --green:#00c980; --red:#f04040; --yellow:#e8a020; --blue:#00bfff;
+            --shadow:0 2px 10px rgba(0,0,0,0.08); --sidebar-bg:#111318; --topbar-bg:#f8f7fc;
+            --col-bg:#f0eef8;
+        }
+
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        html, body { height:100%; }
+        body { font-family:'DM Mono',monospace; background:var(--bg); color:var(--text-primary); overflow:hidden; }
+
+        /* ── LAYOUT ── */
+        .layout { display:grid; grid-template-columns:var(--sidebar-width) 1fr; grid-template-rows:56px 1fr; height:100vh; }
+        .layout.sidebar-collapsed { grid-template-columns:48px 1fr; }
+
+        /* ── SIDEBAR ── */
+        .sidebar { grid-column:1; grid-row:1/-1; background:var(--sidebar-bg); border-right:1px solid #2a2a35; display:flex; flex-direction:column; height:100vh; overflow:hidden; z-index:100; }
+        .layout.sidebar-collapsed .sidebar-text,.layout.sidebar-collapsed .os-subtitle,.layout.sidebar-collapsed .nav-label,.layout.sidebar-collapsed .theme-switcher,.layout.sidebar-collapsed .theme-label { display:none; }
+        .layout.sidebar-collapsed .os-title { font-size:10px; padding:16px 0; text-align:center; }
+        .layout.sidebar-collapsed .nav-item { justify-content:center; padding:10px 0; }
+        .layout.sidebar-collapsed .nav-item .icon { width:100%; text-align:center; }
+        .layout.sidebar-collapsed .sidebar-footer { padding:12px 0; align-items:center; }
+        .os-title { font-family:'Syne',sans-serif; font-weight:800; font-size:13px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); padding:20px 20px 16px; border-bottom:1px solid #2a2a35; margin-bottom:8px; flex-shrink:0; }
+        .os-subtitle { display:block; font-size:10px; font-weight:400; color:#50505f; letter-spacing:.08em; margin-top:2px; }
+        .sidebar-nav { flex:1; overflow-y:auto; padding-bottom:8px; }
+        .nav-label { font-size:9px; font-weight:500; letter-spacing:.18em; text-transform:uppercase; color:#50505f; padding:0 20px; margin:16px 0 6px; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:8px 20px; font-size:12px; color:#9896b8; cursor:pointer; transition:all var(--transition); text-decoration:none; border-left:2px solid transparent; white-space:nowrap; }
+        .nav-item:hover { background:rgba(255,255,255,0.06); color:#e8e6f8; }
+        .nav-item.active { background:rgba(124,111,255,0.12); color:var(--accent); border-left-color:var(--accent); font-weight:500; }
+        .nav-item .icon { font-size:14px; width:16px; text-align:center; flex-shrink:0; }
+        .sidebar-footer { flex-shrink:0; padding:14px 20px; border-top:1px solid #2a2a35; display:flex; flex-direction:column; gap:8px; }
+        .theme-label { font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:#50505f; }
+        .theme-switcher { display:flex; gap:5px; }
+        .theme-btn { flex:1; padding:5px 4px; font-family:'DM Mono',monospace; font-size:9px; border:1px solid #2a2a35; background:transparent; color:#50505f; border-radius:4px; cursor:pointer; transition:all var(--transition); }
+        .theme-btn:hover { border-color:var(--accent); color:var(--accent); }
+        .theme-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .collapse-btn { background:transparent; border:1px solid #2a2a35; color:#50505f; border-radius:4px; padding:5px 8px; font-size:11px; cursor:pointer; transition:all var(--transition); align-self:flex-start; }
+        .collapse-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+        /* ── TOPBAR ── */
+        .topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 20px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+        .topbar-actions { display:flex; gap:8px; align-items:center; }
+        .btn { padding:5px 14px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; border-radius:4px; cursor:pointer; transition:all var(--transition); text-decoration:none; border:1px solid var(--border); color:var(--text-secondary); background:transparent; }
+        .btn:hover { border-color:var(--accent); color:var(--accent); }
+        .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .btn-primary:hover { opacity:.85; color:#fff; }
+        .scout-feedback { font-size:10px; padding:4px 8px; border-radius:4px; }
+        .scout-ok { color:var(--green); }
+        .scout-error { color:var(--red); }
+
+        /* ── KANBAN BOARD ── */
+        .board { grid-column:2; grid-row:2; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; padding:16px 20px; overflow:hidden; background:var(--bg); }
+        [data-theme="light"] .board, [data-theme="mixed"] .board { background:var(--bg-card); }
+
+        .kanban-col { display:flex; flex-direction:column; background:var(--col-bg); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+        [data-theme="dark"] .kanban-col { background:#1a1a20; }
+
+        .col-header { padding:12px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+        .col-title { font-family:'Syne',sans-serif; font-weight:700; font-size:11px; letter-spacing:.1em; text-transform:uppercase; display:flex; align-items:center; gap:6px; }
+        .col-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+        .dot-yellow { background:var(--yellow); }
+        .dot-blue   { background:var(--blue); }
+        .dot-green  { background:var(--green); }
+        .col-count { font-size:10px; color:var(--text-muted); background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:1px 8px; }
+
+        .col-body { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px; }
+        .col-body::-webkit-scrollbar { width:3px; }
+        .col-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+        /* ── IDEA CARD ── */
+        .idea-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; cursor:pointer; transition:all var(--transition); }
+        .idea-card:hover { border-color:var(--accent); box-shadow:var(--shadow); transform:translateY(-1px); }
+        .card-type-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:3px; font-size:9px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px; }
+        .badge-existing { background:rgba(0,201,128,0.12); color:var(--green); }
+        .badge-new      { background:rgba(124,111,255,0.12); color:var(--accent); }
+        .card-title { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; color:var(--text-primary); margin-bottom:6px; line-height:1.4; }
+        .card-narrative { font-size:10px; color:var(--text-muted); line-height:1.6; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:8px; }
+        .card-footer { display:flex; align-items:center; justify-content:space-between; }
+        .card-status { font-size:9px; color:var(--text-muted); }
+        .card-date { font-size:9px; color:var(--text-muted); }
+        .status-pip { display:inline-block; width:5px; height:5px; border-radius:50%; margin-right:4px; background:var(--text-muted); }
+        .pip-writing { background:var(--blue); animation:pulse 1.5s infinite; }
+        .pip-review  { background:var(--yellow); }
+        .pip-done    { background:var(--green); }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        .empty-col { text-align:center; padding:32px 16px; color:var(--text-muted); font-size:11px; }
+        .empty-col .empty-icon { font-size:24px; margin-bottom:8px; opacity:.4; }
+
+        /* ── BYOI MODAL ── */
+        .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:400; align-items:center; justify-content:center; }
+        .modal-backdrop.open { display:flex; }
+        .modal-box { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; width:580px; max-width:95vw; box-shadow:0 8px 40px rgba(0,0,0,0.3); }
+        .modal-head { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+        .modal-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+        .modal-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:2px 6px; border-radius:4px; }
+        .modal-close:hover { color:var(--text-primary); }
+        .modal-body { padding:20px; }
+        .modal-foot { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+        .form-label { display:block; font-size:9px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
+        .form-textarea { width:100%; font-family:'DM Mono',monospace; font-size:11px; padding:10px 12px; border:1px solid var(--border); background:var(--bg-hover); color:var(--text-primary); border-radius:6px; outline:none; resize:vertical; transition:border-color var(--transition); line-height:1.6; }
+        .form-textarea:focus { border-color:var(--accent); }
+        .form-hint { font-size:9px; color:var(--text-muted); margin-top:5px; }
+
+        /* ── DETAIL DRAWER ── */
+        .detail-drawer { position:fixed; top:0; right:-560px; width:560px; height:100vh; background:var(--bg-card); border-left:1px solid var(--border); box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:300; overflow-y:auto; transition:right 0.3s cubic-bezier(0.4,0,0.2,1); }
+        .detail-drawer.open { right:0; }
+        .detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:299; }
+        .detail-overlay.visible { display:block; }
+
+        /* ── TOAST ── */
+        #toast { position:fixed; bottom:20px; right:20px; padding:9px 16px; background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--green); border-radius:6px; font-size:11px; color:var(--text-primary); box-shadow:var(--shadow); opacity:0; transform:translateY(6px); transition:all 0.2s ease; pointer-events:none; z-index:999; }
+        #toast.show { opacity:1; transform:translateY(0); }
+        #toast.error { border-left-color:var(--red); }
+    </style>
+</head>
+<body>
+<div class="layout" id="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="os-title">
+            <span class="sidebar-text">Life OS</span>
+            <span class="os-subtitle">v2.0 · personal</span>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Modules</div>
+            <a class="nav-item" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
+            <a class="nav-item" href="/finance"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
+            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
+            <a class="nav-item active" href="/blog"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
+            <div class="nav-label">Blog</div>
+            <a class="nav-item" href="#" onclick="openByoi();return false;"><span class="icon">⊕</span><span class="sidebar-text">New Idea</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="theme-label">Theme</div>
+            <div class="theme-switcher">
+                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
+                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
+                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
+            </div>
+            <button class="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
+        </div>
+    </aside>
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+        <span class="page-title">Blog Ideas</span>
+        <div class="topbar-actions">
+            <div id="scout-result"></div>
+            <button class="btn"
+                hx-post="/blog/scout"
+                hx-target="#scout-result"
+                hx-swap="innerHTML"
+                hx-indicator="#scout-spinner">
+                ⟳ Run Scout
+            </button>
+            <span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
+            <button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
+        </div>
+    </header>
+
+    <!-- KANBAN BOARD -->
+    <main class="board">
+
+        <!-- Column 1: Backlog -->
+        <div class="kanban-col">
+            <div class="col-header">
+                <div class="col-title">
+                    <span class="col-dot dot-yellow"></span>
+                    Ideation Pipeline
+                </div>
+                <span class="col-count">{{ backlog|length }}</span>
+            </div>
+            <div class="col-body" id="col-backlog">
+                {% for idea in backlog %}
+                    {% include "partials/blog_card.html" %}
+                {% else %}
+                <div class="empty-col">
+                    <div class="empty-icon">◻</div>
+                    <p>No ideas yet.<br>Run the Scout or add your own.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Column 2: In Progress -->
+        <div class="kanban-col">
+            <div class="col-header">
+                <div class="col-title">
+                    <span class="col-dot dot-blue"></span>
+                    Writing & Review
+                </div>
+                <span class="col-count">{{ in_progress|length }}</span>
+            </div>
+            <div class="col-body" id="col-in-progress">
+                {% for idea in in_progress %}
+                    {% include "partials/blog_card.html" %}
+                {% else %}
+                <div class="empty-col">
+                    <div class="empty-icon">◑</div>
+                    <p>Nothing in progress.<br>Trigger the Creator pipeline.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Column 3: Done -->
+        <div class="kanban-col">
+            <div class="col-header">
+                <div class="col-title">
+                    <span class="col-dot dot-green"></span>
+                    Ready to Publish
+                </div>
+                <span class="col-count">{{ done|length }}</span>
+            </div>
+            <div class="col-body" id="col-done">
+                {% for idea in done %}
+                    {% include "partials/blog_card.html" %}
+                {% else %}
+                <div class="empty-col">
+                    <div class="empty-icon">◉</div>
+                    <p>Nothing published yet.<br>Keep writing!</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- BYOI Modal -->
+<div class="modal-backdrop" id="byoi-modal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <span class="modal-title">⊕ Expand New Idea</span>
+            <button class="modal-close" onclick="closeByoi()">✕</button>
+        </div>
+        <div class="modal-body">
+            <label class="form-label">Brain Dump / Starter Code / Raw Notes</label>
+            <textarea class="form-textarea" id="byoi-input" rows="10"
+                placeholder="Paste your markdown, code snippets, or raw thoughts...&#10;&#10;e.g. 'Built a FastAPI app that uses Gemini to score job postings. Uses async SQLAlchemy, Docker, and GCP Secret Manager. The hard part was...'"></textarea>
+            <p class="form-hint">Gemini will structure this into a full article blueprint automatically.</p>
+            <div id="byoi-error" style="margin-top:8px;font-size:11px;color:var(--red);"></div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" onclick="closeByoi()">Cancel</button>
+            <button class="btn btn-primary" id="byoi-submit" onclick="submitByoi()">Structure Content →</button>
+        </div>
+    </div>
+</div>
+
+<!-- Detail drawer -->
+<div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>
+<div class="detail-drawer" id="detail-drawer"></div>
+
+<div id="toast"></div>
+
+<script>
+// ── Theme + sidebar ──
+function setTheme(t,btn){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('life-os-theme',t);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
+let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
+function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;localStorage.setItem('sidebar-collapsed',sidebarCollapsed);applyCollapsed();}
+function applyCollapsed(){document.getElementById('layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);document.getElementById('collapse-icon').textContent=sidebarCollapsed?'▶':'◀';}
+if(window.innerWidth>768)applyCollapsed();
+
+// ── BYOI Modal ──
+function openByoi(){document.getElementById('byoi-modal').classList.add('open');setTimeout(()=>document.getElementById('byoi-input').focus(),100);}
+function closeByoi(){document.getElementById('byoi-modal').classList.remove('open');}
+document.getElementById('byoi-modal').addEventListener('click', e=>{if(e.target===e.currentTarget)closeByoi();});
+
+async function submitByoi(){
+    const input = document.getElementById('byoi-input').value.trim();
+    const errEl = document.getElementById('byoi-error');
+    if(!input){errEl.textContent='Please enter some notes or code.';return;}
+    const btn = document.getElementById('byoi-submit');
+    btn.disabled=true; btn.textContent='Expanding…';
+    errEl.textContent='';
+    const fd = new FormData();
+    fd.append('raw_idea_input', input);
+    try {
+        const resp = await fetch('/blog/ideas', {method:'POST', body:fd});
+        const html = await resp.text();
+        if(resp.ok){
+            // Prepend card to backlog column
+            const col = document.getElementById('col-backlog');
+            const empty = col.querySelector('.empty-col');
+            if(empty) empty.remove();
+            col.insertAdjacentHTML('afterbegin', html);
+            closeByoi();
+            document.getElementById('byoi-input').value='';
+            showToast('Idea structured and added to Backlog.');
+        } else {
+            errEl.textContent='⚠ Failed to expand idea. Try again.';
+        }
+    } catch(e){
+        errEl.textContent='⚠ Network error.';
+    } finally {
+        btn.disabled=false; btn.textContent='Structure Content →';
+    }
+}
+
+// ── Detail drawer ──
+function openDetail(ideaId){
+    const drawer = document.getElementById('detail-drawer');
+    htmx.ajax('GET', `/blog/ideas/${ideaId}`, {target:'#detail-drawer', swap:'innerHTML'});
+    drawer.classList.add('open');
+    document.getElementById('detail-overlay').classList.add('visible');
+}
+function closeDetail(){
+    document.getElementById('detail-drawer').classList.remove('open');
+    document.getElementById('detail-overlay').classList.remove('visible');
+}
+document.addEventListener('keydown', e=>{if(e.key==='Escape')closeDetail();});
+
+// ── Toast ──
+let toastTimer;
+function showToast(msg, isError=false){
+    const t=document.getElementById('toast');
+    t.textContent=msg;
+    t.classList.toggle('error', isError);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// Listen for toast events from HTMX partials
+document.body.addEventListener('htmx:afterSwap', e=>{
+    const toast = document.getElementById('detail-drawer').dataset.toast;
+    if(toast){showToast(toast);delete document.getElementById('detail-drawer').dataset.toast;}
+});
+</script>
+</body>
+</html>

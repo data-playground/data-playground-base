@@ -297,3 +297,112 @@ class TransactionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+"""
+BLOG MODULE — append these classes to the bottom of models.py
+"""
+
+class BlogProjectType(enum.Enum):
+    EXISTING_ASSET = "existing_asset"
+    NEW_BUILD      = "new_build"
+
+
+class BlogIdeaStatus(enum.Enum):
+    IDEA_GENERATED              = "idea_generated"
+    WAITING_FOR_WRITING_TRIGGER = "waiting_for_writing_trigger"
+    WRITING_IN_PROGRESS         = "writing_in_progress"
+    WAITING_FOR_REVIEW          = "waiting_for_review"
+    REVIEW_COMPLETED            = "review_completed"
+    READY_TO_PUBLISH            = "ready_to_publish"
+    PUBLISHED                   = "published"
+
+    @property
+    def label(self) -> str:
+        return {
+            "idea_generated":              "Idea Generated",
+            "waiting_for_writing_trigger": "Ready to Write",
+            "writing_in_progress":         "Writing…",
+            "waiting_for_review":          "Awaiting Review",
+            "review_completed":            "Review Done",
+            "ready_to_publish":            "Ready to Publish",
+            "published":                   "Published",
+        }[self.value]
+
+    @property
+    def kanban_column(self) -> str:
+        """Maps status → kanban column name."""
+        if self.value in ("idea_generated", "waiting_for_writing_trigger"):
+            return "backlog"
+        if self.value in ("writing_in_progress", "waiting_for_review", "review_completed"):
+            return "in_progress"
+        return "done"
+
+
+class BlogIdea(Base):
+    __tablename__ = "blog_ideas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title_concept: Mapped[str] = mapped_column(String(255), nullable=False)
+    project_type: Mapped[BlogProjectType] = mapped_column(
+        Enum(BlogProjectType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=BlogProjectType.NEW_BUILD,
+    )
+
+    # Blueprint fields
+    the_build:         Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    the_narrative:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    the_selling_point: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # BYOI
+    raw_idea_input: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Evidence (HITL checkpoint 1)
+    code_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    author_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # AI artifacts
+    draft_v1:          Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    user_review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    final_article:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # SEO
+    seo_title:       Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    seo_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    seo_tags:        Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # State
+    status: Mapped[BlogIdeaStatus] = mapped_column(
+        Enum(BlogIdeaStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=BlogIdeaStatus.IDEA_GENERATED,
+    )
+    airflow_run_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow, nullable=False
+    )
+
+
+# ── Pydantic schemas ──
+
+class BlogIdeaCreate(BaseModel):
+    raw_idea_input: str
+    title_concept: Optional[str] = None
+
+
+class BlogIdeaResponse(BaseModel):
+    id: int
+    title_concept: str
+    project_type: BlogProjectType
+    status: BlogIdeaStatus
+    the_narrative: Optional[str]
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
