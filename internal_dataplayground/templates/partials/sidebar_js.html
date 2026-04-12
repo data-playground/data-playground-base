@@ -1,0 +1,53 @@
+{# templates/partials/sidebar_js.html
+   Include at the bottom of every page's <script> block, or just before </body>.
+   Provides: setTheme(), toggleSidebar(), applyCollapsed(),
+             openMobileSidebar(), closeMobileSidebar()
+   Requires: #layout element with .sidebar-collapsed class support,
+             #collapse-icon span, .theme-btn buttons
+#}
+<script>
+// ── Theme ──────────────────────────────────────────────────────────────────────
+function setTheme(t, btn) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('life-os-theme', t);
+    document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+(function () {
+    const s = localStorage.getItem('life-os-theme') || 'mixed';
+    document.documentElement.setAttribute('data-theme', s);
+    document.querySelectorAll('.theme-btn').forEach(b =>
+        b.classList.toggle('active', b.textContent.trim().toLowerCase() === s)
+    );
+})();
+
+// ── Sidebar collapse ───────────────────────────────────────────────────────────
+let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+
+function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    localStorage.setItem('sidebar-collapsed', sidebarCollapsed);
+    applyCollapsed();
+}
+
+function applyCollapsed() {
+    document.getElementById('layout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    const icon = document.getElementById('collapse-icon');
+    if (icon) icon.textContent = sidebarCollapsed ? '▶' : '◀';
+}
+
+// Mobile sidebar
+function openMobileSidebar() {
+    document.getElementById('sidebar').classList.add('mobile-open');
+    const bd = document.getElementById('sidebar-backdrop');
+    if (bd) bd.classList.add('visible');
+}
+function closeMobileSidebar() {
+    document.getElementById('sidebar').classList.remove('mobile-open');
+    const bd = document.getElementById('sidebar-backdrop');
+    if (bd) bd.classList.remove('visible');
+}
+
+// Apply on load (desktop only)
+if (window.innerWidth > 768) applyCollapsed();
+</script>

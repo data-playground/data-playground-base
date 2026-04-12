@@ -1,0 +1,75 @@
+{# templates/partials/sidebar.html
+   Included by every page. Pass `active_module` from the router context
+   to highlight the correct nav item.
+
+   Valid values for active_module:
+     "jobs", "finance", "finance_ledger", "finance_upload",
+     "finance_settings", "workouts", "blog", "blog_new"
+#}
+<aside class="sidebar" id="sidebar">
+    <div class="os-title">
+        <span class="sidebar-text">Life OS</span>
+        <span class="os-subtitle">v2.0 · personal</span>
+    </div>
+    <nav class="sidebar-nav">
+        <div class="nav-label">Modules</div>
+        <a class="nav-item {% if active_module == 'jobs' %}active{% endif %}" href="/jobs">
+            <span class="icon">◈</span><span class="sidebar-text">Job Tracker</span>
+        </a>
+        <a class="nav-item {% if active_module == 'finance' %}active{% endif %}" href="/finance">
+            <span class="icon">◎</span><span class="sidebar-text">Finance</span>
+        </a>
+        <a class="nav-item {% if active_module == 'workouts' %}active{% endif %}" href="#">
+            <span class="icon">◷</span><span class="sidebar-text">Workouts</span>
+        </a>
+        <a class="nav-item {% if active_module == 'blog' %}active{% endif %}" href="/blog">
+            <span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span>
+        </a>
+
+        {# ── Finance sub-nav (only shown when in finance section) ── #}
+        {% if active_module in ('finance', 'finance_ledger', 'finance_upload', 'finance_settings') %}
+        <div class="nav-label">Finance</div>
+        <a class="nav-item {% if active_module == 'finance_ledger' %}active{% endif %}" href="/finance/ledger">
+            <span class="icon">⊟</span><span class="sidebar-text">Ledger</span>
+        </a>
+        <a class="nav-item {% if active_module == 'finance_upload' %}active{% endif %}" href="/finance/upload">
+            <span class="icon">⊕</span><span class="sidebar-text">Import CSV</span>
+        </a>
+        <a class="nav-item {% if active_module == 'finance_settings' %}active{% endif %}" href="/finance/settings">
+            <span class="icon">⚙</span><span class="sidebar-text">Settings</span>
+        </a>
+        {% endif %}
+
+        {# ── Blog sub-nav (only shown when in blog section) ── #}
+        {% if active_module in ('blog', 'blog_new') %}
+        <div class="nav-label">Blog</div>
+        <a class="nav-item {% if active_module == 'blog_new' %}active{% endif %}"
+           href="#" onclick="openByoi();return false;">
+            <span class="icon">⊕</span><span class="sidebar-text">New Idea</span>
+        </a>
+        {% endif %}
+
+        {# ── Jobs sub-nav (only shown when in jobs section) ── #}
+        {% if active_module == 'jobs' %}
+        <div class="nav-label">Pipeline</div>
+        <a class="nav-item" href="#" onclick="openStagingPanel(); return false;">
+            <span class="icon">⊕</span><span class="sidebar-text">Add Job Link</span>
+        </a>
+        <a class="nav-item" href="#">
+            <span class="icon">◑</span><span class="sidebar-text">Dashboard</span>
+        </a>
+        {% endif %}
+
+    </nav>
+    <div class="sidebar-footer">
+        <div class="theme-label">Theme</div>
+        <div class="theme-switcher">
+            <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
+            <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
+            <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
+        </div>
+        <button class="collapse-btn" id="collapse-btn" onclick="toggleSidebar()">
+            <span id="collapse-icon">◀</span>
+        </button>
+    </div>
+</aside>

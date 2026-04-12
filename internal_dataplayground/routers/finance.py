@@ -129,7 +129,7 @@ async def finance_settings(request: Request, db: AsyncSession = Depends(get_db))
 
     return templates.TemplateResponse(
         "finance_settings.html",
-        {"request": request, "accounts": accounts, "categories": categories},
+        {"request": request, "accounts": accounts, "categories": categories, "active_module": "finance_settings",},
     )
 
 
@@ -247,7 +247,7 @@ async def upload_form(request: Request, db: AsyncSession = Depends(get_db)):
     accounts = result.scalars().all()
     return templates.TemplateResponse(
         "finance_upload.html",
-        {"request": request, "accounts": accounts},
+        {"request": request, "accounts": accounts, "active_module": "finance_upload",},
     )
 
 
@@ -427,6 +427,7 @@ async def finance_summary(
             "category_totals": category_totals,
             "total_income": total_income, "total_expenses": total_expenses, "net": net,
             "recent_txns": recent_txns, "accounts": accounts, "categories": categories,
+            "active_module": "finance",
         },
     )
 
@@ -479,5 +480,6 @@ async def finance_ledger(
             "sel_category": category,
             "sel_month": month or today.month,
             "sel_year": year or today.year,
+            "active_module": "finance_ledger",
         },
     )

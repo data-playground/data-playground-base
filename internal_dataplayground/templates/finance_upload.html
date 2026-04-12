@@ -104,31 +104,7 @@
 </head>
 <body>
 <div class="layout" id="layout">
-    <aside class="sidebar" id="sidebar">
-        <div class="os-title">
-            <span class="sidebar-text">Life OS</span>
-            <span class="os-subtitle">v2.0 · personal</span>
-        </div>
-        <nav class="sidebar-nav">
-            <div class="nav-label">Modules</div>
-            <a class="nav-item" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
-            <a class="nav-item" href="/finance"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
-            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
-            <a class="nav-item" href="#"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
-            <div class="nav-label">Finance</div>
-            <a class="nav-item" href="/finance/ledger"><span class="icon">⊟</span><span class="sidebar-text">Ledger</span></a>
-            <a class="nav-item active" href="/finance/upload"><span class="icon">⊕</span><span class="sidebar-text">Import CSV</span></a>
-        </nav>
-        <div class="sidebar-footer">
-            <div class="theme-label">Theme</div>
-            <div class="theme-switcher">
-                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
-                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
-                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
-            </div>
-            <button class="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
-        </div>
-    </aside>
+    {% include "partials/sidebar.html" %}
 
     <header class="topbar">
         <span class="page-title">Import CSV</span>
@@ -227,11 +203,9 @@
 
 <script>
 // Theme + sidebar
-function setTheme(t,btn){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('life-os-theme',t);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+{% include "partials/sidebar_js.html" %}
 (function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
 let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
-function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;localStorage.setItem('sidebar-collapsed',sidebarCollapsed);applyCollapsed();}
-function applyCollapsed(){document.getElementById('layout').classList.toggle('sidebar-collapsed',sidebarCollapsed);document.getElementById('collapse-icon').textContent=sidebarCollapsed?'▶':'◀';}
 if(window.innerWidth>768)applyCollapsed();
 
 // New account toggle

@@ -14,7 +14,11 @@ async def list_jobs_ui(request: Request, db: AsyncSession = Depends(get_db)):
     stmt = select(Job).order_by(desc(Job.fit_score))
     result = await db.execute(stmt)
     jobs = result.scalars().all()
-    return templates.TemplateResponse("jobs.html", {"request": request, "jobs": jobs})
+    return templates.TemplateResponse("jobs.html", {
+        "request": request, 
+        "jobs": jobs,
+        "active_module": "jobs",
+    })
 
 @router.get("/detail/{job_id}")
 async def get_job_detail(job_id: int, request: Request, db: AsyncSession = Depends(get_db)):

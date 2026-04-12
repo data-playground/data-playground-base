@@ -130,6 +130,7 @@ async def blog_kanban(request: Request, db: AsyncSession = Depends(get_db)):
         "backlog": backlog,
         "in_progress": in_progress,
         "done": done,
+        "active_module": "blog",
     })
 
 
