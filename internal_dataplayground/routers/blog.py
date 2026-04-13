@@ -37,7 +37,7 @@ templates = Jinja2Templates(directory="templates")
 
 # ── Airflow config ─────────────────────────────────────────────────────────────
 # Airflow is running on the host machine, reachable from Docker via host.docker.internal
-AIRFLOW_BASE    = "http://host.docker.internal:8080/api/v1"
+AIRFLOW_BASE    = "http://airflow-webserver:8080/api/v1"
 AIRFLOW_USER    = "admin"
 AIRFLOW_PASS    = "admin"          # swap to get_key("AirflowPassword") if needed
 SCOUT_DAG_ID    = "life_os_blog_scout"
