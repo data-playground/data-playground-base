@@ -10,6 +10,9 @@ mariadb_data/
 migrate_jobs.sql
 db_backups/
 
+# --- Airflow ---
+airflow/logs/
+
 # --- Python Environment ---
 __pycache__/
 *.pyc

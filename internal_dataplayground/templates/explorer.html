@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mixed">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life OS — SQL Explorer</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- CodeMirror for SQL syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+
+    <style>
+        :root { --transition:0.25s ease; --sidebar-width:220px; --explorer-sidebar:280px; }
+
+        [data-theme="dark"] {
+            --bg:#0d0d0f; --bg-card:#16161a; --bg-hover:#1e1e24;
+            --border:#2a2a35; --text-primary:#e8e8f0; --text-secondary:#8888a8; --text-muted:#50505f;
+            --accent:#6c63ff; --green:#00e5a0; --red:#ff5050; --yellow:#ffb020;
+            --shadow:0 2px 12px rgba(0,0,0,0.4); --sidebar-bg:#16161a; --topbar-bg:#16161a;
+            --editor-bg:#13131a; --resizer:#2a2a35;
+        }
+        [data-theme="light"] {
+            --bg:#f5f4f8; --bg-card:#ffffff; --bg-hover:#faf9fd;
+            --border:#e2e0ec; --text-primary:#1a1a2e; --text-secondary:#5a5880; --text-muted:#9896b0;
+            --accent:#5548e8; --green:#00a870; --red:#d63030; --yellow:#d4920a;
+            --shadow:0 2px 8px rgba(0,0,0,0.06); --sidebar-bg:#ffffff; --topbar-bg:#ffffff;
+            --editor-bg:#f0eef8; --resizer:#e2e0ec;
+        }
+        [data-theme="mixed"] {
+            --bg:#111318; --bg-card:#f8f7fc; --bg-hover:#f2f0fa;
+            --border:#e0ddf0; --text-primary:#1c1b2e; --text-secondary:#58567a; --text-muted:#9896b0;
+            --accent:#7c6fff; --green:#00c980; --red:#f04040; --yellow:#e8a020;
+            --shadow:0 2px 10px rgba(0,0,0,0.08); --sidebar-bg:#111318; --topbar-bg:#f8f7fc;
+            --editor-bg:#13131a; --resizer:#2a2a35;
+        }
+
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        html, body { height:100%; overflow:hidden; }
+        body { font-family:'DM Mono',monospace; background:var(--bg); color:var(--text-primary); }
+
+        /* ── OUTER LAYOUT: nav sidebar + main area ── */
+        .layout { display:grid; grid-template-columns:var(--sidebar-width) 1fr; grid-template-rows:56px 1fr; height:100vh; }
+        .layout.sidebar-collapsed { grid-template-columns:48px 1fr; }
+
+        /* ── NAV SIDEBAR (identical to other pages) ── */
+        .sidebar { grid-column:1; grid-row:1/-1; background:var(--sidebar-bg); border-right:1px solid #2a2a35; display:flex; flex-direction:column; height:100vh; overflow:hidden; z-index:100; }
+        .layout.sidebar-collapsed .sidebar-text,.layout.sidebar-collapsed .os-subtitle,.layout.sidebar-collapsed .nav-label,.layout.sidebar-collapsed .theme-switcher,.layout.sidebar-collapsed .theme-label { display:none; }
+        .layout.sidebar-collapsed .os-title { font-size:10px; padding:16px 0; text-align:center; }
+        .layout.sidebar-collapsed .nav-item { justify-content:center; padding:10px 0; }
+        .layout.sidebar-collapsed .nav-item .icon { width:100%; text-align:center; }
+        .layout.sidebar-collapsed .sidebar-footer { padding:12px 0; align-items:center; }
+        .os-title { font-family:'Syne',sans-serif; font-weight:800; font-size:13px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); padding:20px 20px 16px; border-bottom:1px solid #2a2a35; margin-bottom:8px; flex-shrink:0; }
+        .os-subtitle { display:block; font-size:10px; font-weight:400; color:#50505f; letter-spacing:.08em; margin-top:2px; }
+        .sidebar-nav { flex:1; overflow-y:auto; padding-bottom:8px; }
+        .nav-label { font-size:9px; font-weight:500; letter-spacing:.18em; text-transform:uppercase; color:#50505f; padding:0 20px; margin:16px 0 6px; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:8px 20px; font-size:12px; color:#9896b8; cursor:pointer; transition:all var(--transition); text-decoration:none; border-left:2px solid transparent; white-space:nowrap; }
+        .nav-item:hover { background:rgba(255,255,255,0.06); color:#e8e6f8; }
+        .nav-item.active { background:rgba(124,111,255,0.12); color:var(--accent); border-left-color:var(--accent); font-weight:500; }
+        .nav-item .icon { font-size:14px; width:16px; text-align:center; flex-shrink:0; }
+        .sidebar-footer { flex-shrink:0; padding:14px 20px; border-top:1px solid #2a2a35; display:flex; flex-direction:column; gap:8px; }
+        .theme-label { font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:#50505f; }
+        .theme-switcher { display:flex; gap:5px; }
+        .theme-btn { flex:1; padding:5px 4px; font-family:'DM Mono',monospace; font-size:9px; border:1px solid #2a2a35; background:transparent; color:#50505f; border-radius:4px; cursor:pointer; transition:all var(--transition); }
+        .theme-btn:hover { border-color:var(--accent); color:var(--accent); }
+        .theme-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .collapse-btn { background:transparent; border:1px solid #2a2a35; color:#50505f; border-radius:4px; padding:5px 8px; font-size:11px; cursor:pointer; transition:all var(--transition); align-self:flex-start; }
+        .collapse-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+        /* ── TOPBAR ── */
+        .topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 20px; display:flex; align-items:center; justify-content:space-between; }
+        .page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+        .topbar-right { display:flex; align-items:center; gap:10px; }
+        .run-btn { display:flex; align-items:center; gap:6px; padding:6px 16px; font-family:'DM Mono',monospace; font-size:11px; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; transition:opacity var(--transition); }
+        .run-btn:hover { opacity:.85; }
+        .run-btn:disabled { opacity:.4; cursor:not-allowed; }
+        .run-btn .shortcut { font-size:9px; opacity:.7; padding:1px 4px; border:1px solid rgba(255,255,255,0.3); border-radius:3px; }
+        .status-pill { font-size:10px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); color:var(--text-muted); }
+        .status-pill.ok { border-color:var(--green); color:var(--green); background:rgba(0,201,128,0.08); }
+        .status-pill.err { border-color:var(--red); color:var(--red); background:rgba(240,64,64,0.08); }
+        .status-pill.running { border-color:var(--yellow); color:var(--yellow); background:rgba(232,160,32,0.08); }
+
+        /* ── EXPLORER WORKSPACE ── */
+        .workspace { grid-column:2; grid-row:2; display:grid; grid-template-columns:var(--explorer-sidebar) 1fr; height:100%; overflow:hidden; }
+
+        /* ── TABLE BROWSER (left panel) ── */
+        .table-browser { background:var(--bg-card); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+        [data-theme="dark"] .table-browser { background:#16161a; }
+        [data-theme="mixed"] .table-browser { background:#1a1a22; }
+
+        .browser-header { padding:12px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+        .browser-title { font-size:9px; font-weight:500; letter-spacing:.16em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px; }
+        .browser-search { width:100%; font-family:'DM Mono',monospace; font-size:10px; padding:5px 10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text-primary); border-radius:4px; outline:none; transition:border-color var(--transition); }
+        [data-theme="mixed"] .browser-search,[data-theme="dark"] .browser-search { background:rgba(255,255,255,0.04); }
+        [data-theme="light"] .browser-search { background:var(--bg-hover); }
+        .browser-search::placeholder { color:var(--text-muted); }
+        .browser-search:focus { border-color:var(--accent); }
+
+        .table-list { flex:1; overflow-y:auto; padding:8px 0; }
+        .table-list::-webkit-scrollbar { width:3px; }
+        .table-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+        .table-group { margin-bottom:4px; }
+        .table-item { display:flex; align-items:center; gap:8px; padding:6px 14px; cursor:pointer; transition:background var(--transition); border-left:2px solid transparent; }
+        .table-item:hover { background:rgba(124,111,255,0.08); }
+        .table-item.active { background:rgba(124,111,255,0.12); border-left-color:var(--accent); }
+        .table-icon { font-size:11px; color:var(--text-muted); flex-shrink:0; }
+        .table-name { font-size:11px; color:var(--text-secondary); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .table-item.active .table-name { color:var(--accent); font-weight:500; }
+        .table-row-count { font-size:9px; color:var(--text-muted); flex-shrink:0; }
+
+        /* Column list inside expanded table */
+        .col-list { padding:0 0 4px 0; }
+        .col-item { display:flex; align-items:center; gap:6px; padding:3px 14px 3px 32px; font-size:10px; color:var(--text-muted); cursor:pointer; transition:color var(--transition); }
+        .col-item:hover { color:var(--accent); }
+        .col-type { font-size:9px; padding:1px 5px; border-radius:3px; background:rgba(124,111,255,0.08); color:var(--accent); letter-spacing:.04em; flex-shrink:0; }
+        .col-pk { font-size:9px; color:var(--yellow); margin-left:auto; }
+
+        /* ── RIGHT PANEL: editor + results ── */
+        .right-panel { display:flex; flex-direction:column; overflow:hidden; background:var(--bg-card); }
+        [data-theme="dark"] .right-panel { background:var(--bg); }
+
+        /* Editor pane */
+        .editor-pane { flex-shrink:0; border-bottom:3px solid var(--border); position:relative; }
+        .editor-toolbar { display:flex; align-items:center; justify-content:space-between; padding:6px 14px; background:var(--bg-hover); border-bottom:1px solid var(--border); }
+        [data-theme="dark"] .editor-toolbar,[data-theme="mixed"] .editor-toolbar { background:rgba(255,255,255,0.03); }
+        .editor-label { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); }
+        .editor-actions { display:flex; gap:6px; }
+        .editor-btn { padding:2px 8px; font-family:'DM Mono',monospace; font-size:9px; border:1px solid var(--border); background:transparent; color:var(--text-muted); border-radius:3px; cursor:pointer; transition:all var(--transition); }
+        .editor-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+        /* CodeMirror overrides */
+        .CodeMirror {
+            height: 220px;
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            background: var(--editor-bg) !important;
+        }
+        [data-theme="light"] .CodeMirror {
+            background: #f0eef8 !important;
+            color: #1c1b2e !important;
+        }
+        [data-theme="light"] .CodeMirror-gutters { background: #e8e4f4 !important; border-right: 1px solid #d4d0ec !important; }
+        .CodeMirror-gutters { background: #1a1a24 !important; border-right: 1px solid #2a2a35 !important; }
+        .CodeMirror-linenumber { color: #404058 !important; }
+        .CodeMirror-cursor { border-left-color: var(--accent) !important; }
+        .CodeMirror-selected { background: rgba(124,111,255,0.2) !important; }
+        .CodeMirror-scroll { padding-bottom: 8px; }
+
+        /* Drag handle between editor and results */
+        .drag-handle {
+            height: 6px;
+            background: var(--resizer);
+            cursor: ns-resize;
+            flex-shrink: 0;
+            position: relative;
+            transition: background var(--transition);
+        }
+        .drag-handle:hover { background: var(--accent); }
+        .drag-handle::after {
+            content: '· · ·';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 8px;
+            color: var(--text-muted);
+            letter-spacing: 3px;
+        }
+
+        /* Results pane */
+        .results-pane { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+        .results-toolbar { display:flex; align-items:center; justify-content:space-between; padding:6px 14px; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg-hover); }
+        [data-theme="dark"] .results-toolbar,[data-theme="mixed"] .results-toolbar { background:rgba(255,255,255,0.02); }
+        .results-label { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); }
+        .results-meta { font-size:10px; color:var(--text-muted); }
+        .results-meta span { color:var(--text-secondary); }
+
+        .results-body { flex:1; overflow:auto; }
+        .results-body::-webkit-scrollbar { width:5px; height:5px; }
+        .results-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+        /* Results table */
+        .results-table { width:100%; border-collapse:collapse; font-size:11px; }
+        .results-table thead { position:sticky; top:0; z-index:10; }
+        .results-table th {
+            padding:8px 14px;
+            font-size:9px; font-weight:500; letter-spacing:.12em; text-transform:uppercase;
+            color:var(--text-muted); text-align:left; white-space:nowrap;
+            background:var(--bg-hover); border-bottom:2px solid var(--border);
+            cursor:pointer; user-select:none;
+            transition:color var(--transition);
+        }
+        [data-theme="dark"] .results-table th,[data-theme="mixed"] .results-table th { background:#1a1a22; }
+        .results-table th:hover { color:var(--accent); }
+        .results-table th.sort-asc::after { content:' ↑'; color:var(--accent); }
+        .results-table th.sort-desc::after { content:' ↓'; color:var(--accent); }
+        .results-table td { padding:7px 14px; border-bottom:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; max-width:320px; overflow:hidden; text-overflow:ellipsis; }
+        .results-table tbody tr:hover { background:var(--bg-hover); }
+        .results-table tbody tr:hover td { color:var(--text-primary); }
+        .results-table td.null-val { color:var(--text-muted); font-style:italic; }
+        .results-table td.num-val { color:var(--accent); font-variant-numeric:tabular-nums; }
+        .results-table td.bool-true { color:var(--green); }
+        .results-table td.bool-false { color:var(--red); }
+
+        /* Empty / loading / error states */
+        .state-box { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--text-muted); }
+        .state-icon { font-size:28px; opacity:.4; }
+        .state-text { font-size:12px; }
+        .state-subtext { font-size:10px; opacity:.6; }
+        .error-box { padding:16px 20px; background:rgba(240,64,64,0.06); border:1px solid rgba(240,64,64,0.2); border-radius:6px; margin:16px; font-size:11px; color:var(--red); line-height:1.7; white-space:pre-wrap; font-family:'DM Mono',monospace; }
+        .blocked-box { padding:16px 20px; background:rgba(232,160,32,0.06); border:1px solid rgba(232,160,32,0.2); border-radius:6px; margin:16px; font-size:11px; color:var(--yellow); line-height:1.7; }
+
+        /* Loading spinner */
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .spinner { width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; }
+
+        /* Row limit warning */
+        .limit-banner { padding:4px 14px; font-size:10px; color:var(--yellow); background:rgba(232,160,32,0.06); border-bottom:1px solid rgba(232,160,32,0.15); flex-shrink:0; }
+
+        /* Quick query chips */
+        .quick-queries { padding:8px 14px; border-top:1px solid var(--border); flex-shrink:0; display:flex; gap:6px; flex-wrap:wrap; background:var(--bg-hover); }
+        [data-theme="dark"] .quick-queries,[data-theme="mixed"] .quick-queries { background:rgba(255,255,255,0.02); }
+        .quick-chip { padding:3px 10px; font-family:'DM Mono',monospace; font-size:9px; border:1px solid var(--border); background:transparent; color:var(--text-muted); border-radius:3px; cursor:pointer; transition:all var(--transition); white-space:nowrap; }
+        .quick-chip:hover { border-color:var(--accent); color:var(--accent); }
+    </style>
+</head>
+<body>
+<div class="layout" id="layout">
+
+    <!-- NAV SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="os-title">
+            <span class="sidebar-text">Life OS</span>
+            <span class="os-subtitle">v2.0 · personal</span>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Modules</div>
+            <a class="nav-item" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
+            <a class="nav-item" href="/finance"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
+            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
+            <a class="nav-item" href="/blog"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
+            <div class="nav-label">Tools</div>
+            <a class="nav-item active" href="/explorer"><span class="icon">⊞</span><span class="sidebar-text">SQL Explorer</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="theme-label">Theme</div>
+            <div class="theme-switcher">
+                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
+                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
+                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
+            </div>
+            <button class="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
+        </div>
+    </aside>
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <span class="page-title">SQL Explorer</span>
+            <span style="font-size:9px;padding:2px 8px;border-radius:3px;background:rgba(240,64,64,0.1);color:var(--red);border:1px solid rgba(240,64,64,0.2);letter-spacing:.08em;text-transform:uppercase;">Read-Only</span>
+        </div>
+        <div class="topbar-right">
+            <span class="status-pill" id="status-pill">Ready</span>
+            <button class="run-btn" id="run-btn" onclick="runQuery()">
+                ▶ Run <span class="shortcut">⌘↵</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <div class="workspace">
+
+        <!-- TABLE BROWSER -->
+        <div class="table-browser">
+            <div class="browser-header">
+                <div class="browser-title">Schema · jobs</div>
+                <input class="browser-search" type="text" placeholder="Search tables…" oninput="filterTables(this.value)" id="table-search">
+            </div>
+            <div class="table-list" id="table-list">
+                <div class="state-box" style="height:120px;">
+                    <div class="spinner"></div>
+                    <div class="state-text">Loading schema…</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="right-panel" id="right-panel">
+
+            <!-- Editor pane -->
+            <div class="editor-pane" id="editor-pane">
+                <div class="editor-toolbar">
+                    <span class="editor-label">Query Editor</span>
+                    <div class="editor-actions">
+                        <button class="editor-btn" onclick="formatQuery()">Format</button>
+                        <button class="editor-btn" onclick="clearEditor()">Clear</button>
+                        <button class="editor-btn" onclick="copyQuery()">Copy</button>
+                    </div>
+                </div>
+                <textarea id="sql-editor">SELECT *
+FROM linkedin_jobs
+WHERE fit_score >= 90
+ORDER BY fit_score DESC
+LIMIT 25;</textarea>
+            </div>
+
+            <!-- Drag handle -->
+            <div class="drag-handle" id="drag-handle"></div>
+
+            <!-- Results pane -->
+            <div class="results-pane">
+                <div class="results-toolbar">
+                    <span class="results-label">Results</span>
+                    <span class="results-meta" id="results-meta"></span>
+                </div>
+                <div id="limit-banner" class="limit-banner" style="display:none;">
+                    ⚠ Results capped at 500 rows. Add a LIMIT clause to your query to paginate.
+                </div>
+                <div class="results-body" id="results-body">
+                    <div class="state-box">
+                        <div class="state-icon">⊞</div>
+                        <div class="state-text">Run a query to see results</div>
+                        <div class="state-subtext">Ctrl+Enter or ⌘+Enter to execute</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick query chips -->
+            <div class="quick-queries" id="quick-queries">
+                <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.12em;align-self:center;">Quick:</span>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// ── THEME & SIDEBAR ────────────────────────────────────────────────────────────
+function setTheme(t, btn) {
+    document.documentElement.setAttribute('data-theme', t);
+    localStorage.setItem('life-os-theme', t);
+    document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Update CodeMirror theme
+    if (editor) {
+        editor.setOption('theme', t === 'light' ? 'default' : 'dracula');
+    }
+}
+(function () {
+    const s = localStorage.getItem('life-os-theme') || 'mixed';
+    document.documentElement.setAttribute('data-theme', s);
+    document.querySelectorAll('.theme-btn').forEach(b =>
+        b.classList.toggle('active', b.textContent.trim().toLowerCase() === s)
+    );
+})();
+
+let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    localStorage.setItem('sidebar-collapsed', sidebarCollapsed);
+    document.getElementById('layout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    document.getElementById('collapse-icon').textContent = sidebarCollapsed ? '▶' : '◀';
+}
+if (sidebarCollapsed) {
+    document.getElementById('layout').classList.add('sidebar-collapsed');
+    document.getElementById('collapse-icon').textContent = '▶';
+}
+
+// ── CODEMIRROR SETUP ───────────────────────────────────────────────────────────
+const currentTheme = localStorage.getItem('life-os-theme') || 'mixed';
+const editor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
+    mode: 'text/x-sql',
+    theme: currentTheme === 'light' ? 'default' : 'dracula',
+    lineNumbers: true,
+    matchBrackets: true,
+    autoCloseBrackets: true,
+    indentWithTabs: false,
+    tabSize: 2,
+    extraKeys: {
+        'Ctrl-Enter': runQuery,
+        'Cmd-Enter':  runQuery,
+        'Ctrl-/':     (cm) => cm.execCommand('toggleComment'),
+    }
+});
+
+// ── DRAG-TO-RESIZE editor/results ─────────────────────────────────────────────
+const dragHandle = document.getElementById('drag-handle');
+const editorPane = document.getElementById('editor-pane');
+let isDragging = false;
+let startY, startH;
+
+dragHandle.addEventListener('mousedown', e => {
+    isDragging = true;
+    startY = e.clientY;
+    startH = editorPane.offsetHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const delta = e.clientY - startY;
+    const newH = Math.max(80, Math.min(startH + delta, window.innerHeight - 200));
+    editorPane.style.height = newH + 'px';
+    editor.setSize(null, (newH - 36) + 'px'); // subtract toolbar height
+});
+document.addEventListener('mouseup', () => {
+    isDragging = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+});
+
+// ── SCHEMA / TABLE BROWSER ─────────────────────────────────────────────────────
+let schemaData = {};       // { tableName: { columns: [...], row_count: N } }
+let expandedTable = null;
+let activeTable = null;
+
+async function loadSchema() {
+    try {
+        const resp = await fetch('/explorer/schema');
+        schemaData = await resp.json();
+        renderTableList('');
+        buildQuickChips();
+    } catch (e) {
+        document.getElementById('table-list').innerHTML =
+            `<div class="state-box" style="height:100px;"><div class="state-text" style="color:var(--red);">Failed to load schema</div></div>`;
+    }
+}
+
+function renderTableList(filter) {
+    const list = document.getElementById('table-list');
+    const tables = Object.keys(schemaData).filter(t => t.toLowerCase().includes(filter.toLowerCase()));
+
+    if (!tables.length) {
+        list.innerHTML = `<div class="state-box" style="height:80px;"><div class="state-text">No tables match</div></div>`;
+        return;
+    }
+
+    list.innerHTML = tables.map(tableName => {
+        const meta = schemaData[tableName];
+        const isExpanded = expandedTable === tableName;
+        const isActive = activeTable === tableName;
+
+        let colHtml = '';
+        if (isExpanded) {
+            colHtml = `<div class="col-list">${meta.columns.map(col => `
+                <div class="col-item" onclick="insertColumnName('${col.name}')" title="Click to insert">
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${col.name}</span>
+                    <span class="col-type">${col.type}</span>
+                    ${col.is_pk ? '<span class="col-pk">PK</span>' : ''}
+                </div>
+            `).join('')}</div>`;
+        }
+
+        return `
+            <div class="table-group">
+                <div class="table-item ${isActive ? 'active' : ''}"
+                     onclick="selectTable('${tableName}')">
+                    <span class="table-icon">${isExpanded ? '▾' : '▸'}</span>
+                    <span class="table-name">${tableName}</span>
+                    <span class="table-row-count">${meta.row_count?.toLocaleString() ?? ''}</span>
+                </div>
+                ${colHtml}
+            </div>
+        `;
+    }).join('');
+}
+
+function selectTable(tableName) {
+    if (expandedTable === tableName) {
+        expandedTable = null;
+    } else {
+        expandedTable = tableName;
+        activeTable = tableName;
+        // Auto-populate a SELECT query
+        const cols = schemaData[tableName]?.columns?.map(c => c.name).slice(0, 8).join(', ') || '*';
+        editor.setValue(`SELECT ${cols}\nFROM ${tableName}\nLIMIT 100;`);
+    }
+    renderTableList(document.getElementById('table-search').value);
+}
+
+function filterTables(val) {
+    renderTableList(val);
+}
+
+function insertColumnName(colName) {
+    const doc = editor.getDoc();
+    const cursor = doc.getCursor();
+    doc.replaceRange(colName, cursor);
+    editor.focus();
+}
+
+// ── QUICK CHIPS ────────────────────────────────────────────────────────────────
+function buildQuickChips() {
+    const container = document.getElementById('quick-queries');
+    const chips = [
+        { label: 'High Fit Jobs', sql: 'SELECT job_title, company_name, fit_score\nFROM linkedin_jobs\nWHERE fit_score >= 90\nORDER BY fit_score DESC\nLIMIT 50;' },
+        { label: 'Recent Transactions', sql: 'SELECT t.date, t.description, t.amount, t.category, a.name AS account\nFROM transactions t\nJOIN accounts a ON t.account_id = a.id\nORDER BY t.date DESC\nLIMIT 50;' },
+        { label: 'Staging Queue', sql: 'SELECT id, job_link, status, job_title, company_name, created_at\nFROM staging_jobs\nORDER BY created_at DESC\nLIMIT 25;' },
+        { label: 'Blog Pipeline', sql: 'SELECT id, title_concept, status, updated_at\nFROM blog_ideas\nORDER BY updated_at DESC;' },
+        { label: 'Spend by Category', sql: 'SELECT category, ROUND(SUM(amount), 2) AS total\nFROM transactions\nWHERE amount < 0\nGROUP BY category\nORDER BY total ASC;' },
+        { label: 'ATS Pipeline', sql: 'SELECT j.job_title, j.company_name, l.status, l.created_at\nFROM application_logs l\nJOIN linkedin_jobs j ON l.job_id = j.ID\nORDER BY l.created_at DESC\nLIMIT 30;' },
+    ];
+
+    const existingLabel = container.querySelector('span');
+    container.innerHTML = '';
+    container.appendChild(existingLabel);
+
+    chips.forEach(chip => {
+        const btn = document.createElement('button');
+        btn.className = 'quick-chip';
+        btn.textContent = chip.label;
+        btn.onclick = () => {
+            editor.setValue(chip.sql);
+            editor.focus();
+        };
+        container.appendChild(btn);
+    });
+}
+
+// ── BLOCKED KEYWORDS ──────────────────────────────────────────────────────────
+const BLOCKED = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|REPLACE|GRANT|REVOKE|LOAD|CALL|EXEC|EXECUTE)\b/i;
+
+// ── RUN QUERY ──────────────────────────────────────────────────────────────────
+let sortState = { col: null, dir: 'asc' };
+
+async function runQuery() {
+    const sql = editor.getValue().trim();
+    if (!sql) return;
+
+    // Block write operations client-side (server also enforces this)
+    if (BLOCKED.test(sql)) {
+        setStatus('blocked', '');
+        document.getElementById('results-body').innerHTML = `
+            <div class="blocked-box">
+                ⚠ Write operations are blocked in the SQL Explorer.<br><br>
+                Detected keyword: <strong>${sql.match(BLOCKED)?.[0]}</strong><br>
+                Only SELECT statements are permitted.
+            </div>`;
+        document.getElementById('results-meta').textContent = '';
+        return;
+    }
+
+    setStatus('running', '');
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('results-meta').textContent = '';
+    document.getElementById('limit-banner').style.display = 'none';
+    document.getElementById('results-body').innerHTML = `
+        <div class="state-box"><div class="spinner"></div><div class="state-text">Executing…</div></div>`;
+
+    const startTime = performance.now();
+
+    try {
+        const resp = await fetch('/explorer/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql })
+        });
+
+        const data = await resp.json();
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+        if (!resp.ok) {
+            setStatus('err', '');
+            document.getElementById('results-body').innerHTML =
+                `<div class="error-box">Error: ${data.detail || 'Unknown error'}</div>`;
+            return;
+        }
+
+        const { rows, columns, row_count, capped } = data;
+
+        if (capped) document.getElementById('limit-banner').style.display = 'block';
+
+        sortState = { col: null, dir: 'asc' };
+        renderResults(rows, columns);
+        setStatus('ok', '');
+        document.getElementById('results-meta').innerHTML =
+            `<span>${row_count.toLocaleString()} row${row_count !== 1 ? 's' : ''}</span> · ${elapsed}s`;
+
+    } catch (e) {
+        setStatus('err', '');
+        document.getElementById('results-body').innerHTML =
+            `<div class="error-box">Network error: ${e.message}</div>`;
+    } finally {
+        document.getElementById('run-btn').disabled = false;
+    }
+}
+
+function renderResults(rows, columns) {
+    if (!rows.length) {
+        document.getElementById('results-body').innerHTML = `
+            <div class="state-box"><div class="state-icon">◎</div><div class="state-text">Query returned 0 rows</div></div>`;
+        return;
+    }
+
+    const thead = `<thead><tr>${columns.map((col, i) => `
+        <th onclick="sortResults(${i}, '${col}')" class="${sortState.col === col ? 'sort-' + sortState.dir : ''}">
+            ${col}
+        </th>`).join('')}</tr></thead>`;
+
+    const tbody = `<tbody>${rows.map(row => `
+        <tr>${columns.map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) return `<td class="null-val">NULL</td>`;
+            if (typeof val === 'number') return `<td class="num-val">${val.toLocaleString()}</td>`;
+            if (val === true) return `<td class="bool-true">true</td>`;
+            if (val === false) return `<td class="bool-false">false</td>`;
+            const str = String(val);
+            const display = str.length > 120 ? str.slice(0, 120) + '…' : str;
+            return `<td title="${str.replace(/"/g, '&quot;')}">${display}</td>`;
+        }).join('')}</tr>`).join('')}</tbody>`;
+
+    document.getElementById('results-body').innerHTML =
+        `<table class="results-table">${thead}${tbody}</table>`;
+
+    // Store for sort
+    window._currentRows = rows;
+    window._currentCols = columns;
+}
+
+function sortResults(colIndex, colName) {
+    if (!window._currentRows) return;
+    const newDir = sortState.col === colName && sortState.dir === 'asc' ? 'desc' : 'asc';
+    sortState = { col: colName, dir: newDir };
+
+    const sorted = [...window._currentRows].sort((a, b) => {
+        const va = a[colName], vb = b[colName];
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+        return newDir === 'asc' ? cmp : -cmp;
+    });
+
+    renderResults(sorted, window._currentCols);
+}
+
+function setStatus(state, msg) {
+    const pill = document.getElementById('status-pill');
+    pill.className = 'status-pill';
+    if (state === 'ok') { pill.classList.add('ok'); pill.textContent = '✓ Done'; }
+    else if (state === 'err') { pill.classList.add('err'); pill.textContent = '✗ Error'; }
+    else if (state === 'running') { pill.classList.add('running'); pill.textContent = '⟳ Running…'; }
+    else if (state === 'blocked') { pill.classList.add('err'); pill.textContent = '⛔ Blocked'; }
+    else { pill.textContent = 'Ready'; }
+}
+
+// ── EDITOR UTILITIES ──────────────────────────────────────────────────────────
+function clearEditor() { editor.setValue(''); editor.focus(); }
+function copyQuery() {
+    navigator.clipboard.writeText(editor.getValue()).then(() => {
+        const btn = document.querySelector('.editor-btn');
+        // Find the copy button specifically
+        document.querySelectorAll('.editor-btn').forEach(b => {
+            if (b.textContent === 'Copy') { b.textContent = '✓ Copied'; setTimeout(() => b.textContent = 'Copy', 1500); }
+        });
+    });
+}
+function formatQuery() {
+    // Basic formatting — uppercase keywords, trim whitespace
+    const keywords = ['select','from','where','join','left join','right join','inner join',
+                      'group by','order by','having','limit','offset','on','and','or',
+                      'as','distinct','count','sum','avg','max','min','case','when','then','else','end'];
+    let sql = editor.getValue();
+    keywords.forEach(kw => {
+        const re = new RegExp('\\b' + kw + '\\b', 'gi');
+        sql = sql.replace(re, kw.toUpperCase());
+    });
+    editor.setValue(sql);
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runQuery(); }
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadSchema();
+</script>
+</body>
+</html>

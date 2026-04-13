@@ -1,18 +1,27 @@
+# docker-compose.yml
 services:
+
   db:
     image: mariadb:10.11
-    ports:
-      - "3307:3306" # Host 3307 maps to Container 3306
     container_name: life_os_db
     restart: always
+    ports:
+      - "3307:3306"
     environment:
-      # These use the variables from your .env file
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: jobs
       MYSQL_USER: data_playground
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./mariadb_data:/var/lib/mysql
+      # This SQL runs on first boot — creates the Airflow schema
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   web:
     build: .
@@ -21,13 +30,96 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      # No passwords here! FastAPI gets them from GCP.
       - GOOGLE_APPLICATION_CREDENTIALS=/app/impactful-post-292301-17bfe2bceb2c.json
-      # We tell the app WHERE the DB is, but not the password
-      - DB_HOST=db 
       - APP_ENV=production
     volumes:
       - .:/app
+
+  airflow-init:
+    image: apache/airflow:2.9.1
+    container_name: life_os_airflow_init
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: ${DB_PASSWORD}
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Pedro \
+          --lastname Admin \
+          --role Admin \
+          --email data_playground.contact@gmail.com \
+          --password "${DB_PASSWORD}" || true
+        echo "Airflow init complete."
+    restart: "no"  # Runs once and exits — this is intentional
+
+  airflow-webserver:
+    image: apache/airflow:2.9.1
+    container_name: life_os_airflow_web
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      PYTHONPATH: /opt/airflow/dags
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      # Mount GCP key so DAGs can call Secret Manager
+      - ./${GCP_KEY_FILE}:/opt/airflow/gcp-key.json
+      # Gives DAGs access to your project's Python helpers (models, db utils)
+      - .:/opt/airflow/project
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1
+    container_name: life_os_airflow_scheduler
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+      PYTHONPATH: /opt/airflow/dags
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./${GCP_KEY_FILE}:/opt/airflow/gcp-key.json
+      # Gives DAGs access to your project's Python helpers (models, db utils)
+      - .:/opt/airflow/project
+    command: scheduler
