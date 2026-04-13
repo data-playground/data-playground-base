@@ -146,12 +146,9 @@
     </main>
 </div>
 
-<script>
 {% include "partials/sidebar_js.html" %}
-(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
-let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
-if(window.innerWidth>768)applyCollapsed();
 
+<script>
 async function addAccount() {
     const name = document.getElementById('acct-name').value.trim();
     const type = document.getElementById('acct-type').value;

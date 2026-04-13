@@ -260,16 +260,10 @@
     </main>
 </div>
 
+{% include "partials/sidebar_js.html" %}
+
 <script>
 // Theme
-{% include "partials/sidebar_js.html" %}
-(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
-
-// Sidebar collapse
-let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
-{% include "partials/sidebar_js.html" %}
-if(window.innerWidth>768)applyCollapsed();
-if(window.innerWidth>768)applyCollapsed();
 
 // Donut chart
 {% if category_totals %}

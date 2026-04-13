@@ -414,17 +414,10 @@
 
 <div id="toast"></div>
 
+{% include "partials/sidebar_js.html" %}
 <script>
     // THEME
-	{% include "partials/sidebar_js.html" %}
-    (function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
-
-    // SIDEBAR
-    let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
-    function openMobileSidebar(){document.getElementById('sidebar').classList.add('mobile-open');document.getElementById('sidebar-backdrop').classList.add('visible');}
-    function closeMobileSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebar-backdrop').classList.remove('visible');}
-    if(window.innerWidth>768)applyCollapsed();
-
+	
     // STAGING PANEL
     function toggleStagingBody(){
         const body=document.getElementById('staging-body');

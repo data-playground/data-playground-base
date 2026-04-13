@@ -201,12 +201,10 @@
     </main>
 </div>
 
+{% include "partials/sidebar_js.html" %}
+
 <script>
 // Theme + sidebar
-{% include "partials/sidebar_js.html" %}
-(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
-let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
-if(window.innerWidth>768)applyCollapsed();
 
 // New account toggle
 function toggleNewAcct(){document.getElementById('new-acct-form').classList.toggle('open');}

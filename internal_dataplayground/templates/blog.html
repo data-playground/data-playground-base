@@ -264,13 +264,9 @@
 
 <div id="toast"></div>
 
-<script>
-// ── Theme + sidebar ──
-{% include "partials/sidebar_js.html" %}
-(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.documentElement.setAttribute('data-theme',s);document.querySelectorAll('.theme-btn').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===s));})();
-let sidebarCollapsed=localStorage.getItem('sidebar-collapsed')==='true';
-if(window.innerWidth>768)applyCollapsed();
 
+{% include "partials/sidebar_js.html" %}
+<script>
 // ── BYOI Modal ──
 function openByoi(){document.getElementById('byoi-modal').classList.add('open');setTimeout(()=>document.getElementById('byoi-input').focus(),100);}
 function closeByoi(){document.getElementById('byoi-modal').classList.remove('open');}
