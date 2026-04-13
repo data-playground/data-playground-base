@@ -14,17 +14,20 @@
     <nav class="sidebar-nav">
         <div class="nav-label">Modules</div>
         <a class="nav-item {% if active_module == 'jobs' %}active{% endif %}" href="/jobs">
-            <span class="icon">◈</span><span class="sidebar-text">Job Tracker</span>
+            <i class="fas fa-briefcase icon"></i><span class="sidebar-text">Job Tracker</span>
         </a>
         <a class="nav-item {% if active_module == 'finance' %}active{% endif %}" href="/finance">
-            <span class="icon">◎</span><span class="sidebar-text">Finance</span>
+            <i class="fas fa-dollar-sign icon"></i><span class="sidebar-text">Finance</span>
         </a>
         <a class="nav-item {% if active_module == 'workouts' %}active{% endif %}" href="#">
-            <span class="icon">◷</span><span class="sidebar-text">Workouts</span>
+            <i class="fas fa-dumbbell icon"></i><span class="sidebar-text">Workouts</span>
         </a>
         <a class="nav-item {% if active_module == 'blog' %}active{% endif %}" href="/blog">
-            <span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span>
+            <i class="fas fa-pen-to-square icon"></i><span class="sidebar-text">Blog Ideas</span>
         </a>
+        <a class="nav-item {% if active_module == 'explorer' %}active{% endif %}" href="/explorer">
+			<i class="fas fa-database icon"></i><span class="sidebar-text">SQL Explorer</span>
+		</a>
 
         {# ── Finance sub-nav (only shown when in finance section) ── #}
         {% if active_module in ('finance', 'finance_ledger', 'finance_upload', 'finance_settings') %}

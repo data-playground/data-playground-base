@@ -260,6 +260,8 @@
             <button class="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
         </div>
     </aside>
+	
+	{% include "partials/sidebar.html" %}
 
     <!-- TOPBAR -->
     <header class="topbar">
@@ -344,16 +346,7 @@ LIMIT 25;</textarea>
 
 <script>
 // ── THEME & SIDEBAR ────────────────────────────────────────────────────────────
-function setTheme(t, btn) {
-    document.documentElement.setAttribute('data-theme', t);
-    localStorage.setItem('life-os-theme', t);
-    document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    // Update CodeMirror theme
-    if (editor) {
-        editor.setOption('theme', t === 'light' ? 'default' : 'dracula');
-    }
-}
+{% include "partials/sidebar_js.html" %}
 (function () {
     const s = localStorage.getItem('life-os-theme') || 'mixed';
     document.documentElement.setAttribute('data-theme', s);
@@ -363,12 +356,7 @@ function setTheme(t, btn) {
 })();
 
 let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
-function toggleSidebar() {
-    sidebarCollapsed = !sidebarCollapsed;
-    localStorage.setItem('sidebar-collapsed', sidebarCollapsed);
-    document.getElementById('layout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
-    document.getElementById('collapse-icon').textContent = sidebarCollapsed ? '▶' : '◀';
-}
+
 if (sidebarCollapsed) {
     document.getElementById('layout').classList.add('sidebar-collapsed');
     document.getElementById('collapse-icon').textContent = '▶';
