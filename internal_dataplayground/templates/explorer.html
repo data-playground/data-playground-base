@@ -235,32 +235,7 @@
 <body>
 <div class="layout" id="layout">
 
-    <!-- NAV SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
-        <div class="os-title">
-            <span class="sidebar-text">Life OS</span>
-            <span class="os-subtitle">v2.0 · personal</span>
-        </div>
-        <nav class="sidebar-nav">
-            <div class="nav-label">Modules</div>
-            <a class="nav-item" href="/jobs"><span class="icon">◈</span><span class="sidebar-text">Job Tracker</span></a>
-            <a class="nav-item" href="/finance"><span class="icon">◎</span><span class="sidebar-text">Finance</span></a>
-            <a class="nav-item" href="#"><span class="icon">◷</span><span class="sidebar-text">Workouts</span></a>
-            <a class="nav-item" href="/blog"><span class="icon">◻</span><span class="sidebar-text">Blog Ideas</span></a>
-            <div class="nav-label">Tools</div>
-            <a class="nav-item active" href="/explorer"><span class="icon">⊞</span><span class="sidebar-text">SQL Explorer</span></a>
-        </nav>
-        <div class="sidebar-footer">
-            <div class="theme-label">Theme</div>
-            <div class="theme-switcher">
-                <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
-                <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
-                <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
-            </div>
-            <button class="collapse-btn" onclick="toggleSidebar()"><span id="collapse-icon">◀</span></button>
-        </div>
-    </aside>
-	
+    <!-- NAV SIDEBAR -->	
 	{% include "partials/sidebar.html" %}
 
     <!-- TOPBAR -->
