@@ -1,33 +1,10 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="mixed">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life OS — SQL Explorer</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <!-- CodeMirror for SQL syntax highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
-    {% extends "base.html" %}
-	{% block title %}Job Tracker{% endblock %}
-	{% block page_title %}Job Tracker{% endblock %}
-	{% block extra_css %}<link rel="stylesheet" href="/static/css/jobs.css">{% endblock %}
-	{% block content %}
-	  {# just the page body here #}
-	{% endblock %}
-</head>
-<body>
-<div class="layout" id="layout">
+{% extends "base.html" %}
+{% block title %}Life OS — SQL Explorer{% endblock %}
+{% block page_title %}Life OS — SQL Explorer{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/explorer.css">{% endblock %}
+{% block content %}
 
-    <!-- NAV SIDEBAR -->	
-	{% include "partials/sidebar.html" %}
+<div class="layout" id="layout">
 
     <!-- TOPBAR -->
     <header class="topbar">
@@ -109,8 +86,6 @@ LIMIT 25;</textarea>
         </div>
     </div>
 </div>
-
-{% include "partials/sidebar_js.html" %}
 
 <script>
 // ── THEME & SIDEBAR ────────────────────────────────────────────────────────────
@@ -424,5 +399,5 @@ document.addEventListener('keydown', e => {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadSchema();
 </script>
-</body>
-</html>
+
+{% endblock %}
