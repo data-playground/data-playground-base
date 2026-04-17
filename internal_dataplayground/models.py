@@ -378,6 +378,25 @@ class BlogIdea(Base):
         default=BlogIdeaStatus.IDEA_GENERATED,
     )
     airflow_run_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    # v2 draft
+    draft_v2: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Code Intelligence links
+    code_file_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("code_files.id", ondelete="SET NULL"), nullable=True
+    )
+    code_project_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("code_projects.id", ondelete="SET NULL"), nullable=True
+    )
+    code_file: Mapped[Optional["CodeFile"]] = relationship(
+        "CodeFile", back_populates="blog_ideas",
+        foreign_keys=[code_file_id],
+    )
+    code_project: Mapped[Optional["CodeProject"]] = relationship(
+        "CodeProject", back_populates="blog_ideas",
+        foreign_keys=[code_project_id],
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow, nullable=False
