@@ -3,16 +3,15 @@
 {% block page_title %}Life OS — Blog Ideas{% endblock %}
 {% block topbar_actions %}            
 	<div id="scout-result"></div>
-		<button class="btn"
-			hx-post="/blog/scout"
-			hx-target="#scout-result"
-			hx-swap="innerHTML"
-			hx-indicator="#scout-spinner">
-			⟳ Run Scout
-		</button>
-		<span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
-		<button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
-	</div>
+	<button class="btn"
+		hx-post="/blog/scout"
+		hx-target="#scout-result"
+		hx-swap="innerHTML"
+		hx-indicator="#scout-spinner">
+		⟳ Run Scout
+	</button>
+	<span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
+	<button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="/static/css/blog.css">{% endblock %}
 {% block content %}
