@@ -1,24 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Life OS — SQL Explorer{% endblock %}
 {% block page_title %}Life OS — SQL Explorer{% endblock %}
+{% block topbar_meta %}<span style="font-size:9px;padding:2px 8px;border-radius:3px;background:rgba(240,64,64,0.1);color:var(--red);border:1px solid rgba(240,64,64,0.2);letter-spacing:.08em;text-transform:uppercase;">Read-Only</span>{% endblock %}
+{% block topbar_badges %}<span class="status-pill" id="status-pill">Ready</span>{% endblock %}
+{% block topbar_actions %}<button class="run-btn" id="run-btn" onclick="runQuery()">▶ Run <span class="shortcut">⌘↵</span></button>{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="/static/css/explorer.css">{% endblock %}
 {% block content %}
-
-<div class="layout" id="layout">
-
-    <!-- TOPBAR -->
-    <header class="topbar">
-        <div style="display:flex;align-items:center;gap:12px;">
-            <span class="page-title">SQL Explorer</span>
-            <span style="font-size:9px;padding:2px 8px;border-radius:3px;background:rgba(240,64,64,0.1);color:var(--red);border:1px solid rgba(240,64,64,0.2);letter-spacing:.08em;text-transform:uppercase;">Read-Only</span>
-        </div>
-        <div class="topbar-right">
-            <span class="status-pill" id="status-pill">Ready</span>
-            <button class="run-btn" id="run-btn" onclick="runQuery()">
-                ▶ Run <span class="shortcut">⌘↵</span>
-            </button>
-        </div>
-    </header>
 
     <!-- WORKSPACE -->
     <div class="workspace">
