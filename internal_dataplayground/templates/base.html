@@ -1,0 +1,76 @@
+{# templates/base.html
+   ─────────────────────────────────────────────────────────────────────────
+   Master layout for all Life OS pages.
+   Child templates use: {% extends "base.html" %}
+
+   Available blocks:
+     title           → <title> content (after "Life OS — ")
+     extra_css       → page-specific <link> or <style> tags in <head>
+     page_title      → text in the topbar left
+     topbar_meta     → optional subtitle/count next to page_title
+     topbar_badges   → optional badge chips (e.g. "Read-Only")
+     topbar_actions  → right-side topbar buttons
+     content         → main page body inside .main-content
+     extra_js        → page-specific <script> tags before </body>
+
+   Context variables expected from router:
+     active_module   → used by sidebar partial for active nav highlighting
+   ─────────────────────────────────────────────────────────────────────────
+#}
+<!DOCTYPE html>
+<html lang="en" data-theme="mixed">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life OS — {% block title %}{% endblock %}</title>
+
+    {# Shared foundation styles — theme tokens, layout, sidebar, topbar #}
+    <link rel="stylesheet" href="/static/css/base.css">
+
+    {# Page-specific CSS injected by child templates #}
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="layout" id="layout">
+
+    {# Mobile sidebar backdrop #}
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
+
+    {# ── SIDEBAR ── #}
+    {% include "partials/sidebar.html" %}
+
+    {# ── TOPBAR ── #}
+    <header class="topbar">
+        <div class="topbar-left">
+            <button class="hamburger" onclick="openMobileSidebar()">☰</button>
+            <span class="page-title">{% block page_title %}{% endblock %}</span>
+            {% block topbar_meta %}{% endblock %}
+        </div>
+        <div class="topbar-right">
+            {% block topbar_badges %}{% endblock %}
+            {% block topbar_actions %}{% endblock %}
+        </div>
+    </header>
+
+    {# ── MAIN CONTENT ── #}
+    <main class="main-content" id="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+</div>
+
+{# Shared toast element — populated by showToast() in base.js #}
+<div id="toast"></div>
+
+{# Shared JS: theme, sidebar, toast, mobile — loaded for every page #}
+<script src="/static/js/base.js"></script>
+
+{# HTMX — loaded globally so all pages can use hx-* attributes #}
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+{# Page-specific scripts injected by child templates #}
+{% block extra_js %}{% endblock %}
+
+</body>
+</html>

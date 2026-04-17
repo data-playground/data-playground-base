@@ -1,0 +1,231 @@
+{# templates/code_intelligence.html #}
+{% extends "base.html" %}
+
+{% block title %}Code Intelligence{% endblock %}
+{% block page_title %}Code Intelligence{% endblock %}
+
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);">{{ projects|length }} project{{ 's' if projects|length != 1 else '' }}</span>
+{% endblock %}
+
+{% block topbar_actions %}
+    <button class="btn btn-primary" onclick="openNewProjectModal()">⊕ New Project</button>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── TWO-PANEL LAYOUT: project list left, detail right ── */
+    .ci-workspace {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 16px;
+        height: 100%;
+    }
+
+    /* ── PROJECT LIST (left panel) ── */
+    .project-list-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    .project-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: all var(--transition);
+        border-left: 3px solid transparent;
+    }
+
+    .project-card:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+    .project-card.active { border-left-color: var(--accent); background: var(--accent-dim); }
+
+    .project-card-name {
+        font-family: 'Syne', sans-serif;
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .project-card-repo {
+        font-size: 9px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 8px;
+    }
+
+    .project-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .project-card-stats {
+        display: flex;
+        gap: 6px;
+    }
+
+    /* ── DETAIL PANEL (right) ── */
+    .ci-detail-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ci-detail-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 12px;
+        color: var(--text-muted);
+    }
+
+    .ci-detail-empty .empty-icon { font-size: 36px; opacity: 0.3; }
+    .ci-detail-empty p { font-size: 12px; text-align: center; line-height: 1.7; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ci-workspace">
+
+    {# ── LEFT: PROJECT LIST ── #}
+    <div class="project-list-panel" id="project-list-panel">
+        {% include "partials/project_list.html" %}
+    </div>
+
+    {# ── RIGHT: PROJECT DETAIL (HTMX target) ── #}
+    <div class="ci-detail-panel" id="ci-detail-panel">
+        <div class="ci-detail-empty">
+            <div class="empty-icon">◈</div>
+            <p>Select a project to view its files<br>or create a new one to get started.</p>
+        </div>
+    </div>
+
+</div>
+
+{# ── NEW PROJECT MODAL ── #}
+<div class="modal-backdrop" id="new-project-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:center;justify-content:center;">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:520px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">⊕ New Code Project</span>
+            <button onclick="closeNewProjectModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px;">✕</button>
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+            <div>
+                <label class="form-label">Project Name</label>
+                <input class="form-input" type="text" id="np-name" placeholder="Life OS FastAPI App">
+            </div>
+            <div>
+                <label class="form-label">GitHub Repo <span style="color:var(--text-muted);font-size:8px;">(owner/repo-name)</span></label>
+                <input class="form-input" type="text" id="np-repo" placeholder="pedro/data-playground-base">
+            </div>
+            <div>
+                <label class="form-label">
+                    Base Path
+                    <span style="color:var(--text-muted);font-size:8px;margin-left:6px;">optional — leave empty for whole repo</span>
+                </label>
+                <input class="form-input" type="text" id="np-path" placeholder="internal_dataplayground/routers">
+                <div style="font-size:9px;color:var(--text-muted);margin-top:4px;">
+                    Examples: &nbsp;<code style="color:var(--accent)">internal_dataplayground</code> for the whole app &nbsp;·&nbsp;
+                    <code style="color:var(--accent)">internal_dataplayground/routers</code> for just routers
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Description <span style="color:var(--text-muted);font-size:8px;">optional</span></label>
+                <input class="form-input" type="text" id="np-desc" placeholder="FastAPI routes for the Finance module">
+            </div>
+            <div id="np-error" style="font-size:11px;color:var(--red);min-height:16px;"></div>
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+            <button class="btn" onclick="closeNewProjectModal()">Cancel</button>
+            <button class="btn btn-primary" id="np-submit" onclick="submitNewProject()">Create Project →</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── NEW PROJECT MODAL ──────────────────────────────────────────────────────────
+function openNewProjectModal() {
+    document.getElementById('new-project-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('np-name').focus(), 100);
+}
+function closeNewProjectModal() {
+    document.getElementById('new-project-modal').style.display = 'none';
+    document.getElementById('np-error').textContent = '';
+}
+document.getElementById('new-project-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeNewProjectModal();
+});
+
+async function submitNewProject() {
+    const name = document.getElementById('np-name').value.trim();
+    const repo = document.getElementById('np-repo').value.trim();
+    const path = document.getElementById('np-path').value.trim();
+    const desc = document.getElementById('np-desc').value.trim();
+    const errEl = document.getElementById('np-error');
+
+    if (!name) { errEl.textContent = 'Project name is required.'; return; }
+    if (!repo || !repo.includes('/')) { errEl.textContent = 'Enter a valid repo in owner/repo format.'; return; }
+
+    const btn = document.getElementById('np-submit');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    errEl.textContent = '';
+
+    const fd = new FormData();
+    fd.append('project_name', name);
+    fd.append('github_repo', repo);
+    if (path) fd.append('github_base_path', path);
+    if (desc) fd.append('description', desc);
+
+    try {
+        const resp = await fetch('/code-intel/projects', { method: 'POST', body: fd });
+        const html = await resp.text();
+        if (resp.ok) {
+            document.getElementById('project-list-panel').innerHTML = html;
+            closeNewProjectModal();
+            // Clear inputs
+            ['np-name','np-repo','np-path','np-desc'].forEach(id => document.getElementById(id).value = '');
+            showToast('Project created.');
+        } else {
+            errEl.textContent = '⚠ Failed to create project.';
+        }
+    } catch (e) {
+        errEl.textContent = '⚠ Network error.';
+    } finally {
+        btn.disabled = false; btn.textContent = 'Create Project →';
+    }
+}
+
+// ── LOAD PROJECT DETAIL ────────────────────────────────────────────────────────
+function openProject(projectId) {
+    // Highlight selected card
+    document.querySelectorAll('.project-card').forEach(c => c.classList.remove('active'));
+    const card = document.getElementById(`project-card-${projectId}`);
+    if (card) card.classList.add('active');
+
+    // Load detail via HTMX
+    htmx.ajax('GET', `/code-intel/projects/${projectId}/detail`, {
+        target: '#ci-detail-panel',
+        swap: 'innerHTML',
+    });
+}
+</script>
+{% endblock %}

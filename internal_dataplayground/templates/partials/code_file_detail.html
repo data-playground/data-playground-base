@@ -1,0 +1,200 @@
+{# templates/partials/code_file_detail.html
+   Loaded into #file-detail-drawer via HTMX GET /code-intel/files/{id}
+   `file`  = CodeFile ORM object
+   `toast` = optional success message
+   `error` = optional error message
+#}
+<div style="padding:0;" data-toast="{{ toast or '' }}">
+
+    {# ── HEADER ── #}
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--bg-card);z-index:10;flex-shrink:0;">
+        <div style="flex:1;min-width:0;padding-right:12px;">
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:3px;">
+                {{ file.file_name }}
+            </div>
+            <div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                {{ file.github_path }}
+            </div>
+            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;">
+                {% if file.code_pulled_at %}
+                <span class="badge badge-muted">pulled {{ file.code_pulled_at.strftime('%b %d, %H:%M') }}</span>
+                {% endif %}
+                {% if file.narration %}
+                    {% if file.narration_is_stale %}
+                    <span class="badge badge-red">narration stale</span>
+                    {% else %}
+                    <span class="badge badge-green">narrated ✓</span>
+                    {% endif %}
+                {% endif %}
+                {% if file.commented_status.value != 'none' %}
+                <span class="badge badge-accent">comments: {{ file.commented_status.value }}</span>
+                {% endif %}
+                {% if file.improvement_status.value != 'none' %}
+                <span class="badge badge-yellow">review: {{ file.improvement_status.value }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <button onclick="closeFileDetail()"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+            ✕ Close
+        </button>
+    </div>
+
+    {% if error %}
+    <div style="margin:12px 18px;padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);">⚠ {{ error }}</div>
+    {% endif %}
+
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:18px;">
+
+        {# ── STEP 1: PULL CODE ── #}
+        <div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">① Pull from GitHub</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-sm"
+                        hx-post="/code-intel/files/{{ file.id }}/pull"
+                        hx-target="#file-detail-drawer"
+                        hx-swap="innerHTML"
+                        hx-indicator="#pull-spinner-{{ file.id }}">
+                    ⟳ Pull Latest Code
+                </button>
+                <span id="pull-spinner-{{ file.id }}" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">Pulling…</span>
+                {% if file.raw_code %}
+                <span style="font-size:9px;color:var(--text-muted);">
+                    {{ file.raw_code|length }} chars · SHA {{ file.github_sha[:8] if file.github_sha else '—' }}
+                </span>
+                {% endif %}
+            </div>
+
+            {% if file.raw_code %}
+            <details style="margin-top:8px;">
+                <summary style="font-size:9px;color:var(--accent);cursor:pointer;user-select:none;">View raw code</summary>
+                <pre style="margin-top:8px;font-size:9px;line-height:1.6;padding:10px 12px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:200px;"><code>{{ file.raw_code[:2000] }}{% if file.raw_code|length > 2000 %}
+… (truncated){% endif %}</code></pre>
+            </details>
+            {% endif %}
+        </div>
+
+        <div style="border-top:1px solid var(--border);"></div>
+
+        {# ── STEP 2: NARRATE ── #}
+        <div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;">
+                ② Code Narrator
+                <span style="font-size:8px;color:var(--text-muted);margin-left:4px;text-transform:none;letter-spacing:0;">feeds blog agents + README Writer</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+                <button class="btn btn-sm {% if not file.raw_code %}btn-disabled{% endif %}"
+                        {% if file.raw_code %}
+                        hx-post="/code-intel/files/{{ file.id }}/narrate"
+                        hx-target="#file-detail-drawer"
+                        hx-swap="innerHTML"
+                        hx-indicator="#narrate-spinner-{{ file.id }}"
+                        {% else %}disabled title="Pull code first"{% endif %}>
+                    ▶ Generate Narration
+                </button>
+                <span id="narrate-spinner-{{ file.id }}" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">Narrating… (Claude Sonnet)</span>
+            </div>
+            {% if file.narration %}
+            <div style="font-size:10px;line-height:1.7;color:var(--text-secondary);background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;padding:10px 12px;max-height:200px;overflow-y:auto;">
+                {{ file.narration }}
+            </div>
+            {% if file.narration_generated_at %}
+            <div style="font-size:9px;color:var(--text-muted);margin-top:4px;">
+                Generated {{ file.narration_generated_at.strftime('%b %d, %H:%M') }}
+                {% if file.narration_is_stale %}<span style="color:var(--red);"> — code has changed, regenerate</span>{% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <div style="font-size:10px;color:var(--text-muted);">No narration yet.</div>
+            {% endif %}
+        </div>
+
+        <div style="border-top:1px solid var(--border);"></div>
+
+        {# ── STEP 3: CODE COMMENTER ── #}
+        <div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">
+                ③ Code Commenter
+                <span style="font-size:8px;color:var(--text-muted);margin-left:4px;text-transform:none;letter-spacing:0;">adds docstrings + inline comments, no logic changes</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+                <button class="btn btn-sm"
+                        {% if file.raw_code %}
+                        hx-post="/code-intel/files/{{ file.id }}/comment"
+                        hx-target="#file-detail-drawer"
+                        hx-swap="innerHTML"
+                        hx-indicator="#comment-spinner-{{ file.id }}"
+                        {% else %}disabled title="Pull code first"{% endif %}>
+                    ▶ Generate Comments
+                </button>
+                <span id="comment-spinner-{{ file.id }}" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">Commenting… (Gemini Flash)</span>
+                {% if file.commented_status.value == 'generated' %}
+                <button class="btn btn-sm btn-green" onclick="markCommentReviewed({{ file.id }})">
+                    ✓ Mark Reviewed
+                </button>
+                {% endif %}
+                {% if file.commented_status.value == 'reviewed' %}
+                <button class="btn btn-sm btn-green"
+                        hx-post="/code-intel/files/{{ file.id }}/push-comments"
+                        hx-target="#file-detail-drawer"
+                        hx-swap="innerHTML">
+                    ↑ Push to GitHub
+                </button>
+                {% endif %}
+            </div>
+            {% if file.commented_code %}
+            <details>
+                <summary style="font-size:9px;color:var(--blue);cursor:pointer;user-select:none;">
+                    View commented version
+                    <span style="color:var(--text-muted);"> · {{ file.commented_status.value }}</span>
+                </summary>
+                <pre style="margin-top:8px;font-size:9px;line-height:1.6;padding:10px 12px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:200px;"><code>{{ file.commented_code[:2000] }}{% if file.commented_code|length > 2000 %}
+… (truncated — push to see full version on GitHub){% endif %}</code></pre>
+            </details>
+            {% endif %}
+        </div>
+
+        <div style="border-top:1px solid var(--border);"></div>
+
+        {# ── STEP 4: CODE IMPROVER ── #}
+        <div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:8px;">
+                ④ Code Improver
+                <span style="font-size:8px;color:var(--text-muted);margin-left:4px;text-transform:none;letter-spacing:0;">review report only — never auto-applies changes</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+                <button class="btn btn-sm"
+                        {% if file.raw_code %}
+                        hx-post="/code-intel/files/{{ file.id }}/improve"
+                        hx-target="#file-detail-drawer"
+                        hx-swap="innerHTML"
+                        hx-indicator="#improve-spinner-{{ file.id }}"
+                        {% else %}disabled title="Pull code first"{% endif %}>
+                    ▶ Generate Review
+                </button>
+                <span id="improve-spinner-{{ file.id }}" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">Analyzing… (Gemini Pro)</span>
+            </div>
+            {% if file.improvement_notes %}
+            <div style="font-size:10px;line-height:1.75;color:var(--text-secondary);background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;padding:10px 12px;max-height:280px;overflow-y:auto;white-space:pre-wrap;">{{ file.improvement_notes }}</div>
+            {% if file.improvement_generated_at %}
+            <div style="font-size:9px;color:var(--text-muted);margin-top:4px;">
+                Generated {{ file.improvement_generated_at.strftime('%b %d, %H:%M') }}
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<script>
+async function markCommentReviewed(fileId) {
+    // PATCH endpoint to mark commented_status as 'reviewed'
+    const fd = new FormData();
+    fd.append('commented_status', 'reviewed');
+    const resp = await fetch(`/code-intel/files/${fileId}/comment-status`, { method: 'PATCH', body: fd });
+    if (resp.ok) {
+        document.getElementById('file-detail-drawer').innerHTML = await resp.text();
+    }
+}
+</script>

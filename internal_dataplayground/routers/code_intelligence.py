@@ -518,3 +518,52 @@ async def push_commented_file(
         {"request": request, "file": code_file,
          "toast": f"Commented {code_file.file_name} pushed to GitHub ✓"},
     )
+
+
+@router.get("/projects/{project_id}/detail", response_class=HTMLResponse)
+async def project_detail(
+    project_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Loads the project detail partial into the right panel."""
+    project = await db.get(CodeProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse(
+        "partials/project_detail.html",
+        {"request": request, "project": project},
+    )
+
+
+@router.patch("/files/{file_id}/comment-status", response_class=HTMLResponse)
+async def update_comment_status(
+    file_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Updates the commented_status field.
+    Called from the UI when user clicks 'Mark Reviewed' on commented code.
+    """
+    form = await request.form()
+    status_str = str(form.get("commented_status", "")).strip()
+
+    try:
+        new_status = CommentedStatus(status_str)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid status: {status_str}")
+
+    code_file = await db.get(CodeFile, file_id)
+    if not code_file:
+        raise HTTPException(status_code=404)
+
+    code_file.commented_status = new_status
+    await db.commit()
+    await db.refresh(code_file)
+
+    return templates.TemplateResponse(
+        "partials/code_file_detail.html",
+        {"request": request, "file": code_file,
+         "toast": "Commented code marked as reviewed. Ready to push to GitHub."},
+    )

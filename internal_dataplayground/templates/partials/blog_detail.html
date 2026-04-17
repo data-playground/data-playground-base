@@ -1,13 +1,13 @@
 {# templates/partials/blog_detail.html
    Loaded into #detail-drawer via HTMX GET /blog/ideas/{id}
-   `idea` = BlogIdea ORM object
+   `idea`  = BlogIdea ORM object
    `toast` = optional success message
    `error` = optional error message
 #}
 <div style="padding:0;" data-toast="{{ toast or '' }}">
 
-    <!-- Header -->
-    <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
+    {# ── HEADER ── #}
+    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
         <div style="flex:1;min-width:0;padding-right:12px;">
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:4px;">
                 {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
@@ -15,17 +15,19 @@
             <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text-primary);line-height:1.3;">
                 {{ idea.title_concept }}
             </div>
-            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;display:flex;align-items:center;gap:6px;">
                 <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:
                     {% if idea.status.value == 'writing_in_progress' %}var(--blue)
                     {% elif idea.status.value in ('waiting_for_review','review_completed') %}var(--yellow)
                     {% elif idea.status.value in ('ready_to_publish','published') %}var(--green)
-                    {% else %}var(--text-muted){% endif %};
-                    margin-right:4px;vertical-align:middle;"></span>
+                    {% else %}var(--text-muted){% endif %};"></span>
                 {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
             </div>
         </div>
-        <button onclick="closeDetail()" style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;flex-shrink:0;">✕ Close</button>
+        <button onclick="closeDetail()"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;flex-shrink:0;">
+            ✕ Close
+        </button>
     </div>
 
     {% if error %}
@@ -34,18 +36,18 @@
 
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:18px;">
 
-        <!-- Blueprint section -->
+        {# ── BLUEPRINT ── #}
         {% if idea.the_narrative or idea.the_build or idea.the_selling_point %}
         <div>
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">Blueprint</div>
             {% if idea.the_narrative %}
-            <div style="margin-bottom:10px;">
+            <div style="margin-bottom:8px;">
                 <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;">Narrative</div>
                 <p style="font-size:11px;line-height:1.7;color:var(--text-secondary);">{{ idea.the_narrative }}</p>
             </div>
             {% endif %}
             {% if idea.the_build %}
-            <div style="margin-bottom:10px;">
+            <div style="margin-bottom:8px;">
                 <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;">The Build</div>
                 <p style="font-size:11px;line-height:1.7;color:var(--text-secondary);">{{ idea.the_build }}</p>
             </div>
@@ -60,24 +62,27 @@
         <div style="border-top:1px solid var(--border);"></div>
         {% endif %}
 
-        <!-- HITL Checkpoint 1: Evidence -->
+        {# ── HITL 1: EVIDENCE ── #}
         <div>
-            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:10px;">① Evidence (Code + Notes)</div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:10px;">
+                ① Evidence
+                <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">code snippets + author notes</span>
+            </div>
             <form id="evidence-form-{{ idea.id }}">
                 <div style="margin-bottom:10px;">
-                    <label style="display:block;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Code / Config Snippets</label>
-                    <textarea name="code_content" rows="5"
+                    <label class="form-label">Code Snippets</label>
+                    <textarea name="code_content" rows="4"
                         style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.6;"
-                        placeholder="Paste relevant code blocks here…">{{ idea.code_content or '' }}</textarea>
+                        placeholder="Paste key code blocks here…">{{ idea.code_content or '' }}</textarea>
                 </div>
                 <div style="margin-bottom:10px;">
-                    <label style="display:block;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Author Notes (what was hard, decisions made, lessons)</label>
-                    <textarea name="author_notes" rows="4"
+                    <label class="form-label">Author Notes</label>
+                    <textarea name="author_notes" rows="3"
                         style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.6;"
-                        placeholder="e.g. The hardest part was getting async Alembic to work with MariaDB…">{{ idea.author_notes or '' }}</textarea>
+                        placeholder="What was hard, what decisions you made, key results…">{{ idea.author_notes or '' }}</textarea>
                 </div>
                 <button type="button" onclick="saveEvidence({{ idea.id }})"
-                    style="padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:transparent;color:var(--yellow);border:1px solid var(--yellow);border-radius:4px;cursor:pointer;transition:all .2s;">
+                    style="padding:5px 13px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:transparent;color:var(--yellow);border:1px solid var(--yellow);border-radius:4px;cursor:pointer;">
                     Save Evidence
                 </button>
             </form>
@@ -85,92 +90,127 @@
 
         <div style="border-top:1px solid var(--border);"></div>
 
-        <!-- Trigger Creator -->
+        {# ── TRIGGER 1: GHOSTWRITER ── #}
         <div>
-            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">② Trigger Creator Pipeline</div>
-            <p style="font-size:10px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
-                Calls the Airflow Creator DAG with this idea's ID.
-                The multi-agent relay will generate a full draft.
-            </p>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">
+                ② Ghostwriter
+                <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">writes draft_v1 · Llama 3.3 70B via Groq</span>
+            </div>
             {% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
             <button
                 hx-patch="/blog/ideas/{{ idea.id }}/trigger"
                 hx-target="#detail-drawer"
                 hx-swap="innerHTML"
-                style="padding:7px 16px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--blue);color:#fff;border:none;border-radius:4px;cursor:pointer;opacity:.9;transition:opacity .2s;">
-                ▶ Trigger Airflow Creator
+                style="padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--blue);color:#fff;border:none;border-radius:4px;cursor:pointer;">
+                ▶ Trigger Ghostwriter
             </button>
             {% elif idea.status.value == 'writing_in_progress' %}
             <div style="font-size:11px;color:var(--blue);">⚙ Writing in progress… (Airflow run: {{ idea.airflow_run_id or '—' }})</div>
             {% else %}
-            <div style="font-size:11px;color:var(--text-muted);">Pipeline already completed this stage.</div>
-            {% endif %}
-        </div>
-
-        <div style="border-top:1px solid var(--border);"></div>
-
-        <!-- HITL Checkpoint 2: Review draft with markdown preview -->
-        <div>
-            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:10px;">③ Review Draft</div>
-            {% if idea.draft_v1 %}
-            <!-- Markdown split editor -->
-            <div style="margin-bottom:10px;">
-                <div style="display:flex;gap:6px;margin-bottom:6px;">
-                    <button onclick="setEditorTab('edit')" id="tab-edit"
-                        style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:3px;cursor:pointer;">Edit</button>
-                    <button onclick="setEditorTab('preview')" id="tab-preview"
-                        style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">Preview</button>
-                    <button onclick="setEditorTab('split')" id="tab-split"
-                        style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">Split</button>
-                </div>
-                <div id="editor-wrap" style="display:grid;grid-template-columns:1fr;gap:8px;">
-                    <textarea id="draft-editor" rows="12"
-                        style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.7;"
-                        oninput="updatePreview()">{{ idea.draft_v1 }}</textarea>
-                    <div id="draft-preview"
-                        style="display:none;font-size:11px;line-height:1.8;color:var(--text-secondary);border:1px solid var(--border);border-radius:5px;padding:10px 14px;background:var(--bg-hover);overflow-y:auto;max-height:320px;">
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-bottom:10px;">
-                <label style="display:block;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Your Review Notes / Requested Changes</label>
-                <textarea id="review-notes-{{ idea.id }}" name="user_review_notes" rows="3"
-                    style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.6;"
-                    placeholder="e.g. Make the intro punchier. Add a section on the Alembic migration issues…">{{ idea.user_review_notes or '' }}</textarea>
-            </div>
-
-            {% if idea.status.value == 'waiting_for_review' %}
-            <button onclick="saveReview({{ idea.id }})"
-                style="padding:7px 16px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--green);color:#fff;border:none;border-radius:4px;cursor:pointer;">
-                ✓ Mark Review Complete
+            <div style="font-size:10px;color:var(--text-muted);">Ghostwriter already completed. Re-trigger to regenerate draft_v1.</div>
+            <button hx-patch="/blog/ideas/{{ idea.id }}/trigger" hx-target="#detail-drawer" hx-swap="innerHTML"
+                style="margin-top:6px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">
+                ⟳ Regenerate draft_v1
             </button>
             {% endif %}
+        </div>
+
+        <div style="border-top:1px solid var(--border);"></div>
+
+        {# ── HITL 2: REVIEW DRAFT V1 ── #}
+        <div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:10px;">
+                ③ Review Draft
+                <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">read draft_v1, add feedback for Refiner</span>
+            </div>
+
+            {% if idea.draft_v1 %}
+            {# Tab switcher for edit / preview / split #}
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+                <button onclick="setEditorTab('edit')" id="tab-edit"
+                    style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:3px;cursor:pointer;">Edit</button>
+                <button onclick="setEditorTab('preview')" id="tab-preview"
+                    style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">Preview</button>
+                <button onclick="setEditorTab('split')" id="tab-split"
+                    style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">Split</button>
+            </div>
+
+            <div id="editor-wrap" style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:10px;">
+                <textarea id="draft-editor" rows="10"
+                    style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.7;"
+                    oninput="updatePreview()">{{ idea.draft_v1 }}</textarea>
+                <div id="draft-preview"
+                    style="display:none;font-size:11px;line-height:1.8;color:var(--text-secondary);border:1px solid var(--border);border-radius:5px;padding:10px 14px;background:var(--bg-hover);overflow-y:auto;max-height:300px;">
+                </div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <label class="form-label">Your Review Notes for the Refiner</label>
+                <textarea id="review-notes-{{ idea.id }}" rows="3"
+                    style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.6;"
+                    placeholder="e.g. Make the intro punchier. Add a section on the Alembic migration issues. Remove the third paragraph in the intro.">{{ idea.user_review_notes or '' }}</textarea>
+            </div>
+
+            <button onclick="saveReview({{ idea.id }})"
+                style="padding:5px 13px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:transparent;color:var(--green);border:1px solid var(--green);border-radius:4px;cursor:pointer;">
+                ✓ Save Review Notes
+            </button>
 
             {% else %}
-            <div style="font-size:11px;color:var(--text-muted);padding:12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);">
-                Draft not yet generated. Trigger the Creator pipeline above.
+            <div style="font-size:11px;color:var(--text-muted);padding:10px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);">
+                draft_v1 not yet generated. Trigger the Ghostwriter above.
             </div>
             {% endif %}
         </div>
 
-        <!-- Final article + SEO (if ready) -->
-        {% if idea.final_article %}
         <div style="border-top:1px solid var(--border);"></div>
+
+        {# ── TRIGGER 2: FINALIZE (Refiner + Editor) ── #}
         <div>
-            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px;">④ Final Article</div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;">
+                ④ Finalize
+                <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">Refiner → draft_v2 · Editor → final article + SEO</span>
+            </div>
+            {% if idea.draft_v1 %}
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/finalize"
+                hx-target="#detail-drawer"
+                hx-swap="innerHTML"
+                style="padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">
+                ▶ Run Refiner + Editor
+            </button>
+            <div style="font-size:9px;color:var(--text-muted);margin-top:6px;">
+                Triggers life_os_blog_finalizer DAG. Saves draft_v2 then final_article to DB.
+            </div>
+            {% else %}
+            <div style="font-size:10px;color:var(--text-muted);">Complete the Ghostwriter step first.</div>
+            {% endif %}
+        </div>
+
+        {# ── FINAL ARTICLE (if available) ── #}
+        {% if idea.final_article %}
+        <div style="border-top:1px solid var(--border);padding-top:14px;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px;">⑤ Final Article</div>
             {% if idea.seo_title %}
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">
-                <strong style="color:var(--text-primary);">SEO Title:</strong> {{ idea.seo_title }}
+            <div style="font-size:11px;margin-bottom:4px;">
+                <strong style="color:var(--text-primary);">SEO Title:</strong>
+                <span style="color:var(--text-secondary);">{{ idea.seo_title }}</span>
+            </div>
+            {% endif %}
+            {% if idea.seo_description %}
+            <div style="font-size:11px;margin-bottom:4px;">
+                <strong style="color:var(--text-primary);">Meta:</strong>
+                <span style="color:var(--text-secondary);">{{ idea.seo_description }}</span>
             </div>
             {% endif %}
             {% if idea.seo_tags %}
-            <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">
-                <strong style="color:var(--text-primary);">Tags:</strong> {{ idea.seo_tags }}
+            <div style="font-size:11px;margin-bottom:12px;">
+                <strong style="color:var(--text-primary);">Tags:</strong>
+                <span style="color:var(--text-secondary);">{{ idea.seo_tags }}</span>
             </div>
             {% endif %}
             <a href="/blog/ideas/{{ idea.id }}/article"
-               style="display:inline-block;padding:7px 16px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--text-primary);color:var(--bg-card);border-radius:4px;text-decoration:none;">
+               style="display:inline-block;padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--text-primary);color:var(--bg-card);border-radius:4px;text-decoration:none;">
                 ↗ View Full Article
             </a>
         </div>
@@ -184,59 +224,59 @@
 async function saveEvidence(id) {
     const form = document.getElementById(`evidence-form-${id}`);
     const fd = new FormData(form);
-    const resp = await fetch(`/blog/ideas/${id}/evidence`, {method:'PATCH', body:fd});
-    if(resp.ok){
+    const resp = await fetch(`/blog/ideas/${id}/evidence`, { method: 'PATCH', body: fd });
+    if (resp.ok) {
         document.getElementById('detail-drawer').innerHTML = await resp.text();
         showToast('Evidence saved.');
     }
 }
 
-// Review save
+// Review notes save
 async function saveReview(id) {
     const notes = document.getElementById(`review-notes-${id}`).value;
     const fd = new FormData();
     fd.append('user_review_notes', notes);
-    const resp = await fetch(`/blog/ideas/${id}/review`, {method:'PATCH', body:fd});
-    if(resp.ok){
+    const resp = await fetch(`/blog/ideas/${id}/review`, { method: 'PATCH', body: fd });
+    if (resp.ok) {
         document.getElementById('detail-drawer').innerHTML = await resp.text();
-        showToast('Review submitted. Refiner agents queued.');
+        showToast('Review notes saved. Click Finalize when ready.');
     }
 }
 
-// Markdown editor tabs
+// Markdown split editor tabs
 function setEditorTab(mode) {
-    const editor  = document.getElementById('draft-editor');
+    const editor = document.getElementById('draft-editor');
     const preview = document.getElementById('draft-preview');
-    const wrap    = document.getElementById('editor-wrap');
-    document.querySelectorAll('#tab-edit,#tab-preview,#tab-split').forEach(b=>{
-        b.style.background='transparent';b.style.color='var(--text-muted)';b.style.borderColor='var(--border)';
+    const wrap = document.getElementById('editor-wrap');
+    ['tab-edit','tab-preview','tab-split'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) { b.style.background = 'transparent'; b.style.color = 'var(--text-muted)'; b.style.borderColor = 'var(--border)'; }
     });
-    const activeBtn = document.getElementById(`tab-${mode}`);
-    if(activeBtn){activeBtn.style.background='var(--accent)';activeBtn.style.color='#fff';activeBtn.style.borderColor='var(--accent)';}
+    const active = document.getElementById(`tab-${mode}`);
+    if (active) { active.style.background = 'var(--accent)'; active.style.color = '#fff'; active.style.borderColor = 'var(--accent)'; }
 
-    if(mode==='edit'){
-        wrap.style.gridTemplateColumns='1fr';
-        editor.style.display='block';preview.style.display='none';
-    } else if(mode==='preview'){
-        wrap.style.gridTemplateColumns='1fr';
-        editor.style.display='none';preview.style.display='block';
+    if (mode === 'edit') {
+        wrap.style.gridTemplateColumns = '1fr';
+        editor.style.display = 'block'; preview.style.display = 'none';
+    } else if (mode === 'preview') {
+        wrap.style.gridTemplateColumns = '1fr';
+        editor.style.display = 'none'; preview.style.display = 'block';
         updatePreview();
     } else {
-        wrap.style.gridTemplateColumns='1fr 1fr';
-        editor.style.display='block';preview.style.display='block';
+        wrap.style.gridTemplateColumns = '1fr 1fr';
+        editor.style.display = 'block'; preview.style.display = 'block';
         updatePreview();
     }
 }
 
-function updatePreview(){
+function updatePreview() {
     const src = document.getElementById('draft-editor');
     const pre = document.getElementById('draft-preview');
-    if(src && pre && typeof marked !== 'undefined'){
+    if (src && pre && typeof marked !== 'undefined') {
         pre.innerHTML = marked.parse(src.value);
     }
 }
 
-// Init preview on load
 document.addEventListener('DOMContentLoaded', updatePreview);
 updatePreview();
 </script>
