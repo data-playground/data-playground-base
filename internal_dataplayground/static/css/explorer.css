@@ -1,3 +1,5 @@
+:root { --transition:0.25s ease; --sidebar-width:220px; --explorer-sidebar:280px; }
+
 /* ── TOPBAR ── */
 .topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 20px; display:flex; align-items:center; justify-content:space-between; }
 .page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
