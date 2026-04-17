@@ -14,8 +14,8 @@
 .status-pill.running { border-color:var(--yellow); color:var(--yellow); background:rgba(232,160,32,0.08); }
 
 /* ── MAIN CONTENT ADJUSTMENT ── */
-.main-content { padding: 0; }
-;
+.main-content { padding:0px; }
+
 /* ── EXPLORER WORKSPACE ── */
 .workspace { grid-column:2; grid-row:2; display:grid; grid-template-columns:var(--explorer-sidebar) 1fr; height:100%; overflow:hidden; }
 
