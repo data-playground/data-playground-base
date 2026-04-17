@@ -406,3 +406,238 @@ class BlogIdeaResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ── ENUMS ─────────────────────────────────────────────────────────────────────
+
+class ReadmeStatus(enum.Enum):
+    NONE      = "none"
+    DRAFT     = "draft"
+    REVIEWED  = "reviewed"
+    APPROVED  = "approved"
+    PUSHED    = "pushed"
+    STALE     = "stale"      # code changed after README was generated
+
+
+class CommentedStatus(enum.Enum):
+    NONE      = "none"
+    GENERATED = "generated"
+    REVIEWED  = "reviewed"
+    PUSHED    = "pushed"
+
+
+class ImprovementStatus(enum.Enum):
+    NONE      = "none"
+    GENERATED = "generated"
+    REVIEWED  = "reviewed"
+    APPLIED   = "applied"
+    PUSHED    = "pushed"
+
+
+# ── CODE INTELLIGENCE ─────────────────────────────────────────────────────────
+
+class CodeProject(Base):
+    """
+    One row per logical project scope.
+    A project can be a whole repo, a folder, or a nested subfolder.
+    Defined by github_repo + github_base_path together.
+
+    Examples:
+      github_repo="pedro/data-playground-base", github_base_path=""
+        → whole repo
+
+      github_repo="pedro/data-playground-base", github_base_path="internal_dataplayground"
+        → FastAPI app subfolder only
+
+      github_repo="pedro/data-playground-base", github_base_path="internal_dataplayground/routers"
+        → just the routers subfolder
+    """
+    __tablename__ = "code_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # GitHub coordinates
+    github_repo: Mapped[str] = mapped_column(String(255), nullable=False)
+    github_base_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Empty string or None = whole repo root
+
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # README — generated from all file narrations, pushed to GitHub
+    readme_md: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    readme_status: Mapped[ReadmeStatus] = mapped_column(
+        Enum(ReadmeStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ReadmeStatus.NONE,
+    )
+    readme_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    readme_generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    readme_pushed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow, nullable=False
+    )
+
+    # Relationships
+    files: Mapped[list["CodeFile"]] = relationship(
+        "CodeFile", back_populates="project",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    blog_ideas: Mapped[list["BlogIdea"]] = relationship(
+        "BlogIdea", back_populates="code_project",
+        foreign_keys="BlogIdea.code_project_id",
+    )
+
+    @property
+    def file_count(self) -> int:
+        return len(self.files)
+
+    @property
+    def has_narrations(self) -> bool:
+        return all(f.narration for f in self.files)
+
+    @property
+    def readme_is_stale(self) -> bool:
+        """True if any file was pulled after the README was generated."""
+        if not self.readme_generated_at:
+            return False
+        return any(
+            f.code_pulled_at and f.code_pulled_at > self.readme_generated_at
+            for f in self.files
+        )
+
+
+class CodeFile(Base):
+    """
+    One row per individual script tracked within a CodeProject.
+    Narration is the key output — consumed by Ghostwriter, Researcher,
+    Idea Expander agents.
+    Commented code and improvement notes are reviewed before pushing.
+    """
+    __tablename__ = "code_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("code_projects.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # e.g. "finance.py"
+    github_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    # e.g. "internal_dataplayground/routers/finance.py"
+    github_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # SHA of last pull — used for staleness detection and push
+
+    # Raw code from GitHub
+    raw_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    code_pulled_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Code Narrator output
+    narration: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    narration_generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Code Commenter output
+    commented_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    commented_generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    commented_status: Mapped[CommentedStatus] = mapped_column(
+        Enum(CommentedStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=CommentedStatus.NONE,
+    )
+
+    # Code Improver output
+    improvement_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    improvement_generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    improvement_status: Mapped[ImprovementStatus] = mapped_column(
+        Enum(ImprovementStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ImprovementStatus.NONE,
+    )
+
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow, nullable=False
+    )
+
+    # Relationships
+    project: Mapped["CodeProject"] = relationship("CodeProject", back_populates="files")
+    blog_ideas: Mapped[list["BlogIdea"]] = relationship(
+        "BlogIdea", back_populates="code_file",
+        foreign_keys="BlogIdea.code_file_id",
+    )
+
+    @property
+    def narration_is_stale(self) -> bool:
+        """True if code was pulled after narration was generated."""
+        if not self.narration_generated_at or not self.code_pulled_at:
+            return False
+        return self.code_pulled_at > self.narration_generated_at
+
+
+# ── UPDATED BLOG IDEA (additions to existing BlogIdea model) ──────────────────
+# Add these columns/relationships to your existing BlogIdea class in models.py:
+#
+#   draft_v2: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+#
+#   code_file_id: Mapped[Optional[int]] = mapped_column(
+#       Integer, ForeignKey("code_files.id", ondelete="SET NULL"), nullable=True
+#   )
+#   code_project_id: Mapped[Optional[int]] = mapped_column(
+#       Integer, ForeignKey("code_projects.id", ondelete="SET NULL"), nullable=True
+#   )
+#   code_file: Mapped[Optional["CodeFile"]] = relationship(
+#       "CodeFile", back_populates="blog_ideas",
+#       foreign_keys=[code_file_id],
+#   )
+#   code_project: Mapped[Optional["CodeProject"]] = relationship(
+#       "CodeProject", back_populates="blog_ideas",
+#       foreign_keys=[code_project_id],
+#   )
+
+
+# ── PYDANTIC SCHEMAS ──────────────────────────────────────────────────────────
+
+from pydantic import BaseModel
+
+class CodeProjectCreate(BaseModel):
+    project_name: str
+    github_repo: str
+    github_base_path: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CodeProjectResponse(BaseModel):
+    id: int
+    project_name: str
+    github_repo: str
+    github_base_path: Optional[str]
+    description: Optional[str]
+    readme_status: ReadmeStatus
+    file_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class CodeFileResponse(BaseModel):
+    id: int
+    project_id: int
+    file_name: str
+    github_path: str
+    narration: Optional[str]
+    commented_status: CommentedStatus
+    improvement_status: ImprovementStatus
+    narration_is_stale: bool
+
+    class Config:
+        from_attributes = True
+
+

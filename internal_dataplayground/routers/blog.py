@@ -1,31 +1,32 @@
 # routers/blog.py
 """
-Blog Ideation Module
+Blog Ideation Module — Full Pipeline Router
 
 Endpoints:
-  GET  /blog                        → Kanban board
-  POST /blog/ideas                  → BYOI — submit raw idea, Gemini expands to blueprint
-  GET  /blog/ideas/{id}             → Detail drawer partial (HTMX)
-  PATCH /blog/ideas/{id}/evidence   → Save code + author notes → advances to waiting_for_writing_trigger
-  PATCH /blog/ideas/{id}/trigger    → Call Airflow REST API → starts Creator DAG
-  PATCH /blog/ideas/{id}/review     → Save review notes → advances to review_completed
-  PATCH /blog/ideas/{id}/status     → Generic status update
-  POST /blog/scout                  → Call Airflow REST API → triggers Scout DAG
-  GET  /blog/ideas/{id}/article     → Full article view
+  GET  /blog                           → Kanban board (backlog / writing / done)
+  POST /blog/ideas                     → BYOI: expand raw idea → blueprint → DB
+  GET  /blog/ideas/{id}                → Detail drawer partial (HTMX)
+  PATCH /blog/ideas/{id}/evidence      → Save code + author notes (HITL 1)
+  PATCH /blog/ideas/{id}/trigger       → Trigger Ghostwriter DAG (life_os_blog_creator)
+  PATCH /blog/ideas/{id}/review        → Save review notes (HITL 2)
+  PATCH /blog/ideas/{id}/finalize      → Trigger Refiner+Editor DAG (life_os_blog_finalizer)
+  PATCH /blog/ideas/{id}/status        → Generic status update
+  POST  /blog/scout                    → Trigger Scout DAG (life_os_blog_scout)
+  GET   /blog/ideas/{id}/article       → Full article view
 """
 
 import json
 import logging
 import httpx
-from typing import Optional
+import base64
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-from google import genai
 
 from database import get_db, get_key
 from models import BlogIdea, BlogIdeaStatus, BlogProjectType
@@ -36,21 +37,21 @@ router = APIRouter(prefix="/blog", tags=["Blog"])
 templates = Jinja2Templates(directory="templates")
 
 # ── Airflow config ─────────────────────────────────────────────────────────────
-# Airflow is running on the host machine, reachable from Docker via host.docker.internal
-AIRFLOW_BASE    = "http://airflow-webserver:8080/api/v1"
-AIRFLOW_USER    = "admin"
-AIRFLOW_PASS    = "admin"          # swap to get_key("AirflowPassword") if needed
-SCOUT_DAG_ID    = "life_os_blog_scout"
-CREATOR_DAG_ID  = "life_os_blog_creator"
+AIRFLOW_BASE   = "http://airflow-webserver:8080/api/v1"
+AIRFLOW_USER   = "admin"
+SCOUT_DAG      = "life_os_blog_scout"
+CREATOR_DAG    = "life_os_blog_creator"
+FINALIZER_DAG  = "life_os_blog_finalizer"
 
 
 def _airflow_headers() -> dict:
-    import base64
-    token = base64.b64encode(f"{AIRFLOW_USER}:{AIRFLOW_PASS}".encode()).decode()
+    # Password pulled from GCP Secret Manager — same as DB password in your setup
+    password = get_key("Airflow-Admin-Password")  # or reuse DB_PASSWORD if same
+    token = base64.b64encode(f"{AIRFLOW_USER}:{password}".encode()).decode()
     return {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
 
 
-async def _trigger_airflow_dag(dag_id: str, conf: dict = {}) -> str:
+async def _trigger_dag(dag_id: str, conf: dict = {}) -> str:
     """Triggers an Airflow DAG and returns the run_id."""
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
@@ -59,57 +60,14 @@ async def _trigger_airflow_dag(dag_id: str, conf: dict = {}) -> str:
             json={"conf": conf},
         )
         resp.raise_for_status()
-        return resp.json().get("dag_run_id", "")
+        return resp.json().get("dag_run_id", "unknown")
 
 
-# ── Gemini blueprint expander ──────────────────────────────────────────────────
+# ── Gemini blueprint expander (for BYOI) ───────────────────────────────────────
 
 def _expand_idea_to_blueprint(raw_input: str) -> dict:
-    """
-    Takes raw user notes/code and returns a structured blueprint dict:
-    {title_concept, project_type, the_build, the_narrative, the_selling_point}
-    """
-    client = genai.Client(api_key=get_key("Gemini-API"))
-
-    prompt = f"""You are a technical content strategist for a data engineer's portfolio blog.
-A user has submitted raw notes or code. Expand it into a structured article blueprint.
-
-Raw input:
-\"\"\"
-{raw_input}
-\"\"\"
-
-Respond ONLY with a JSON object with exactly these keys:
-{{
-  "title_concept": "A compelling, SEO-friendly article title (max 80 chars)",
-  "project_type": "existing_asset" or "new_build",
-  "the_build": "2-3 sentences describing what was technically built and the stack used",
-  "the_narrative": "2-3 sentences on the story arc — what problem this solves and why it matters",
-  "the_selling_point": "1 sentence on the unique insight or skill this demonstrates to employers/readers"
-}}
-
-No markdown, no explanation. Raw JSON only."""
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-lite",
-            contents=prompt,
-        )
-        raw = response.text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        return json.loads(raw.strip())
-    except Exception as exc:
-        log.warning("Blueprint expansion failed: %s", exc)
-        return {
-            "title_concept": "Untitled — edit me",
-            "project_type": "new_build",
-            "the_build": "",
-            "the_narrative": raw_input[:500],
-            "the_selling_point": "",
-        }
+    from agents.blog_agents import agent_idea_expander
+    return agent_idea_expander(raw_input)
 
 
 # ── Kanban board ───────────────────────────────────────────────────────────────
@@ -134,7 +92,7 @@ async def blog_kanban(request: Request, db: AsyncSession = Depends(get_db)):
     })
 
 
-# ── BYOI — create new idea ─────────────────────────────────────────────────────
+# ── BYOI — create new idea from raw input ──────────────────────────────────────
 
 @router.post("/ideas", response_class=HTMLResponse)
 async def create_idea(
@@ -142,7 +100,22 @@ async def create_idea(
     raw_idea_input: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    blueprint = _expand_idea_to_blueprint(raw_idea_input)
+    """
+    Receives raw user notes from the BYOI modal.
+    Calls Idea Expander agent, stores structured blueprint in blog_ideas.
+    Returns a new card partial for HTMX to prepend into the backlog column.
+    """
+    try:
+        blueprint = _expand_idea_to_blueprint(raw_idea_input)
+    except Exception as exc:
+        log.warning("Idea expansion failed: %s", exc)
+        blueprint = {
+            "title_concept": "Untitled — edit me",
+            "project_type": "new_build",
+            "the_build": "",
+            "the_narrative": raw_idea_input[:500],
+            "the_selling_point": "",
+        }
 
     try:
         ptype = BlogProjectType(blueprint.get("project_type", "new_build"))
@@ -150,19 +123,18 @@ async def create_idea(
         ptype = BlogProjectType.NEW_BUILD
 
     idea = BlogIdea(
-        title_concept    = blueprint.get("title_concept", "Untitled"),
-        project_type     = ptype,
-        the_build        = blueprint.get("the_build"),
-        the_narrative    = blueprint.get("the_narrative"),
-        the_selling_point= blueprint.get("the_selling_point"),
-        raw_idea_input   = raw_idea_input,
-        status           = BlogIdeaStatus.IDEA_GENERATED,
+        title_concept=blueprint.get("title_concept", "Untitled"),
+        project_type=ptype,
+        the_build=blueprint.get("the_build"),
+        the_narrative=blueprint.get("the_narrative"),
+        the_selling_point=blueprint.get("the_selling_point"),
+        raw_idea_input=raw_idea_input,
+        status=BlogIdeaStatus.IDEA_GENERATED,
     )
     db.add(idea)
     await db.commit()
     await db.refresh(idea)
 
-    # Return a new card partial to prepend into the backlog column
     return templates.TemplateResponse(
         "partials/blog_card.html",
         {"request": request, "idea": idea},
@@ -186,7 +158,7 @@ async def idea_detail(
     )
 
 
-# ── HITL Checkpoint 1 — save evidence ─────────────────────────────────────────
+# ── HITL 1 — Save evidence (code snippets + author notes) ─────────────────────
 
 @router.patch("/ideas/{idea_id}/evidence", response_class=HTMLResponse)
 async def save_evidence(
@@ -199,21 +171,21 @@ async def save_evidence(
     if not idea:
         raise HTTPException(status_code=404)
 
-    idea.code_content = str(form.get("code_content", "")).strip() or None
-    idea.author_notes = str(form.get("author_notes", "")).strip() or None
-    idea.status       = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
-    idea.updated_at   = datetime.utcnow()
+    idea.code_content  = str(form.get("code_content", "")).strip() or None
+    idea.author_notes  = str(form.get("author_notes", "")).strip() or None
+    idea.status        = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
+    idea.updated_at    = datetime.utcnow()
     await db.commit()
     await db.refresh(idea)
 
     return templates.TemplateResponse(
         "partials/blog_detail.html",
         {"request": request, "idea": idea,
-         "toast": "Evidence saved. Ready to trigger the Creator pipeline."},
+         "toast": "Evidence saved. Ready to trigger the Ghostwriter."},
     )
 
 
-# ── Trigger Creator DAG ────────────────────────────────────────────────────────
+# ── Trigger 1 — Ghostwriter DAG ───────────────────────────────────────────────
 
 @router.patch("/ideas/{idea_id}/trigger", response_class=HTMLResponse)
 async def trigger_creator(
@@ -229,22 +201,22 @@ async def trigger_creator(
         BlogIdeaStatus.IDEA_GENERATED,
         BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER,
     ):
-        raise HTTPException(status_code=409, detail="Idea is already in the pipeline.")
-
-    try:
-        run_id = await _trigger_airflow_dag(
-            CREATOR_DAG_ID,
-            conf={"idea_id": idea_id},
-        )
-        idea.airflow_run_id = run_id
-        idea.status         = BlogIdeaStatus.WRITING_IN_PROGRESS
-    except Exception as exc:
-        log.warning("Airflow trigger failed: %s", exc)
-        # Soft fail — mark status but surface the error to the user
         return templates.TemplateResponse(
             "partials/blog_detail.html",
             {"request": request, "idea": idea,
-             "error": f"Airflow unreachable: {exc}. Is Airflow running on port 8080?"},
+             "error": f"Cannot trigger from status: {idea.status.label}"},
+        )
+
+    try:
+        run_id = await _trigger_dag(CREATOR_DAG, conf={"idea_id": idea_id})
+        idea.airflow_run_id = run_id
+        idea.status = BlogIdeaStatus.WRITING_IN_PROGRESS
+    except Exception as exc:
+        log.warning("Airflow trigger failed: %s", exc)
+        return templates.TemplateResponse(
+            "partials/blog_detail.html",
+            {"request": request, "idea": idea,
+             "error": f"Airflow unreachable: {exc}. Is the airflow-webserver container running?"},
         )
 
     idea.updated_at = datetime.utcnow()
@@ -254,11 +226,11 @@ async def trigger_creator(
     return templates.TemplateResponse(
         "partials/blog_detail.html",
         {"request": request, "idea": idea,
-         "toast": "Creator DAG triggered. Check Airflow for progress."},
+         "toast": f"Ghostwriter DAG triggered (run: {run_id}). Check Airflow for progress."},
     )
 
 
-# ── HITL Checkpoint 2 — review draft ──────────────────────────────────────────
+# ── HITL 2 — Save review notes after reading draft_v1 ─────────────────────────
 
 @router.patch("/ideas/{idea_id}/review", response_class=HTMLResponse)
 async def save_review(
@@ -272,7 +244,7 @@ async def save_review(
         raise HTTPException(status_code=404)
 
     idea.user_review_notes = str(form.get("user_review_notes", "")).strip() or None
-    idea.status            = BlogIdeaStatus.REVIEW_COMPLETED
+    idea.status            = BlogIdeaStatus.WAITING_FOR_REVIEW
     idea.updated_at        = datetime.utcnow()
     await db.commit()
     await db.refresh(idea)
@@ -280,7 +252,49 @@ async def save_review(
     return templates.TemplateResponse(
         "partials/blog_detail.html",
         {"request": request, "idea": idea,
-         "toast": "Review saved. The Refiner + SEO agents will now finalize the article."},
+         "toast": "Review notes saved. Click Finalize when ready to run Refiner + Editor."},
+    )
+
+
+# ── Trigger 2 — Finalizer DAG (Refiner + Editor) ──────────────────────────────
+
+@router.patch("/ideas/{idea_id}/finalize", response_class=HTMLResponse)
+async def trigger_finalizer(
+    idea_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    idea = await db.get(BlogIdea, idea_id)
+    if not idea:
+        raise HTTPException(status_code=404)
+
+    if not idea.draft_v1:
+        return templates.TemplateResponse(
+            "partials/blog_detail.html",
+            {"request": request, "idea": idea,
+             "error": "No draft found. Run the Ghostwriter first."},
+        )
+
+    try:
+        run_id = await _trigger_dag(FINALIZER_DAG, conf={"idea_id": idea_id})
+        idea.airflow_run_id = run_id
+        idea.status = BlogIdeaStatus.REVIEW_COMPLETED
+    except Exception as exc:
+        log.warning("Finalizer DAG trigger failed: %s", exc)
+        return templates.TemplateResponse(
+            "partials/blog_detail.html",
+            {"request": request, "idea": idea,
+             "error": f"Airflow unreachable: {exc}"},
+        )
+
+    idea.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(idea)
+
+    return templates.TemplateResponse(
+        "partials/blog_detail.html",
+        {"request": request, "idea": idea,
+         "toast": f"Refiner + Editor triggered (run: {run_id}). Will be READY_TO_PUBLISH shortly."},
     )
 
 
@@ -293,11 +307,10 @@ async def update_status(
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
-    status_str = str(form.get("status", "")).strip()
     try:
-        new_status = BlogIdeaStatus(status_str)
+        new_status = BlogIdeaStatus(str(form.get("status", "")).strip())
     except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid status: {status_str}")
+        raise HTTPException(status_code=422, detail="Invalid status value")
 
     idea = await db.get(BlogIdea, idea_id)
     if not idea:
@@ -314,14 +327,14 @@ async def update_status(
     )
 
 
-# ── Trigger Scout DAG ──────────────────────────────────────────────────────────
+# ── Scout DAG trigger ──────────────────────────────────────────────────────────
 
 @router.post("/scout", response_class=HTMLResponse)
 async def trigger_scout(request: Request):
     try:
-        run_id = await _trigger_airflow_dag(SCOUT_DAG_ID)
+        run_id = await _trigger_dag(SCOUT_DAG)
         return HTMLResponse(
-            f'<p class="scout-ok">✓ Scout DAG triggered (run: {run_id}). '
+            f'<p class="scout-ok">✓ Scout triggered (run: {run_id}). '
             f'New ideas will appear in ~2 minutes.</p>'
         )
     except Exception as exc:

@@ -1,7 +1,8 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from database import init_db
-from routers import jobs, ats, staging, finance, blog, explorer
+from routers import jobs, ats, staging, finance, blog, explorer, code_intelligence
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -12,6 +13,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Serve static files (CSS, JS) — required for Option C base.html
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Plug in the Jobs module
 app.include_router(jobs.router)
 app.include_router(ats.router)
@@ -19,6 +23,7 @@ app.include_router(staging.router)
 app.include_router(finance.router)
 app.include_router(blog.router)
 app.include_router(explorer.router)
+app.include_router(code_intelligence.router)
 
 @app.get("/")
 async def root():
