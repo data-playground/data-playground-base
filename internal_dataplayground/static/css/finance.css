@@ -1,0 +1,68 @@
+:root { --transition:0.25s ease; --sidebar-width:220px; }
+
+/* ── TOPBAR ── */
+.topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 24px; display:flex; align-items:center; justify-content:space-between; }
+.page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+.topbar-actions { display:flex; gap:8px; }
+.btn { padding:5px 14px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; border-radius:4px; cursor:pointer; transition:all var(--transition); text-decoration:none; border:1px solid var(--border); color:var(--text-secondary); background:transparent; }
+.btn:hover { border-color:var(--accent); color:var(--accent); }
+.btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.btn-primary:hover { opacity:.85; color:#fff; }
+
+/* ── MAIN ── */
+.main-content { grid-column:2; grid-row:2; padding:20px 24px; overflow-y:auto; background:var(--bg-card); }
+[data-theme="dark"] .main-content { background:var(--bg); }
+
+/* ── MONTH PICKER ── */
+.month-nav { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+.month-nav select { font-family:'DM Mono',monospace; font-size:11px; padding:4px 10px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); border-radius:4px; outline:none; cursor:pointer; }
+.month-nav select:focus { border-color:var(--accent); }
+.month-nav label { font-size:10px; color:var(--text-muted); }
+
+/* ── KPI CARDS ── */
+.kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+.kpi-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; box-shadow:var(--shadow); }
+[data-theme="dark"] .kpi-card { background:var(--bg-card); }
+.kpi-label { font-size:9px; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
+.kpi-value { font-family:'Syne',sans-serif; font-size:24px; font-weight:700; }
+.kpi-income { color:var(--green); }
+.kpi-expense { color:var(--red); }
+.kpi-net-pos { color:var(--green); }
+.kpi-net-neg { color:var(--red); }
+
+/* ── TWO-COL GRID ── */
+.dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+.panel { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; box-shadow:var(--shadow); }
+[data-theme="dark"] .panel { background:var(--bg-card); }
+.panel-title { font-size:10px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); margin-bottom:14px; }
+
+/* ── CATEGORY BREAKDOWN ── */
+.cat-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.cat-name { font-size:11px; color:var(--text-secondary); width:130px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cat-bar-wrap { flex:1; background:var(--bg-hover); border-radius:3px; height:6px; }
+.cat-bar { height:6px; border-radius:3px; background:var(--accent); transition:width .4s ease; }
+.cat-bar.expense { background:var(--red); }
+.cat-bar.income  { background:var(--green); }
+.cat-amount { font-size:10px; color:var(--text-muted); width:80px; text-align:right; flex-shrink:0; }
+
+/* ── RECENT TRANSACTIONS ── */
+.txn-table { width:100%; border-collapse:collapse; font-size:11px; }
+.txn-table th { font-size:9px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); text-align:left; padding:4px 8px 8px; border-bottom:1px solid var(--border); }
+.txn-table td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.txn-table tbody tr:last-child td { border-bottom:none; }
+.txn-table tbody tr:hover { background:var(--bg-hover); }
+.txn-amount-pos { color:var(--green); font-weight:500; }
+.txn-amount-neg { color:var(--red); font-weight:500; }
+
+.cat-badge { display:inline-block; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:500; letter-spacing:.05em; text-transform:uppercase; }
+.cat-housing          { background:rgba(108,99,255,0.12); color:#7c6fff; }
+.cat-food-dining      { background:rgba(255,176,32,0.12); color:#e8a020; }
+.cat-transport        { background:rgba(0,191,255,0.12); color:#00bfff; }
+.cat-subscriptions    { background:rgba(255,140,66,0.12); color:#ff8c42; }
+.cat-health           { background:rgba(0,201,128,0.12); color:#00c980; }
+.cat-entertainment    { background:rgba(240,64,64,0.12); color:#f04040; }
+.cat-savings-transfer { background:rgba(100,200,100,0.12); color:#64c864; }
+.cat-income           { background:rgba(0,229,160,0.12); color:#00e5a0; }
+.cat-other            { background:rgba(136,136,168,0.12); color:#8888a8; }
+
+.empty-note { font-size:12px; color:var(--text-muted); padding:20px 0; text-align:center; }

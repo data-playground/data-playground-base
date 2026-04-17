@@ -1,45 +1,21 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="mixed">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life OS — Job Tracker</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-	{% extends "base.html" %}
-	{% block title %}Job Tracker{% endblock %}
-	{% block page_title %}Job Tracker{% endblock %}
-	{% block extra_css %}<link rel="stylesheet" href="/static/css/jobs.css">{% endblock %}
-	{% block content %}
-	  {# just the page body here #}
-	{% endblock %}
-</head>
-<body>
-<div class="layout" id="layout">
-    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
-
-    <!-- SIDEBAR -->
-    {% include "partials/sidebar.html" %}
-
-    <!-- TOPBAR -->
-    <header class="topbar">
-        <div class="topbar-left">
-            <button class="hamburger" onclick="openMobileSidebar()">☰</button>
-            <span class="page-title">Job Tracker</span>
-            <span class="job-count">{{ jobs|length }} listings</span>
-        </div>
-        <div class="topbar-right">
-            <div class="filter-bar">
-                <button class="filter-pill" onclick="setQuickFilter('all',this)">All</button>
-                <button class="filter-pill active" onclick="setQuickFilter('high',this)">High Fit</button>
-                <button class="filter-pill" onclick="setQuickFilter('remote',this)">Remote</button>
-                <button class="filter-pill" onclick="setQuickFilter('applied',this)">Applied</button>
-                <button class="filter-pill danger" onclick="setQuickFilter('not_applied',this)">Not Applied</button>
-            </div>
-            <button class="filter-pill" id="adv-toggle" onclick="toggleAdvancedFilters(this)">⚙ Filters</button>
-        </div>
-    </header>
+{% extends "base.html" %}
+{% block title %}Life OS — Finance{% endblock %}
+{% block page_title %}Life OS — Finance{% endblock %}
+{% block topbar_meta %}<span class="job-count">{{ jobs|length }} listings</span>{% endblock %}
+{% block topbar_badges %}
+	<div class="filter-bar">
+		<button class="filter-pill" onclick="setQuickFilter('all',this)">All</button>
+		<button class="filter-pill active" onclick="setQuickFilter('high',this)">High Fit</button>
+		<button class="filter-pill" onclick="setQuickFilter('remote',this)">Remote</button>
+		<button class="filter-pill" onclick="setQuickFilter('applied',this)">Applied</button>
+		<button class="filter-pill danger" onclick="setQuickFilter('not_applied',this)">Not Applied</button>
+	</div>
+{% endblock %}
+{% block topbar_actions %}            
+	<button class="filter-pill" id="adv-toggle" onclick="toggleAdvancedFilters(this)">⚙ Filters</button>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/finance.css">{% endblock %}
+{% block content %}
 
     <!-- FILTER PANEL -->
 	<div class="filter-panel" id="filter-panel">
@@ -174,11 +150,9 @@
         </div>
         {% endif %}
     </main>
-</div>
 
 <div id="toast"></div>
 
-{% include "partials/sidebar_js.html" %}
 <script>
     // THEME
 	
@@ -418,5 +392,4 @@
         applyAllFilters();
     });
 </script>
-</body>
-</html>
+{% endblock %}
