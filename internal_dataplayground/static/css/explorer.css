@@ -1,3 +1,19 @@
+/* ── OUTER LAYOUT: nav sidebar + main area ── */
+.layout { display:grid; grid-template-columns:var(--sidebar-width) 1fr; grid-template-rows:56px 1fr; height:100vh; }
+.layout.sidebar-collapsed { grid-template-columns:48px 1fr; }
+
+/* ── TOPBAR ── */
+.topbar { grid-column:2; grid-row:1; background:var(--topbar-bg); border-bottom:1px solid var(--border); padding:0 20px; display:flex; align-items:center; justify-content:space-between; }
+.page-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+.topbar-right { display:flex; align-items:center; gap:10px; }
+.run-btn { display:flex; align-items:center; gap:6px; padding:6px 16px; font-family:'DM Mono',monospace; font-size:11px; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; transition:opacity var(--transition); }
+.run-btn:hover { opacity:.85; }
+.run-btn:disabled { opacity:.4; cursor:not-allowed; }
+.run-btn .shortcut { font-size:9px; opacity:.7; padding:1px 4px; border:1px solid rgba(255,255,255,0.3); border-radius:3px; }
+.status-pill { font-size:10px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); color:var(--text-muted); }
+.status-pill.ok { border-color:var(--green); color:var(--green); background:rgba(0,201,128,0.08); }
+.status-pill.err { border-color:var(--red); color:var(--red); background:rgba(240,64,64,0.08); }
+.status-pill.running { border-color:var(--yellow); color:var(--yellow); background:rgba(232,160,32,0.08); }
 
 /* ── EXPLORER WORKSPACE ── */
 .workspace { grid-column:2; grid-row:2; display:grid; grid-template-columns:var(--explorer-sidebar) 1fr; height:100%; overflow:hidden; }
