@@ -1,43 +1,21 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="mixed">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life OS — Blog Ideas</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-    {% extends "base.html" %}
-	{% block title %}Job Tracker{% endblock %}
-	{% block page_title %}Job Tracker{% endblock %}
-	{% block extra_css %}<link rel="stylesheet" href="/static/css/jobs.css">{% endblock %}
-	{% block content %}
-	  {# just the page body here #}
-	{% endblock %}
-</head>
-<body>
-<div class="layout" id="layout">
-
-    <!-- SIDEBAR -->
-	{% include "partials/sidebar.html" %}
-
-    <!-- TOPBAR -->
-    <header class="topbar">
-        <span class="page-title">Blog Ideas</span>
-        <div class="topbar-actions">
-            <div id="scout-result"></div>
-            <button class="btn"
-                hx-post="/blog/scout"
-                hx-target="#scout-result"
-                hx-swap="innerHTML"
-                hx-indicator="#scout-spinner">
-                ⟳ Run Scout
-            </button>
-            <span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
-            <button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
-        </div>
-    </header>
+{% extends "base.html" %}
+{% block title %}Life OS — Blog Ideas{% endblock %}
+{% block page_title %}Life OS — Blog Ideas{% endblock %}
+{% block topbar_actions %}            
+	<div id="scout-result"></div>
+		<button class="btn"
+			hx-post="/blog/scout"
+			hx-target="#scout-result"
+			hx-swap="innerHTML"
+			hx-indicator="#scout-spinner">
+			⟳ Run Scout
+		</button>
+		<span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
+		<button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
+	</div>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/blog.css">{% endblock %}
+{% block content %}
 
     <!-- KANBAN BOARD -->
     <main class="board">
@@ -135,8 +113,6 @@
 
 <div id="toast"></div>
 
-
-{% include "partials/sidebar_js.html" %}
 <script>
 // ── BYOI Modal ──
 function openByoi(){document.getElementById('byoi-modal').classList.add('open');setTimeout(()=>document.getElementById('byoi-input').focus(),100);}
@@ -204,5 +180,4 @@ document.body.addEventListener('htmx:afterSwap', e=>{
     if(toast){showToast(toast);delete document.getElementById('detail-drawer').dataset.toast;}
 });
 </script>
-</body>
-</html>
+{% endblock %}
