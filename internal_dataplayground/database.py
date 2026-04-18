@@ -4,6 +4,11 @@ from google.cloud import secretmanager
 from fastapi import HTTPException
 import json
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from secrets import get_key  # ← now imported, not defined here
+
+
+# Re-export so existing callers of `from database import get_key` still work
+__all__ = ["get_key", "init_db", "get_db", "Settings", "settings"]
 
 class Settings(BaseSettings):
     app_env: str = "local"
@@ -15,14 +20,6 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
-
-# GCP Secret Manager Logic
-def get_key(SECRET_NAME):
-    client = secretmanager.SecretManagerServiceClient()
-    project_id = "impactful-post-292301"
-    request = {"name": f"projects/{project_id}/secrets/{SECRET_NAME}/versions/latest"}
-    response = client.access_secret_version(request)
-    return response.payload.data.decode("UTF-8")
 
 # Initialization (Variables will be set during FastAPI lifespan)
 engine = None

@@ -12,7 +12,8 @@ USER airflow
 # Only install packages that Airflow does NOT already bundle.
 # Do NOT install sqlalchemy, httpx, requests, or typing-extensions —
 # Airflow ships with its own pinned versions and overriding them breaks things.
-RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir --upgrade \
+    sqlalchemy==2.0.48 \
     pymysql==1.1.0 \
     asyncmy==0.2.11 \
     google-cloud-secret-manager==2.26.0 \
