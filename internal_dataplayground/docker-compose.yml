@@ -40,7 +40,9 @@ services:
       - .:/app
 
   airflow-init:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow        # ← was: image: apache/airflow:2.9.1
     container_name: life_os_airflow_init
     depends_on:
       db:
@@ -66,10 +68,12 @@ services:
           --email data_playground.contact@gmail.com \
           --password "${DB_PASSWORD}" || true
         echo "Airflow init complete."
-    restart: "no"  # Runs once and exits — this is intentional
+    restart: "no"
 
   airflow-webserver:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow        # ← was: image: apache/airflow:2.9.1
     container_name: life_os_airflow_web
     restart: always
     depends_on:
@@ -84,14 +88,13 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      PYTHONPATH: /opt/airflow/dags
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+      PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
-      # Mount GCP key so DAGs can call Secret Manager
       - ./${GCP_KEY_FILE}:/opt/airflow/gcp-key.json
-      # Gives DAGs access to your project's Python helpers (models, db utils)
       - .:/opt/airflow/project
     command: webserver
     healthcheck:
@@ -101,7 +104,9 @@ services:
       retries: 5
 
   airflow-scheduler:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow        # ← was: image: apache/airflow:2.9.1
     container_name: life_os_airflow_scheduler
     restart: always
     depends_on:
@@ -113,13 +118,13 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
       GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-      PYTHONPATH: /opt/airflow/dags
+      PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - ./${GCP_KEY_FILE}:/opt/airflow/gcp-key.json
-      # Gives DAGs access to your project's Python helpers (models, db utils)
       - .:/opt/airflow/project
     command: scheduler
