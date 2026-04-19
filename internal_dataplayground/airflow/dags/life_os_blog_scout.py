@@ -23,8 +23,12 @@ from agents.blog_agents import agent_researcher
 log = logging.getLogger(__name__)
 
 DEFAULT_INTERESTS = (
-    "FastAPI, async Python, MariaDB, Docker, GCP, Apache Airflow, "
-    "data pipelines, multi-agent AI, personal productivity systems"
+    "Sports, Basketball, Soccer (football), (American) Football, Volleyball, Baseball,  "
+    "NBA, NFL, Premier League (English Footbal), MLB, Brasileirao (Brailian Football), Champions League, World Cup (mainly Soccer, but others as well), Libertadores (South American Soccer), Olympics (summer and winter), "
+    "Music (playing and listening), TV shows, Movies, Food, "
+    "Tableau, SQL, AI, Gen AI, Python, Apache Airflow, "
+    "GCP, Gemini, BigQuery, "
+    "data pipelines, data extraction, data analysis
 )
 DEFAULT_PROJECTS = (
     "Life OS (self-hosted FastAPI + MariaDB + Docker personal command center), "
