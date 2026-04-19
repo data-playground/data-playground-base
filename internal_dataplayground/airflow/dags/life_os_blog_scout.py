@@ -44,23 +44,19 @@ default_args = {
 
 
 def task_run_researcher(**context):
-    from dag_db import get_sync_session
-    from models import BlogIdea, BlogIdeaStatus, BlogProjectType, CodeFile
+    # from dag_db import get_sync_session
+    # from models import BlogIdea, BlogIdeaStatus, BlogProjectType, CodeFile
+    from dag_db import fetch_all, execute_many
 
     conf = context["dag_run"].conf or {}
     interests = conf.get("interests", DEFAULT_INTERESTS)
 
-    # Pull narrations from DB using sync session
-    session = get_sync_session()
-    try:
-        rows = session.query(
-            CodeFile.github_path, CodeFile.narration
-        ).filter(
-            CodeFile.narration.isnot(None)
-        ).limit(15).all()
-        file_narrations = [{"path": r[0], "narration": r[1]} for r in rows]
-    finally:
-        session.close()
+    # Pull narrations for richer agent context
+    rows = fetch_all(
+        "SELECT github_path, narration FROM code_files "
+        "WHERE narration IS NOT NULL LIMIT 15"
+    )
+    file_narrations = [{"path": r["github_path"], "narration": r["narration"]} for r in rows]
 
     blueprints = agent_researcher(
         interests=interests,
@@ -69,33 +65,33 @@ def task_run_researcher(**context):
     )
     log.info("Researcher produced %d blueprints", len(blueprints))
 
-    session = get_sync_session()
-    try:
-        inserted = 0
-        for bp in blueprints:
-            try:
-                ptype = BlogProjectType(bp.get("project_type", "new_build"))
-            except ValueError:
-                ptype = BlogProjectType.NEW_BUILD
+    statements = []
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-            idea = BlogIdea(
-                title_concept=bp.get("title_concept", "Untitled"),
-                project_type=ptype,
-                the_build=bp.get("the_build"),
-                the_narrative=bp.get("the_narrative"),
-                the_selling_point=bp.get("the_selling_point"),
-                status=BlogIdeaStatus.IDEA_GENERATED,
+    for bp in blueprints:
+        ptype = bp.get("project_type", "new_build")
+        if ptype not in ("existing_asset", "new_build"):
+            ptype = "new_build"
+
+        statements.append((
+            """INSERT INTO blog_ideas
+               (title_concept, project_type, the_build, the_narrative,
+                the_selling_point, status, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (
+                bp.get("title_concept", "Untitled"),
+                ptype,
+                bp.get("the_build"),
+                bp.get("the_narrative"),
+                bp.get("the_selling_point"),
+                "idea_generated",
+                now,
+                now,
             )
-            session.add(idea)
-            inserted += 1
+        ))
 
-        session.commit()
-        log.info("Inserted %d blog ideas", inserted)
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    execute_many(statements)
+    log.info("Inserted %d blog ideas into backlog", len(statements))
 
 
 with DAG(
