@@ -47,7 +47,7 @@ DEFAULT_PROJECTS = (
 
 def task_run_researcher(**context):
     import json
-    from secrets import get_key
+    from gcp_secrets import get_key
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
     from models import BlogIdea, BlogIdeaStatus, BlogProjectType
 

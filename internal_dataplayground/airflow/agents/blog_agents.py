@@ -28,15 +28,15 @@ log = logging.getLogger(__name__)
 # ── KEY HELPERS ───────────────────────────────────────────────────────────────
 
 def _gemini_key() -> str:
-    from database import get_key
+    from gcp_secrets import get_key
     return get_key("Gemini-API")
 
 def _groq_key() -> str:
-    from database import get_key
+    from gcp_secrets import get_key
     return get_key("Groq-API")
 
 def _github_token() -> str:
-    from database import get_key
+    from gcp_secrets import get_key
     return get_key("GitHub-Models-Token")
     # Note: this is a separate token for GitHub Models inference,
     # distinct from your GitHub-PAT used for repo API calls.

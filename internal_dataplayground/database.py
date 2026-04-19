@@ -4,7 +4,7 @@ from google.cloud import secretmanager
 from fastapi import HTTPException
 import json
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from secrets import get_key  # ← now imported, not defined here
+from gcp_secrets import get_key  # ← now imported, not defined here
 
 
 # Re-export so existing callers of `from database import get_key` still work

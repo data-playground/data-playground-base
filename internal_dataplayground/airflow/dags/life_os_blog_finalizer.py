@@ -45,7 +45,7 @@ def _get_db(get_key_fn):
 
 
 def task_refiner(**context):
-    from secrets import get_key
+    from gcp_secrets import get_key
     from models import BlogIdea, BlogIdeaStatus
 
     idea_id = context["dag_run"].conf.get("idea_id")
@@ -74,7 +74,7 @@ def task_refiner(**context):
 
 
 def task_editor(**context):
-    from secrets import get_key
+    from gcp_secrets import get_key
     from models import BlogIdea, BlogIdeaStatus
 
     idea_id = context["dag_run"].conf.get("idea_id")

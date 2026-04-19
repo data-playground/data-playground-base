@@ -41,7 +41,7 @@ default_args = {
 
 
 def task_ghostwriter(**context):
-    from secrets import get_key
+    from gcp_secrets import get_key
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
     from models import BlogIdea, BlogIdeaStatus, CodeFile
 
