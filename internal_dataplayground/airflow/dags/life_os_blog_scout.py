@@ -97,7 +97,7 @@ def task_run_researcher(**context):
 with DAG(
     dag_id="life_os_blog_scout",
     default_args=default_args,
-    schedule_interval="0 9 * * 1,4",
+    schedule_interval="0 9 * * *",
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["life_os", "blog"],
