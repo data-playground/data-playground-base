@@ -28,7 +28,7 @@ DEFAULT_INTERESTS = (
     "Music (playing and listening), TV shows, Movies, Food, "
     "Tableau, SQL, AI, Gen AI, Python, Apache Airflow, "
     "GCP, Gemini, BigQuery, "
-    "data pipelines, data extraction, data analysis
+    "data pipelines, data extraction, data analysis"
 )
 DEFAULT_PROJECTS = (
     "Life OS (self-hosted FastAPI + MariaDB + Docker personal command center), "
