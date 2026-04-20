@@ -26,7 +26,7 @@ sys.path.insert(0, '/opt/airflow/project/airflow')
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from agents.blog_agents import agent_refiner, agent_editor
+from agents.blog_agents import agent_ghostwriter
 
 log = logging.getLogger(__name__)
 
@@ -38,82 +38,51 @@ default_args = {
 }
 
 
-def _parse_editor_output(raw: str) -> tuple[str, str, str, str]:
-    try:
-        parts = raw.split("---")
-        if len(parts) < 3:
-            return "", "", "", raw.strip()
-        meta_block = parts[1].strip()
-        article = "---".join(parts[2:]).strip()
-        title, desc, tags = "", "", ""
-        for line in meta_block.splitlines():
-            line = line.strip()
-            if line.lower().startswith("title:"):
-                title = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("meta description:"):
-                desc = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("tags:"):
-                tags = line.split(":", 1)[1].strip()
-        return title, desc, tags, article
-    except Exception as exc:
-        log.warning("Editor output parsing failed: %s", exc)
-        return "", "", "", raw
-
-
-def task_refiner(**context):
+def task_ghostwriter(**context):
     from dag_db import fetch_one, execute
 
     idea_id = context["dag_run"].conf.get("idea_id")
-    idea = fetch_one("SELECT * FROM blog_ideas WHERE id = %s", (idea_id,))
-    if not idea:
-        raise ValueError(f"BlogIdea {idea_id} not found")
-    if not idea.get("draft_v1"):
-        raise ValueError(f"BlogIdea {idea_id} has no draft_v1 to refine")
+    if not idea_id:
+        raise ValueError("idea_id is required in DAG conf")
 
-    log.info("Running Refiner for idea %d", idea_id)
-    refined = agent_refiner(
-        original_draft=idea["draft_v1"],
-        user_feedback=idea.get("user_review_notes") or "No specific feedback provided.",
-    )
-
-    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    execute(
-        "UPDATE blog_ideas SET draft_v2 = %s, status = %s, updated_at = %s WHERE id = %s",
-        (refined, "review_completed", now, idea_id)
-    )
-    log.info("draft_v2 written for idea %d", idea_id)
-
-
-def task_editor(**context):
-    from dag_db import fetch_one, execute
-
-    idea_id = context["dag_run"].conf.get("idea_id")
     idea = fetch_one("SELECT * FROM blog_ideas WHERE id = %s", (idea_id,))
     if not idea:
         raise ValueError(f"BlogIdea {idea_id} not found")
 
-    source = idea.get("draft_v2") or idea.get("draft_v1") or ""
-    if not source:
-        raise ValueError(f"BlogIdea {idea_id} has no draft to edit")
+    # Pull narration from linked code file if present
+    narration = ""
+    if idea.get("code_file_id"):
+        code_file = fetch_one(
+            "SELECT narration FROM code_files WHERE id = %s",
+            (idea["code_file_id"],)
+        )
+        if code_file and code_file.get("narration"):
+            narration = code_file["narration"]
 
-    log.info("Running Editor for idea %d", idea_id)
-    final_output = agent_editor(draft_content=source)
-    seo_title, seo_desc, seo_tags, article = _parse_editor_output(final_output)
+    blueprint = {
+        "title_concept": idea["title_concept"],
+        "the_build": idea.get("the_build") or "",
+        "the_narrative": idea.get("the_narrative") or "",
+        "the_selling_point": idea.get("the_selling_point") or "",
+    }
+
+    log.info("Running Ghostwriter for idea %d: %s", idea_id, idea["title_concept"])
+    draft = agent_ghostwriter(
+        blueprint=blueprint,
+        author_notes=idea.get("author_notes") or "",
+        code_narrative=narration,
+    )
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     execute(
-        """UPDATE blog_ideas
-           SET final_article = %s, seo_title = %s, seo_description = %s,
-               seo_tags = %s, status = %s, updated_at = %s
-           WHERE id = %s""",
-        (article, seo_title or idea["title_concept"], seo_desc, seo_tags,
-         "ready_to_publish", now, idea_id)
+        "UPDATE blog_ideas SET draft_v1 = %s, status = %s, updated_at = %s WHERE id = %s",
+        (draft, "waiting_for_review", now, idea_id)
     )
-    log.info("Final article written for idea %d, status → ready_to_publish", idea_id)
+    log.info("draft_v1 written for idea %d, status → waiting_for_review", idea_id)
 
 
 with DAG(
-    dag_id="life_os_blog_finalizer",
+    dag_id="life_os_blog_creator",
     default_args=default_args,
     schedule_interval=None,
     start_date=datetime(2026, 1, 1),
@@ -121,6 +90,7 @@ with DAG(
     tags=["life_os", "blog"],
 ) as dag:
 
-    refine = PythonOperator(task_id="refiner", python_callable=task_refiner)
-    edit = PythonOperator(task_id="editor", python_callable=task_editor)
-    refine >> edit
+    ghostwrite = PythonOperator(
+        task_id="ghostwriter",
+        python_callable=task_ghostwriter,
+    )
