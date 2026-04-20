@@ -54,7 +54,7 @@ services:
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: admin
-      _AIRFLOW_WWW_USER_PASSWORD: ${DB_PASSWORD}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_SECRET_KEY}
     entrypoint: /bin/bash
     command:
       - -c
@@ -66,7 +66,7 @@ services:
           --lastname Admin \
           --role Admin \
           --email data_playground.contact@gmail.com \
-          --password "${DB_PASSWORD}" || true
+          --password "${AIRFLOW_SECRET_KEY}" || true
         echo "Airflow init complete."
     restart: "no"
 
@@ -90,6 +90,7 @@ services:
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
       GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
       PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
