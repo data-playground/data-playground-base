@@ -7,7 +7,7 @@
 		<div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% else %}badge-new{% endif %}">
 			{% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
 		</div>
-		{% if not idea.the_narrative %}
+		{% if not idea.the_build %}
 		<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;
 					color:var(--yellow);margin-left:6px;">
 			⏳ Enriching…
