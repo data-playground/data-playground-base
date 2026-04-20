@@ -3,9 +3,17 @@
    `idea` = BlogIdea ORM object
 #}
 <div class="idea-card" id="blog-card-{{ idea.id }}" onclick="openDetail({{ idea.id }})">
-    <div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% else %}badge-new{% endif %}">
-        {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
-    </div>
+	<div style="display:flex;gap: 20px;">
+		<div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% else %}badge-new{% endif %}">
+			{% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
+		</div>
+		{% if not idea.the_narrative %}
+		<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+					color:var(--yellow);margin-left:6px;">
+			⏳ Enriching…
+		</div>
+		{% endif %}
+	</div>
     <div class="card-title">{{ idea.title_concept }}</div>
     {% if idea.the_narrative %}
     <div class="card-narrative">{{ idea.the_narrative }}</div>

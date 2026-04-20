@@ -117,35 +117,10 @@ async def create_idea(
     Calls Idea Expander agent, stores structured blueprint in blog_ideas.
     Returns a new card partial for HTMX to prepend into the backlog column.
     """
-    expansion_error = None
-
-    try:
-        blueprint = _expand_idea_to_blueprint(raw_idea_input)
-        log.info("Blueprint expanded: title=%s, narrative=%s",
-                 blueprint.get("title_concept"),
-                 (blueprint.get("the_narrative") or "")[:80])
-    except Exception as exc:
-        expansion_error = str(exc)
-        log.warning("Idea expansion failed: %s", expansion_error, exc_info=True)
-        blueprint = {
-            "title_concept": raw_idea_input[:80].strip() or "Untitled",
-            "project_type": "new_build",
-            "the_build": "",
-            "the_narrative": raw_idea_input[:500],
-            "the_selling_point": "",
-        }
-
-    try:
-        ptype = BlogProjectType(blueprint.get("project_type", "new_build"))
-    except ValueError:
-        ptype = BlogProjectType.NEW_BUILD
-
+    # Save immediately — no Gemini call here
     idea = BlogIdea(
-        title_concept=blueprint.get("title_concept", "Untitled"),
-        project_type=ptype,
-        the_build=blueprint.get("the_build"),
-        the_narrative=blueprint.get("the_narrative"),
-        the_selling_point=blueprint.get("the_selling_point"),
+        title_concept=raw_idea_input[:80].strip() or "Untitled",
+        project_type=BlogProjectType.NEW_BUILD,
         raw_idea_input=raw_idea_input,
         status=BlogIdeaStatus.IDEA_GENERATED,
     )
@@ -153,11 +128,17 @@ async def create_idea(
     await db.commit()
     await db.refresh(idea)
 
-    toast = f"⚠ Gemini expansion failed: {expansion_error[:100]}" if expansion_error else ""
+    # Trigger enrichment DAG in background — fire and forget
+    try:
+        await _trigger_dag("life_os_idea_expander", conf={"idea_id": idea.id})
+    except Exception as exc:
+        log.warning("Could not trigger enrichment DAG: %s", exc)
+        # Non-fatal — idea is saved, enrichment can be retried manually
 
     return templates.TemplateResponse(
         "partials/blog_card.html",
-        {"request": request, "idea": idea},
+        {"request": request, "idea": idea,
+         "toast": "Idea saved. Gemini is enriching it in the background."},
     )
 
 
