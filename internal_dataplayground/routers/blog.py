@@ -121,10 +121,12 @@ async def create_idea(
 
     try:
         blueprint = _expand_idea_to_blueprint(raw_idea_input)
-        log.info("Blueprint expanded successfully: %s", blueprint.get("title_concept"))
+        log.info("Blueprint expanded: title=%s, narrative=%s",
+                 blueprint.get("title_concept"),
+                 (blueprint.get("the_narrative") or "")[:80])
     except Exception as exc:
         expansion_error = str(exc)
-        log.warning("Idea expansion failed: %s", expansion_error)
+        log.warning("Idea expansion failed: %s", expansion_error, exc_info=True)
         blueprint = {
             "title_concept": raw_idea_input[:80].strip() or "Untitled",
             "project_type": "new_build",
