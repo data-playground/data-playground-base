@@ -48,7 +48,7 @@ def _gemini_flash(system: str, prompt: str) -> str:
     """Calls Gemini Flash for fast, instruction-following tasks."""
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-3.1-flash-lite:generateContent?key={_gemini_key()}"
+        f"models/gemini-3.1-flash-lite-preview:generateContent?key={_gemini_key()}"
     )
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
@@ -63,7 +63,7 @@ def _gemini_pro_json(system: str, prompt: str, schema: dict, retries: int = 3) -
     """Calls Gemini Pro with structured JSON output."""
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-3-flash:generateContent?key={_gemini_key()}"
+        f"models/gemini-3-flash-preview:generateContent?key={_gemini_key()}"
     )
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
@@ -549,7 +549,7 @@ Order by severity (High first). Maximum 10 suggestions per file.
     # Use Gemini Pro for deeper reasoning on code review
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-3-flash:generateContent?key={_gemini_key()}"
+        f"models/gemini-3-flash-preview:generateContent?key={_gemini_key()}"
     )
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
