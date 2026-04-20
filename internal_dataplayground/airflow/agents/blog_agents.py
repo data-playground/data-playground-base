@@ -59,7 +59,7 @@ def _gemini_flash(system: str, prompt: str) -> str:
     return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
-def _gemini_pro_json(system: str, prompt: str, schema: dict) -> str:
+def _gemini_pro_json(system: str, prompt: str, schema: dict, retries: int = 3) -> str:
     """Calls Gemini Pro with structured JSON output."""
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
@@ -73,9 +73,20 @@ def _gemini_pro_json(system: str, prompt: str, schema: dict) -> str:
             "responseSchema": schema,
         },
     }
-    resp = requests.post(url, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    for attempt in range(retries):
+        try:
+            resp = requests.post(url, json=payload, timeout=90)
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as exc:
+            if "503" in str(exc) or "Service Unavailable" in str(exc):
+                if attempt < retries - 1:
+                    wait = 15 ** attempt  # 1s, 2s, 4s
+                    log.warning("Gemini 503, retrying in %ds (attempt %d/%d)", wait, attempt+1, retries)
+                    time.sleep(wait)
+                    continue
+            raise  # re-raise non-503 errors immediately
+    raise RuntimeError("Gemini unavailable after retries")
 
 
 def _claude_sonnet(system: str, prompt: str) -> str:
