@@ -24,10 +24,26 @@
                 {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
             </div>
         </div>
-        <button onclick="closeDetail()"
-                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;flex-shrink:0;">
-            ✕ Close
-        </button>
+		<div style="display:flex;gap:6px;flex-shrink:0;">
+			<!-- Archive (move to backlog) -->
+			<button
+				hx-patch="/blog/ideas/{{ idea.id }}/archive"
+				hx-target="#detail-drawer"
+				hx-swap="innerHTML"
+				style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
+				title="Move back to backlog">
+				↩ Backlog
+			</button>
+			<!-- Delete permanently -->
+			<button
+				onclick="deleteIdea({{ idea.id }})"
+				style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
+				title="Delete permanently">
+				✕ Delete
+			</button>
+			<!-- Existing close button -->
+			<button onclick="closeDetail()" ...>✕ Close</button>
+		</div>
     </div>
 
     {% if error %}
@@ -279,4 +295,16 @@ function updatePreview() {
 
 document.addEventListener('DOMContentLoaded', updatePreview);
 updatePreview();
+
+async function deleteIdea(id) {
+    if (!confirm('Permanently delete this idea? This cannot be undone.')) return;
+    const resp = await fetch(`/blog/ideas/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+        closeDetail();
+        // Remove the card from the kanban board
+        const card = document.getElementById(`blog-card-${id}`);
+        if (card) card.remove();
+        showToast('Idea deleted.');
+    }
+}
 </script>

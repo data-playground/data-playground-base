@@ -62,13 +62,43 @@ def task_run_researcher(**context):
     )
     file_narrations = [{"path": r["github_path"], "narration": r["narration"]} for r in rows]
 
+    # Pull existing idea titles to avoid duplicates
+    existing = fetch_all(
+        "SELECT title_concept FROM blog_ideas "
+        "WHERE status NOT IN ('published') "
+        "ORDER BY created_at DESC LIMIT 50"
+    )
+    existing_titles = [r["title_concept"] for r in existing]
+    log.info("Found %d existing ideas to avoid duplicating", len(existing_titles))
+
     blueprints = agent_researcher(
         interests=interests,
         existing_projects=DEFAULT_PROJECTS,
         file_narrations=file_narrations,
+        existing_titles=existing_titles,   # ← pass to agent
     )
     log.info("Researcher produced %d blueprints", len(blueprints))
 
+
+    # Filter out near-duplicates before inserting
+    existing_lower = {t.lower() for t in existing_titles}
+    new_blueprints = []
+    for bp in blueprints:
+        title = bp.get("title_concept", "").lower()
+        # Simple substring check — good enough for deduplication
+        is_duplicate = any(
+            title in existing.lower() or existing.lower() in title
+            for existing in existing_lower
+        )
+        if is_duplicate:
+            log.info("Skipping duplicate: %s", bp.get("title_concept"))
+        else:
+            new_blueprints.append(bp)
+
+    if not new_blueprints:
+        log.info("All generated ideas were duplicates — nothing inserted")
+        return
+        
     statements = []
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 

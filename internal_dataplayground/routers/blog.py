@@ -65,10 +65,22 @@ async def _trigger_dag(dag_id: str, conf: dict = {}) -> str:
 
 # ── Gemini blueprint expander (for BYOI) ───────────────────────────────────────
 
-def _expand_idea_to_blueprint(raw_input: str) -> dict:
+# def _expand_idea_to_blueprint(raw_input: str) -> dict:
+    # from agents.blog_agents import agent_idea_expander
+    # return agent_idea_expander(raw_input)
+    
+def _expand_idea_to_blueprint(user_idea: str) -> dict:
+    import sys
+    import os
+    
+    # Ensure the airflow agents folder is reachable from FastAPI's working dir
+    airflow_path = os.path.join(os.path.dirname(__file__), '..', 'airflow')
+    airflow_path = os.path.abspath(airflow_path)
+    if airflow_path not in sys.path:
+        sys.path.insert(0, airflow_path)
+    
     from agents.blog_agents import agent_idea_expander
-    return agent_idea_expander(raw_input)
-
+    return agent_idea_expander(user_idea)
 
 # ── Kanban board ───────────────────────────────────────────────────────────────
 
@@ -105,12 +117,16 @@ async def create_idea(
     Calls Idea Expander agent, stores structured blueprint in blog_ideas.
     Returns a new card partial for HTMX to prepend into the backlog column.
     """
+    expansion_error = None
+
     try:
         blueprint = _expand_idea_to_blueprint(raw_idea_input)
+        log.info("Blueprint expanded successfully: %s", blueprint.get("title_concept"))
     except Exception as exc:
-        log.warning("Idea expansion failed: %s", exc)
+        expansion_error = str(exc)
+        log.warning("Idea expansion failed: %s", expansion_error)
         blueprint = {
-            "title_concept": "Untitled — edit me",
+            "title_concept": raw_idea_input[:80].strip() or "Untitled",
             "project_type": "new_build",
             "the_build": "",
             "the_narrative": raw_idea_input[:500],
@@ -134,6 +150,8 @@ async def create_idea(
     db.add(idea)
     await db.commit()
     await db.refresh(idea)
+
+    toast = f"⚠ Gemini expansion failed: {expansion_error[:100]}" if expansion_error else ""
 
     return templates.TemplateResponse(
         "partials/blog_card.html",
@@ -358,4 +376,38 @@ async def view_article(
     return templates.TemplateResponse(
         "blog_article.html",
         {"request": request, "idea": idea},
+    )
+
+@router.delete("/ideas/{idea_id}", response_class=HTMLResponse)
+async def delete_idea(
+    idea_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    idea = await db.get(BlogIdea, idea_id)
+    if not idea:
+        raise HTTPException(status_code=404)
+    await db.delete(idea)
+    await db.commit()
+    # Return empty string — HTMX will remove the card
+    return HTMLResponse("")
+
+
+@router.patch("/ideas/{idea_id}/archive", response_class=HTMLResponse)
+async def archive_idea(
+    idea_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Move any idea back to idea_generated (backlog)."""
+    idea = await db.get(BlogIdea, idea_id)
+    if not idea:
+        raise HTTPException(status_code=404)
+    idea.status = BlogIdeaStatus.IDEA_GENERATED
+    idea.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(idea)
+    return templates.TemplateResponse(
+        "partials/blog_detail.html",
+        {"request": request, "idea": idea, "toast": "Moved back to backlog."},
     )

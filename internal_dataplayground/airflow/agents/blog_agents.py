@@ -206,6 +206,7 @@ def agent_researcher(
     interests: str,
     existing_projects: str,
     file_narrations: list[dict] | None = None,
+    existing_titles: list[str] | None = None,   # ← add this
 ) -> list[dict]:
     """
     Generates 3 blog post blueprints following the 1-and-2 Rule:
@@ -232,6 +233,7 @@ Strictly follow the 1-and-2 Rule:
 
 Ideas must be specific, actionable, and demonstrate senior-level thinking.
 Avoid generic topics. Each idea must be meaningfully distinct.
+Ideas must be specific and meaningfully distinct from each other AND from the existing titles provided.
 """
     narration_block = ""
     if file_narrations:
@@ -239,10 +241,16 @@ Avoid generic topics. Each idea must be meaningfully distinct.
             f"{n['path']}: {n['narration'][:400]}" for n in file_narrations[:10]
         )
 
+    existing_block = ""
+    if existing_titles:
+        existing_block = "\n\nAlready covered — do NOT suggest similar topics:\n" + \
+            "\n".join(f"- {t}" for t in existing_titles[:30])
+
     prompt = (
         f"Generate the next 3 blog blueprints.\n"
         f"Author interests: {interests}\n"
         f"Existing projects: {existing_projects}"
+        f"{existing_block}"
         f"{narration_block}"
     )
 
