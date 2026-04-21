@@ -17,20 +17,33 @@ default_args = {
 }
 
 def task_expand_idea(**context):
-    from dag_db import fetch_one, execute
+    from dag_db import fetch_one, fetch_all, execute
     from agents.blog_agents import agent_idea_expander
 
     idea_id = context["dag_run"].conf.get("idea_id")
     idea = fetch_one("SELECT * FROM blog_ideas WHERE id = %s", (idea_id,))
-    if not idea:
-        raise ValueError(f"BlogIdea {idea_id} not found")
-
     raw = idea.get("raw_idea_input") or idea.get("title_concept", "")
-    if not raw:
-        raise ValueError(f"BlogIdea {idea_id} has no raw input to expand")
 
-    log.info("Expanding idea %d: %s", idea_id, raw[:80])
-    blueprint = agent_idea_expander(raw)
+    # If idea has a linked code_file, pull its narration and enrich the input
+    narration_context = ""
+    if idea.get("code_file_id"):
+        cf = fetch_one("SELECT narration, file_name FROM code_files WHERE id = %s",
+                       (idea["code_file_id"],))
+        if cf and cf.get("narration"):
+            narration_context = f"\n\nRelated code file ({cf['file_name']}):\n{cf['narration']}"
+    elif idea.get("code_project_id"):
+        # Pull all narrations for the project
+        files = fetch_all(
+            "SELECT file_name, narration FROM code_files "
+            "WHERE project_id = %s AND narration IS NOT NULL LIMIT 5",
+            (idea["code_project_id"],)
+        )
+        if files:
+            narration_context = "\n\nRelated project files:\n" + "\n\n".join(
+                f"{f['file_name']}: {f['narration'][:400]}" for f in files
+            )
+
+    blueprint = agent_idea_expander(raw + narration_context)
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     execute(

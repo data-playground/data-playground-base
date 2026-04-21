@@ -93,6 +93,41 @@
                 <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">code snippets + author notes</span>
             </div>
             <form id="evidence-form-{{ idea.id }}">
+				<!-- Code Project dropdown -->
+				<div style="margin-bottom:10px;">
+					<label class="form-label">Linked Code Project (optional)</label>
+					<select name="code_project_id"
+						style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
+							   padding:8px 10px;border:1px solid var(--border);
+							   background:var(--bg-hover);color:var(--text-primary);
+							   border-radius:5px;outline:none;">
+						<option value="">— none —</option>
+						{% for p in code_projects %}
+						<option value="{{ p.id }}"
+							{% if idea.code_project_id == p.id %}selected{% endif %}>
+							{{ p.project_name }} ({{ p.github_repo }})
+						</option>
+						{% endfor %}
+					</select>
+				</div>
+
+				<!-- Code File dropdown -->
+				<div style="margin-bottom:10px;">
+					<label class="form-label">Linked Code File (optional — overrides project)</label>
+					<select name="code_file_id"
+						style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
+							   padding:8px 10px;border:1px solid var(--border);
+							   background:var(--bg-hover);color:var(--text-primary);
+							   border-radius:5px;outline:none;">
+						<option value="">— none —</option>
+						{% for f in code_files %}
+						<option value="{{ f.id }}"
+							{% if idea.code_file_id == f.id %}selected{% endif %}>
+							{{ f.file_name }} — {{ f.github_path }}
+						</option>
+						{% endfor %}
+					</select>
+				</div>
                 <div style="margin-bottom:10px;">
                     <label class="form-label">Code Snippets</label>
                     <textarea name="code_content" rows="4"

@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from database import get_db, get_key
-from models import BlogIdea, BlogIdeaStatus, BlogProjectType
+from models import BlogIdea, BlogIdeaStatus, BlogProjectType, CodeFile, CodeProject
 
 log = logging.getLogger(__name__)
 
@@ -153,11 +153,27 @@ async def idea_detail(
     idea = await db.get(BlogIdea, idea_id)
     if not idea:
         return HTMLResponse("Not found", status_code=404)
+    
+    # Fetch available code files and projects for the dropdown
+    files_result = await db.execute(
+        select(CodeFile).order_by(CodeFile.file_name)
+    )
+    code_files = files_result.scalars().all()
+    
+    projects_result = await db.execute(
+        select(CodeProject).order_by(CodeProject.project_name)
+    )
+    code_projects = projects_result.scalars().all()
+    
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {"request": request, "idea": idea},
+        {
+            "request": request,
+            "idea": idea,
+            "code_files": code_files,
+            "code_projects": code_projects,
+        },
     )
-
 
 # ── HITL 1 — Save evidence (code snippets + author notes) ─────────────────────
 
@@ -174,8 +190,15 @@ async def save_evidence(
 
     idea.code_content  = str(form.get("code_content", "")).strip() or None
     idea.author_notes  = str(form.get("author_notes", "")).strip() or None
-    idea.status        = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
-    idea.updated_at    = datetime.utcnow()
+    
+    # Save the code file / project link
+    code_file_id = form.get("code_file_id")
+    code_project_id = form.get("code_project_id")
+    idea.code_file_id    = int(code_file_id) if code_file_id else None
+    idea.code_project_id = int(code_project_id) if code_project_id else None
+    
+    idea.status     = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
+    idea.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(idea)
 
@@ -184,7 +207,6 @@ async def save_evidence(
         {"request": request, "idea": idea,
          "toast": "Evidence saved. Ready to trigger the Ghostwriter."},
     )
-
 
 # ── Trigger 1 — Ghostwriter DAG ───────────────────────────────────────────────
 

@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import requests
+import time
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ def _gemini_pro_json(system: str, prompt: str, schema: dict, retries: int = 3) -
         except Exception as exc:
             if "503" in str(exc) or "Service Unavailable" in str(exc):
                 if attempt < retries - 1:
-                    wait = 15 ** attempt  # 1s, 2s, 4s
+                    wait = 5 ** attempt  # 1s, 2s, 4s
                     log.warning("Gemini 503, retrying in %ds (attempt %d/%d)", wait, attempt+1, retries)
                     time.sleep(wait)
                     continue

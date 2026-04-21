@@ -40,37 +40,32 @@ default_args = {
 
 def task_ghostwriter(**context):
     from dag_db import fetch_one, execute
+    from agents.blog_agents import agent_ghostwriter
 
     idea_id = context["dag_run"].conf.get("idea_id")
-    if not idea_id:
-        raise ValueError("idea_id is required in DAG conf")
-
     idea = fetch_one("SELECT * FROM blog_ideas WHERE id = %s", (idea_id,))
-    if not idea:
-        raise ValueError(f"BlogIdea {idea_id} not found")
 
-    # Pull narration from linked code file if present
-    narration = ""
+    # Pull narration from linked code_file if exists
+    code_narrative = ""
     if idea.get("code_file_id"):
-        code_file = fetch_one(
-            "SELECT narration FROM code_files WHERE id = %s",
-            (idea["code_file_id"],)
-        )
-        if code_file and code_file.get("narration"):
-            narration = code_file["narration"]
+        cf = fetch_one("SELECT narration, file_name FROM code_files WHERE id = %s",
+                       (idea["code_file_id"],))
+        if cf:
+            code_narrative = cf.get("narration") or ""
+    
+    # Fall back to manually entered code_content from HITL evidence step
+    if not code_narrative and idea.get("code_content"):
+        code_narrative = idea["code_content"]
 
-    blueprint = {
-        "title_concept": idea["title_concept"],
-        "the_build": idea.get("the_build") or "",
-        "the_narrative": idea.get("the_narrative") or "",
-        "the_selling_point": idea.get("the_selling_point") or "",
-    }
-
-    log.info("Running Ghostwriter for idea %d: %s", idea_id, idea["title_concept"])
     draft = agent_ghostwriter(
-        blueprint=blueprint,
+        blueprint={
+            "title_concept": idea["title_concept"],
+            "the_build": idea.get("the_build") or "",
+            "the_narrative": idea.get("the_narrative") or "",
+            "the_selling_point": idea.get("the_selling_point") or "",
+        },
         author_notes=idea.get("author_notes") or "",
-        code_narrative=narration,
+        code_narrative=code_narrative,
     )
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
