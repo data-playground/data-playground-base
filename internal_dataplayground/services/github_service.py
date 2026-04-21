@@ -2,9 +2,9 @@
 """
 GitHub REST API service.
 Handles pulling file content and pushing updated files back to the repo.
-Uses a PAT stored in GCP Secret Manager under the key "GitHub-PAT".
+Uses a PAT stored in GCP Secret Manager under the key "GitHub-Key".
 
-Required GCP Secret: "GitHub-PAT"
+Required GCP Secret: "GitHub-Key"
   Value: a GitHub Personal Access Token with repo scope (read + write)
   Create at: https://github.com/settings/tokens
 """
@@ -21,7 +21,7 @@ GITHUB_API = "https://api.github.com"
 
 
 def _get_headers() -> dict:
-    token = get_key("GitHub-PAT")
+    token = get_key("GitHub-Key")
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
