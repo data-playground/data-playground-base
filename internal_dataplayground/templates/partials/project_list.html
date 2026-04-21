@@ -10,47 +10,30 @@
 {% if projects %}
 {% for project in projects %}
 <div class="project-card" id="project-card-{{ project.id }}" onclick="openProject({{ project.id }})">
-    <div class="project-card-name">{{ project.project_name }}</div>
-    <div class="project-card-repo">
-        {{ project.github_repo }}{% if project.github_base_path %} / {{ project.github_base_path }}{% endif %}
-    </div>
-    <div class="project-card-meta">
-        <div class="project-card-stats">
-            <span class="badge badge-muted">{{ project.file_count }} file{{ 's' if project.file_count != 1 else '' }}</span>
-            {% if project.readme_status.value == 'pushed' %}
-                <span class="badge badge-green">README ✓</span>
-            {% elif project.readme_status.value in ('draft', 'reviewed', 'approved') %}
-                <span class="badge badge-yellow">README draft</span>
-            {% elif project.readme_status.value == 'stale' %}
-                <span class="badge badge-red">README stale</span>
-            {% endif %}
+    <span class="project-card-icon">◈</span>
+    <div class="project-card-info">
+        <div class="project-card-name">{{ project.project_name }}</div>
+        <div class="project-card-repo">
+            {{ project.github_repo }}{% if project.github_base_path %}/{{ project.github_base_path }}{% endif %}
         </div>
-        <button class="btn btn-sm"
-                style="color:var(--red);border-color:transparent;"
-                onclick="event.stopPropagation(); deleteProject({{ project.id }}, '{{ project.project_name }}')"
-                title="Delete project">✕</button>
     </div>
+    <div class="project-card-badges">
+        <span class="badge badge-muted" style="font-size:8px;">{{ project.file_count }}f</span>
+        {% if project.readme_status.value == 'pushed' %}
+            <span class="badge badge-green" style="font-size:8px;">README✓</span>
+        {% elif project.readme_status.value in ('draft', 'reviewed') %}
+            <span class="badge badge-yellow" style="font-size:8px;">README</span>
+        {% endif %}
+    </div>
+    <button class="project-card-delete"
+            onclick="event.stopPropagation(); deleteProject({{ project.id }}, '{{ project.project_name }}')"
+            title="Delete project">✕</button>
 </div>
 {% endfor %}
 
 {% else %}
-<div class="empty-state" style="padding:40px 20px;">
-    <div class="empty-icon">◈</div>
-    <p>No projects yet.<br>Click "New Project" to connect a GitHub repo.</p>
+<div style="padding:32px 20px;text-align:center;color:var(--text-muted);font-size:11px;line-height:1.7;">
+    <div style="font-size:28px;margin-bottom:10px;opacity:.3;">◈</div>
+    No projects yet.<br>Click <strong>⊕ New Project</strong> to connect a GitHub repo.
 </div>
 {% endif %}
-
-<script>
-async function deleteProject(id, name) {
-    if (!confirm(`Delete project "${name}" and all its tracked files?`)) return;
-    const resp = await fetch(`/code-intel/projects/${id}`, { method: 'DELETE' });
-    if (resp.ok) {
-        document.getElementById('project-list-panel').innerHTML = await resp.text();
-        document.getElementById('ci-detail-panel').innerHTML = `
-            <div class="ci-detail-empty">
-                <div class="empty-icon">◈</div>
-                <p>Select a project to view its files.</p>
-            </div>`;
-    }
-}
-</script>

@@ -1,0 +1,197 @@
+{# templates/partials/project_detail.html
+   Loaded into #ci-detail-panel via HTMX GET /code-intel/projects/{id}/detail
+   `project` = CodeProject ORM object (with .files loaded via selectin)
+   `toast`   = optional success message
+   `error`   = optional error message
+#}
+<div style="height:100%;display:flex;flex-direction:column;" data-toast="{{ toast or '' }}">
+
+    {# ── HEADER ── #}
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;background:var(--bg-hover);">
+        <div style="flex:1;min-width:0;">
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:3px;">
+                {{ project.project_name }}
+            </div>
+            <div style="font-size:9px;color:var(--text-muted);">
+                {{ project.github_repo }}{% if project.github_base_path %} / <code style="color:var(--accent)">{{ project.github_base_path }}</code>{% endif %}
+            </div>
+            {% if project.description %}
+            <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">{{ project.description }}</div>
+            {% endif %}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
+            <button class="btn btn-sm"
+                    hx-post="/code-intel/projects/{{ project.id }}/sync"
+                    hx-target="#ci-detail-panel"
+                    hx-swap="innerHTML"
+                    hx-indicator="#sync-spinner">
+                ⟳ Sync Files
+            </button>
+            <span id="sync-spinner" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);align-self:center;">Syncing…</span>
+        </div>
+    </div>
+
+    {% if error %}
+    <div style="margin:12px 18px;padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);">⚠ {{ error }}</div>
+    {% endif %}
+
+    <div style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:20px;">
+
+        {# ── FILE LIST ── #}
+        <div>
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">
+                Tracked Files
+                <span style="margin-left:6px;color:var(--text-secondary);">{{ project.files|length }}</span>
+            </div>
+
+            {% if project.files %}
+            <div style="display:flex;flex-direction:column;gap:6px;" id="file-list-{{ project.id }}">
+                {% for file in project.files %}
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;font-size:11px;">
+                    <span style="font-size:10px;color:var(--text-muted);">🐍</span>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            {{ file.file_name }}
+                        </div>
+                        <div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            {{ file.github_path }}
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-shrink:0;">
+                        {% if file.narration %}
+                            <span class="badge badge-green" title="Narration available">narrated</span>
+                        {% endif %}
+                        {% if file.commented_status.value != 'none' %}
+                            <span class="badge badge-accent" title="Comments {{ file.commented_status.value }}">commented</span>
+                        {% endif %}
+                        {% if file.improvement_status.value != 'none' %}
+                            <span class="badge badge-yellow" title="Improvement report {{ file.improvement_status.value }}">reviewed</span>
+                        {% endif %}
+                    </div>
+                    <button class="btn btn-sm"
+                            onclick="openFileDetail({{ file.id }})"
+                            title="Open file detail">→</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="font-size:11px;color:var(--text-muted);padding:12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);text-align:center;">
+                No files tracked yet. Click "Sync Files" to discover .py files from GitHub.
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── README SECTION ── #}
+        <div style="border-top:1px solid var(--border);padding-top:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
+                    README.md
+                    <span style="margin-left:8px;">
+                        {% if project.readme_status.value == 'none' %}
+                            <span class="badge badge-muted">not generated</span>
+                        {% elif project.readme_status.value == 'draft' %}
+                            <span class="badge badge-yellow">draft</span>
+                        {% elif project.readme_status.value == 'reviewed' %}
+                            <span class="badge badge-accent">reviewed</span>
+                        {% elif project.readme_status.value == 'pushed' %}
+                            <span class="badge badge-green">pushed ✓</span>
+                        {% elif project.readme_status.value == 'stale' %}
+                            <span class="badge badge-red">stale</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-sm"
+                            hx-post="/code-intel/projects/{{ project.id }}/generate-readme"
+                            hx-target="#ci-detail-panel"
+                            hx-swap="innerHTML"
+                            hx-indicator="#readme-spinner"
+                            title="Generate README from file narrations">
+                        ⟳ Generate
+                    </button>
+                    {% if project.readme_status.value in ('reviewed', 'approved') %}
+                    <button class="btn btn-sm btn-green"
+                            hx-post="/code-intel/projects/{{ project.id }}/push-readme"
+                            hx-target="#ci-detail-panel"
+                            hx-swap="innerHTML">
+                        ↑ Push to GitHub
+                    </button>
+                    {% endif %}
+                    <span id="readme-spinner" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);align-self:center;">Generating…</span>
+                </div>
+            </div>
+
+            {% if project.readme_md %}
+            {# README editor — edit and save #}
+            <div>
+                <textarea id="readme-editor-{{ project.id }}"
+                    style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;
+                           border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);
+                           border-radius:6px;outline:none;resize:vertical;line-height:1.7;min-height:280px;"
+                    >{{ project.readme_md }}</textarea>
+                <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+                    <button class="btn btn-sm btn-primary" onclick="saveReadme({{ project.id }})">
+                        Save Edits
+                    </button>
+                    {% if project.readme_generated_at %}
+                    <span style="font-size:9px;color:var(--text-muted);">
+                        Generated {{ project.readme_generated_at.strftime('%b %d, %H:%M') }}
+                    </span>
+                    {% endif %}
+                    {% if project.readme_pushed_at %}
+                    <span style="font-size:9px;color:var(--green);">
+                        Pushed {{ project.readme_pushed_at.strftime('%b %d, %H:%M') }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div style="font-size:11px;color:var(--text-muted);padding:12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);">
+                No README generated yet.
+                {% if not project.has_narrations %}
+                Narrate at least one file first, then generate the README.
+                {% else %}
+                Click "Generate" to create one from your file narrations.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+
+    {# ── FILE DETAIL DRAWER (inside the right panel) ── #}
+    <div class="detail-overlay" id="file-overlay" onclick="closeFileDetail()" style="z-index:350;"></div>
+    <div id="file-detail-drawer" class="detail-drawer" style="z-index:360;width:480px;"></div>
+
+</div>
+
+<script>
+async function saveReadme(projectId) {
+    const content = document.getElementById(`readme-editor-${projectId}`).value;
+    const fd = new FormData();
+    fd.append('readme_md', content);
+    const resp = await fetch(`/code-intel/projects/${projectId}/readme`, { method: 'PATCH', body: fd });
+    if (resp.ok) {
+        document.getElementById('ci-detail-panel').innerHTML = await resp.text();
+        showToast('README saved and marked as reviewed.');
+    }
+}
+
+function openFileDetail(fileId) {
+    htmx.ajax('GET', `/code-intel/files/${fileId}`, {
+        target: '#file-detail-drawer',
+        swap: 'innerHTML',
+    });
+    document.getElementById('file-detail-drawer').classList.add('open');
+    document.getElementById('file-overlay').classList.add('visible');
+}
+
+function closeFileDetail() {
+    document.getElementById('file-detail-drawer').classList.remove('open');
+    document.getElementById('file-overlay').classList.remove('visible');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeFileDetail();
+});
+</script>

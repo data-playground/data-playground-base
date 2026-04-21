@@ -4,22 +4,33 @@
    `toast`   = optional success message
    `error`   = optional error message
 #}
-<div style="height:100%;display:flex;flex-direction:column;" data-toast="{{ toast or '' }}">
+<div style="height:100%;display:flex;flex-direction:column;" data-toast="{{ toast or '' }}" data-project-id="{{ project.id }}">
 
     {# ── HEADER ── #}
-    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;background:var(--bg-hover);">
+    <div class="pd-header">
         <div style="flex:1;min-width:0;">
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:3px;">
-                {{ project.project_name }}
-            </div>
-            <div style="font-size:9px;color:var(--text-muted);">
+            <div class="pd-title">{{ project.project_name }}</div>
+            <div class="pd-subtitle">
                 {{ project.github_repo }}{% if project.github_base_path %} / <code style="color:var(--accent)">{{ project.github_base_path }}</code>{% endif %}
+                · {{ project.files|length }} file{{ 's' if project.files|length != 1 else '' }} tracked
             </div>
             {% if project.description %}
             <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">{{ project.description }}</div>
             {% endif %}
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:12px;">
+            {# README status badge #}
+            {% if project.readme_status.value == 'none' %}
+                <span class="badge badge-muted">no README</span>
+            {% elif project.readme_status.value == 'draft' %}
+                <span class="badge badge-yellow">README draft</span>
+            {% elif project.readme_status.value == 'reviewed' %}
+                <span class="badge badge-accent">README reviewed</span>
+            {% elif project.readme_status.value == 'pushed' %}
+                <span class="badge badge-green">README pushed ✓</span>
+            {% elif project.readme_status.value == 'stale' %}
+                <span class="badge badge-red">README stale</span>
+            {% endif %}
             <button class="btn btn-sm"
                     hx-post="/code-intel/projects/{{ project.id }}/sync"
                     hx-target="#ci-detail-panel"
@@ -27,145 +38,320 @@
                     hx-indicator="#sync-spinner">
                 ⟳ Sync Files
             </button>
-            <span id="sync-spinner" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);align-self:center;">Syncing…</span>
+            <span id="sync-spinner" class="htmx-indicator"><span class="spinner-inline"></span> Syncing…</span>
         </div>
     </div>
 
     {% if error %}
-    <div style="margin:12px 18px;padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);">⚠ {{ error }}</div>
+    <div style="margin:10px 18px;padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);">⚠ {{ error }}</div>
     {% endif %}
 
-    <div style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:20px;">
+    <div class="pd-body">
 
-        {# ── FILE LIST ── #}
-        <div>
-            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;">
-                Tracked Files
-                <span style="margin-left:6px;color:var(--text-secondary);">{{ project.files|length }}</span>
+        {# ── FILE TREE ── #}
+        <div class="file-tree-section">
+            <div class="section-label">
+                <span>Files</span>
+                {% if project.files %}
+                <span style="color:var(--text-secondary);">click a file to run agents</span>
+                {% endif %}
             </div>
 
             {% if project.files %}
-            <div style="display:flex;flex-direction:column;gap:6px;" id="file-list-{{ project.id }}">
+            <div style="display:flex;flex-direction:column;gap:4px;" id="file-list-{{ project.id }}">
                 {% for file in project.files %}
-                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;font-size:11px;">
-                    <span style="font-size:10px;color:var(--text-muted);">🐍</span>
+                <div class="file-row" id="file-row-{{ file.id }}" onclick="selectFile({{ file.id }}, this)">
+                    <span class="file-row-icon">🐍</span>
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                            {{ file.file_name }}
-                        </div>
-                        <div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                            {{ file.github_path }}
-                        </div>
+                        <div class="file-row-name">{{ file.file_name }}</div>
+                        <div class="file-row-path">{{ file.github_path }}</div>
                     </div>
-                    <div style="display:flex;gap:4px;flex-shrink:0;">
+                    <div class="file-row-badges">
                         {% if file.narration %}
-                            <span class="badge badge-green" title="Narration available">narrated</span>
+                            {% if file.narration_is_stale %}
+                            <span class="badge badge-red" title="Code changed since narration">stale</span>
+                            {% else %}
+                            <span class="badge badge-green" title="Narration ready">narrated</span>
+                            {% endif %}
                         {% endif %}
                         {% if file.commented_status.value != 'none' %}
-                            <span class="badge badge-accent" title="Comments {{ file.commented_status.value }}">commented</span>
+                            <span class="badge badge-accent" title="Comments {{ file.commented_status.value }}">💬{{ file.commented_status.value }}</span>
                         {% endif %}
                         {% if file.improvement_status.value != 'none' %}
-                            <span class="badge badge-yellow" title="Improvement report {{ file.improvement_status.value }}">reviewed</span>
+                            <span class="badge badge-yellow" title="Review {{ file.improvement_status.value }}">📋{{ file.improvement_status.value }}</span>
+                        {% endif %}
+                        {% if not file.raw_code %}
+                            <span class="badge badge-muted">not pulled</span>
                         {% endif %}
                     </div>
-                    <button class="btn btn-sm"
-                            onclick="openFileDetail({{ file.id }})"
-                            title="Open file detail">→</button>
                 </div>
                 {% endfor %}
             </div>
             {% else %}
-            <div style="font-size:11px;color:var(--text-muted);padding:12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);text-align:center;">
-                No files tracked yet. Click "Sync Files" to discover .py files from GitHub.
+            <div style="text-align:center;padding:24px 16px;color:var(--text-muted);font-size:11px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);">
+                No files tracked yet.<br>Click <strong>⟳ Sync Files</strong> above to discover .py files from GitHub.
             </div>
             {% endif %}
         </div>
 
-        {# ── README SECTION ── #}
-        <div style="border-top:1px solid var(--border);padding-top:16px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
-                    README.md
-                    <span style="margin-left:8px;">
-                        {% if project.readme_status.value == 'none' %}
-                            <span class="badge badge-muted">not generated</span>
-                        {% elif project.readme_status.value == 'draft' %}
-                            <span class="badge badge-yellow">draft</span>
-                        {% elif project.readme_status.value == 'reviewed' %}
-                            <span class="badge badge-accent">reviewed</span>
-                        {% elif project.readme_status.value == 'pushed' %}
-                            <span class="badge badge-green">pushed ✓</span>
-                        {% elif project.readme_status.value == 'stale' %}
-                            <span class="badge badge-red">stale</span>
-                        {% endif %}
-                    </span>
-                </div>
-                <div style="display:flex;gap:6px;">
-                    <button class="btn btn-sm"
-                            hx-post="/code-intel/projects/{{ project.id }}/generate-readme"
-                            hx-target="#ci-detail-panel"
-                            hx-swap="innerHTML"
-                            hx-indicator="#readme-spinner"
-                            title="Generate README from file narrations">
-                        ⟳ Generate
-                    </button>
-                    {% if project.readme_status.value in ('reviewed', 'approved') %}
-                    <button class="btn btn-sm btn-green"
-                            hx-post="/code-intel/projects/{{ project.id }}/push-readme"
-                            hx-target="#ci-detail-panel"
-                            hx-swap="innerHTML">
-                        ↑ Push to GitHub
-                    </button>
-                    {% endif %}
-                    <span id="readme-spinner" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);align-self:center;">Generating…</span>
-                </div>
-            </div>
+        {# ── PROJECT-LEVEL AGENTS ── #}
+        <div class="agent-panel" style="border-bottom:1px solid var(--border);">
+            <div class="section-label"><span>Project Agents</span></div>
 
-            {% if project.readme_md %}
-            {# README editor — edit and save #}
-            <div>
-                <textarea id="readme-editor-{{ project.id }}"
-                    style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;
-                           border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);
-                           border-radius:6px;outline:none;resize:vertical;line-height:1.7;min-height:280px;"
-                    >{{ project.readme_md }}</textarea>
+            {# README Writer #}
+            <div class="agent-card">
+                <div class="agent-card-header">
+                    <span class="agent-card-title" style="color:var(--accent);">📄 README Writer</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn btn-sm"
+                                hx-post="/code-intel/projects/{{ project.id }}/generate-readme"
+                                hx-target="#ci-detail-panel"
+                                hx-swap="innerHTML"
+                                hx-indicator="#readme-gen-spinner"
+                                {% if not project.files|selectattr('narration')|list %}disabled title="Narrate at least one file first"{% endif %}>
+                            ▶ Generate README
+                        </button>
+                        <span id="readme-gen-spinner" class="htmx-indicator"><span class="spinner-inline"></span> Generating…</span>
+                        {% if project.readme_status.value in ('reviewed',) %}
+                        <button class="btn btn-sm btn-green"
+                                hx-post="/code-intel/projects/{{ project.id }}/push-readme"
+                                hx-target="#ci-detail-panel"
+                                hx-swap="innerHTML">
+                            ↑ Push to GitHub
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="agent-card-desc">
+                    Synthesizes narrations from all tracked files into a professional README.md.
+                    Requires at least one narrated file.
+                    {% if not project.files|selectattr('narration')|list %}
+                    <span style="color:var(--yellow);">⚠ Narrate files below first.</span>
+                    {% endif %}
+                </div>
+                {% if project.readme_md %}
+                <textarea class="readme-editor" id="readme-editor-{{ project.id }}">{{ project.readme_md }}</textarea>
                 <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-                    <button class="btn btn-sm btn-primary" onclick="saveReadme({{ project.id }})">
-                        Save Edits
-                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="saveReadme({{ project.id }})">Save Edits</button>
                     {% if project.readme_generated_at %}
-                    <span style="font-size:9px;color:var(--text-muted);">
-                        Generated {{ project.readme_generated_at.strftime('%b %d, %H:%M') }}
-                    </span>
+                    <span style="font-size:9px;color:var(--text-muted);">Generated {{ project.readme_generated_at.strftime('%b %d, %H:%M') }}</span>
                     {% endif %}
                     {% if project.readme_pushed_at %}
-                    <span style="font-size:9px;color:var(--green);">
-                        Pushed {{ project.readme_pushed_at.strftime('%b %d, %H:%M') }}
-                    </span>
+                    <span style="font-size:9px;color:var(--green);">Pushed {{ project.readme_pushed_at.strftime('%b %d, %H:%M') }}</span>
                     {% endif %}
                 </div>
-            </div>
-            {% else %}
-            <div style="font-size:11px;color:var(--text-muted);padding:12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);">
-                No README generated yet.
-                {% if not project.has_narrations %}
-                Narrate at least one file first, then generate the README.
-                {% else %}
-                Click "Generate" to create one from your file narrations.
                 {% endif %}
             </div>
-            {% endif %}
+        </div>
+
+        {# ── FILE AGENT PANEL (shown after selecting a file) ── #}
+        <div id="file-agent-panel" style="display:none;" class="agent-panel">
+            <div class="section-label">
+                <span>File Agents — <span id="selected-file-name" style="color:var(--accent);font-style:italic;text-transform:none;letter-spacing:0;font-size:10px;"></span></span>
+                <button onclick="clearFileSelection()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:9px;">✕ deselect</button>
+            </div>
+
+            {# Pull Code #}
+            <div class="agent-card">
+                <div class="agent-card-header">
+                    <span class="agent-card-title" style="color:var(--text-secondary);">① Pull from GitHub</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn btn-sm" id="pull-btn" onclick="runFileAgent('pull')">⟳ Pull Latest</button>
+                        <span id="pull-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span> Pulling…</span>
+                    </div>
+                </div>
+                <div class="agent-card-desc">Fetch the latest source code from GitHub. Required before running any agent.</div>
+                <div id="pull-output" style="display:none;" class="agent-output"></div>
+            </div>
+
+            {# Code Narrator #}
+            <div class="agent-card">
+                <div class="agent-card-header">
+                    <span class="agent-card-title" style="color:var(--accent);">② Code Narrator</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn btn-sm" id="narrate-btn" onclick="runFileAgent('narrate')">▶ Narrate</button>
+                        <span id="narrate-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span> Narrating…</span>
+                    </div>
+                </div>
+                <div class="agent-card-desc">Produces a technical summary consumed by the Blog pipeline and README Writer. Uses Claude Sonnet.</div>
+                <div id="narrate-output" style="display:none;" class="agent-output"></div>
+            </div>
+
+            {# Code Commenter #}
+            <div class="agent-card">
+                <div class="agent-card-header">
+                    <span class="agent-card-title" style="color:var(--blue);">③ Code Commenter</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn btn-sm" id="comment-btn" onclick="runFileAgent('comment')">▶ Add Comments</button>
+                        <button class="btn btn-sm btn-green" id="comment-review-btn" style="display:none;" onclick="markCommentReviewed()">✓ Mark Reviewed</button>
+                        <button class="btn btn-sm btn-green" id="comment-push-btn" style="display:none;" onclick="runFileAgent('push-comments')">↑ Push to GitHub</button>
+                        <span id="comment-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span> Commenting…</span>
+                    </div>
+                </div>
+                <div class="agent-card-desc">Adds docstrings and inline comments. No logic changes. Review before pushing to GitHub.</div>
+                <div id="comment-output" style="display:none;" class="agent-output"></div>
+            </div>
+
+            {# Code Improver #}
+            <div class="agent-card">
+                <div class="agent-card-header">
+                    <span class="agent-card-title" style="color:var(--yellow);">④ Code Improver</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="btn btn-sm" id="improve-btn" onclick="runFileAgent('improve')">▶ Review Code</button>
+                        <span id="improve-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span> Analyzing…</span>
+                    </div>
+                </div>
+                <div class="agent-card-desc">Structured improvement report — severity, category, and concrete suggestions. Never auto-applied.</div>
+                <div id="improve-output" style="display:none;" class="agent-output"></div>
+            </div>
         </div>
 
     </div>
-
-    {# ── FILE DETAIL DRAWER (inside the right panel) ── #}
-    <div class="detail-overlay" id="file-overlay" onclick="closeFileDetail()" style="z-index:350;"></div>
-    <div id="file-detail-drawer" class="detail-drawer" style="z-index:360;width:480px;"></div>
-
 </div>
 
 <script>
+// ── FILE SELECTION ─────────────────────────────────────────────────────────────
+let selectedFileId = null;
+let selectedCommentedStatus = 'none';
+
+function selectFile(fileId, rowEl) {
+    // Deselect previous
+    document.querySelectorAll('.file-row').forEach(r => r.classList.remove('selected'));
+    rowEl.classList.add('selected');
+    selectedFileId = fileId;
+
+    // Show agent panel
+    const panel = document.getElementById('file-agent-panel');
+    panel.style.display = 'block';
+
+    // Update selected file name
+    const fileName = rowEl.querySelector('.file-row-name').textContent.trim();
+    document.getElementById('selected-file-name').textContent = fileName;
+
+    // Clear old outputs
+    ['pull','narrate','comment','improve'].forEach(t => {
+        const el = document.getElementById(`${t}-output`);
+        if (el) { el.style.display = 'none'; el.textContent = ''; }
+    });
+    document.getElementById('comment-review-btn').style.display = 'none';
+    document.getElementById('comment-push-btn').style.display = 'none';
+
+    // Update button states based on file badges
+    const badges = rowEl.querySelectorAll('.badge');
+    const badgeTexts = [...badges].map(b => b.title + ' ' + b.textContent.toLowerCase());
+    const hasCode = !badgeTexts.some(t => t.includes('not pulled'));
+    const commentStatus = [...badges].find(b => b.title.startsWith('Comments'));
+
+    if (commentStatus) {
+        selectedCommentedStatus = commentStatus.title.replace('Comments ', '');
+        if (selectedCommentedStatus === 'generated') {
+            document.getElementById('comment-review-btn').style.display = 'inline-flex';
+        } else if (selectedCommentedStatus === 'reviewed') {
+            document.getElementById('comment-push-btn').style.display = 'inline-flex';
+        }
+    }
+
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearFileSelection() {
+    selectedFileId = null;
+    document.querySelectorAll('.file-row').forEach(r => r.classList.remove('selected'));
+    document.getElementById('file-agent-panel').style.display = 'none';
+}
+
+// ── FILE AGENT RUNNER ──────────────────────────────────────────────────────────
+async function runFileAgent(action) {
+    if (!selectedFileId) { showToast('Select a file first.', true); return; }
+
+    const spinner = document.getElementById(`${action === 'push-comments' ? 'comment' : action}-spinner`);
+    const output  = document.getElementById(`${action === 'push-comments' ? 'comment' : action}-output`);
+    const btn     = document.getElementById(`${action === 'push-comments' ? 'comment' : action}-btn`);
+
+    if (spinner) spinner.style.display = 'inline';
+    if (btn) btn.disabled = true;
+
+    const urlMap = {
+        'pull':          `/code-intel/files/${selectedFileId}/pull`,
+        'narrate':       `/code-intel/files/${selectedFileId}/narrate`,
+        'comment':       `/code-intel/files/${selectedFileId}/comment`,
+        'improve':       `/code-intel/files/${selectedFileId}/improve`,
+        'push-comments': `/code-intel/files/${selectedFileId}/push-comments`,
+    };
+
+    try {
+        const resp = await fetch(urlMap[action], { method: 'POST' });
+        const html = await resp.text();
+
+        // The endpoint returns the full file detail partial — parse out the toast and outputs
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const toastVal = doc.querySelector('[data-toast]')?.dataset.toast;
+        if (toastVal) showToast(toastVal);
+
+        // After pull — reload the project detail to update badges
+        if (action === 'pull' || action === 'push-comments') {
+            // Reload the whole project detail to refresh file list badges
+            const projectId = getProjectIdFromDetail();
+            if (projectId) {
+                htmx.ajax('GET', `/code-intel/projects/${projectId}/detail`, {
+                    target: '#ci-detail-panel',
+                    swap: 'innerHTML',
+                });
+                return;
+            }
+        }
+
+        // For narrate/comment/improve — show output inline
+        if (output) {
+            // Try to extract narration/comments/improvement text from the returned partial
+            let text = '';
+            const narrationEl = doc.querySelector('[id^="narrate"], .agent-output');
+            if (narrationEl) text = narrationEl.textContent.trim();
+
+            // Fallback: show a success message
+            if (!text) text = `✓ ${action} completed. Reload the file row to see updated badges.`;
+
+            output.textContent = text;
+            output.style.display = 'block';
+
+            // Show review button after comment generation
+            if (action === 'comment') {
+                document.getElementById('comment-review-btn').style.display = 'inline-flex';
+            }
+        }
+
+        // Reload project detail to update badges
+        const projectId = getProjectIdFromDetail();
+        if (projectId) {
+            setTimeout(() => {
+                htmx.ajax('GET', `/code-intel/projects/${projectId}/detail`, {
+                    target: '#ci-detail-panel',
+                    swap: 'innerHTML',
+                });
+            }, 800);
+        }
+
+    } catch (err) {
+        showToast(`⚠ ${action} failed: ${err.message}`, true);
+    } finally {
+        if (spinner) spinner.style.display = 'none';
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function markCommentReviewed() {
+    if (!selectedFileId) return;
+    const fd = new FormData();
+    fd.append('commented_status', 'reviewed');
+    const resp = await fetch(`/code-intel/files/${selectedFileId}/comment-status`, { method: 'PATCH', body: fd });
+    if (resp.ok) {
+        showToast('Marked as reviewed. Ready to push.');
+        document.getElementById('comment-review-btn').style.display = 'none';
+        document.getElementById('comment-push-btn').style.display = 'inline-flex';
+    }
+}
+
 async function saveReadme(projectId) {
     const content = document.getElementById(`readme-editor-${projectId}`).value;
     const fd = new FormData();
@@ -173,25 +359,21 @@ async function saveReadme(projectId) {
     const resp = await fetch(`/code-intel/projects/${projectId}/readme`, { method: 'PATCH', body: fd });
     if (resp.ok) {
         document.getElementById('ci-detail-panel').innerHTML = await resp.text();
-        showToast('README saved and marked as reviewed.');
+        showToast('README saved.');
     }
 }
 
-function openFileDetail(fileId) {
-    htmx.ajax('GET', `/code-intel/files/${fileId}`, {
-        target: '#file-detail-drawer',
-        swap: 'innerHTML',
-    });
-    document.getElementById('file-detail-drawer').classList.add('open');
-    document.getElementById('file-overlay').classList.add('visible');
+function getProjectIdFromDetail() {
+    // Extract project ID from a data attribute we set on the container
+    const el = document.querySelector('[data-project-id]');
+    return el ? el.dataset.projectId : null;
 }
 
-function closeFileDetail() {
-    document.getElementById('file-detail-drawer').classList.remove('open');
-    document.getElementById('file-overlay').classList.remove('visible');
-}
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeFileDetail();
+// Re-select file after panel reloads if we had one selected
+document.addEventListener('htmx:afterSwap', (e) => {
+    if (e.target.id === 'ci-detail-panel') {
+        const toast = e.target.querySelector('[data-toast]')?.dataset.toast;
+        if (toast) showToast(toast);
+    }
 });
 </script>

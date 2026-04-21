@@ -1,0 +1,56 @@
+{# templates/partials/project_list.html
+   Rendered into #project-list-panel.
+   `projects` = list of CodeProject ORM objects
+   `toast`    = optional success message
+#}
+{% if toast %}
+<script>document.addEventListener('DOMContentLoaded', () => showToast('{{ toast }}'));</script>
+{% endif %}
+
+{% if projects %}
+{% for project in projects %}
+<div class="project-card" id="project-card-{{ project.id }}" onclick="openProject({{ project.id }})">
+    <div class="project-card-name">{{ project.project_name }}</div>
+    <div class="project-card-repo">
+        {{ project.github_repo }}{% if project.github_base_path %} / {{ project.github_base_path }}{% endif %}
+    </div>
+    <div class="project-card-meta">
+        <div class="project-card-stats">
+            <span class="badge badge-muted">{{ project.file_count }} file{{ 's' if project.file_count != 1 else '' }}</span>
+            {% if project.readme_status.value == 'pushed' %}
+                <span class="badge badge-green">README ✓</span>
+            {% elif project.readme_status.value in ('draft', 'reviewed', 'approved') %}
+                <span class="badge badge-yellow">README draft</span>
+            {% elif project.readme_status.value == 'stale' %}
+                <span class="badge badge-red">README stale</span>
+            {% endif %}
+        </div>
+        <button class="btn btn-sm"
+                style="color:var(--red);border-color:transparent;"
+                onclick="event.stopPropagation(); deleteProject({{ project.id }}, '{{ project.project_name }}')"
+                title="Delete project">✕</button>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="empty-state" style="padding:40px 20px;">
+    <div class="empty-icon">◈</div>
+    <p>No projects yet.<br>Click "New Project" to connect a GitHub repo.</p>
+</div>
+{% endif %}
+
+<script>
+async function deleteProject(id, name) {
+    if (!confirm(`Delete project "${name}" and all its tracked files?`)) return;
+    const resp = await fetch(`/code-intel/projects/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+        document.getElementById('project-list-panel').innerHTML = await resp.text();
+        document.getElementById('ci-detail-panel').innerHTML = `
+            <div class="ci-detail-empty">
+                <div class="empty-icon">◈</div>
+                <p>Select a project to view its files.</p>
+            </div>`;
+    }
+}
+</script>

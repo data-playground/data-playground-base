@@ -1,6 +1,4 @@
-{# templates/code_intelligence.html #}
 {% extends "base.html" %}
-
 {% block title %}Code Intelligence{% endblock %}
 {% block page_title %}Code Intelligence{% endblock %}
 
@@ -14,76 +12,99 @@
 
 {% block extra_css %}
 <style>
-    /* ── TWO-PANEL LAYOUT: project list left, detail right ── */
+    /* ── TWO-PANEL LAYOUT ── */
     .ci-workspace {
         display: grid;
         grid-template-columns: 300px 1fr;
-        gap: 16px;
+        gap: 0;
         height: 100%;
+        overflow: hidden;
     }
 
-    /* ── PROJECT LIST (left panel) ── */
+    /* ── LEFT: PROJECT LIST ── */
     .project-list-panel {
+        border-right: 1px solid var(--border);
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        overflow: hidden;
+        background: var(--bg-card);
+    }
+    [data-theme="dark"] .project-list-panel,
+    [data-theme="mixed"] .project-list-panel { background: #111318; }
+
+    .project-list-header {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .project-list-header-label {
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .project-list-scroll {
+        flex: 1;
         overflow-y: auto;
-        padding-right: 4px;
+        padding: 8px 0;
     }
 
     .project-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 12px 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
         cursor: pointer;
-        transition: all var(--transition);
-        border-left: 3px solid transparent;
+        transition: background var(--transition);
+        border-left: 2px solid transparent;
     }
-
-    .project-card:hover { border-color: var(--accent); box-shadow: var(--shadow); }
-    .project-card.active { border-left-color: var(--accent); background: var(--accent-dim); }
-
+    .project-card:hover { background: rgba(124,111,255,0.06); }
+    .project-card.active {
+        background: rgba(124,111,255,0.10);
+        border-left-color: var(--accent);
+    }
+    .project-card-icon { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
+    .project-card-info { flex: 1; min-width: 0; }
     .project-card-name {
-        font-family: 'Syne', sans-serif;
-        font-weight: 700;
-        font-size: 12px;
+        font-size: 11px;
+        font-weight: 500;
         color: var(--text-primary);
-        margin-bottom: 4px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
-
+    .project-card.active .project-card-name { color: var(--accent); }
     .project-card-repo {
         font-size: 9px;
         color: var(--text-muted);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        margin-bottom: 8px;
+        margin-top: 1px;
     }
-
-    .project-card-meta {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
+    .project-card-badges { display: flex; gap: 4px; flex-shrink: 0; }
+    .project-card-delete {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 10px;
+        padding: 2px 4px;
+        border-radius: 3px;
+        opacity: 0;
+        transition: opacity var(--transition), color var(--transition);
     }
+    .project-card:hover .project-card-delete { opacity: 1; }
+    .project-card-delete:hover { color: var(--red); }
 
-    .project-card-stats {
-        display: flex;
-        gap: 6px;
-    }
-
-    /* ── DETAIL PANEL (right) ── */
+    /* ── RIGHT PANEL ── */
     .ci-detail-panel {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+        background: var(--bg-card);
     }
 
     .ci-detail-empty {
@@ -95,9 +116,174 @@
         gap: 12px;
         color: var(--text-muted);
     }
-
     .ci-detail-empty .empty-icon { font-size: 36px; opacity: 0.3; }
     .ci-detail-empty p { font-size: 12px; text-align: center; line-height: 1.7; }
+
+    /* ── PROJECT DETAIL INNER ── */
+    .pd-header {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-shrink: 0;
+        background: var(--bg-hover);
+    }
+    .pd-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; color:var(--text-primary); margin-bottom:2px; }
+    .pd-subtitle { font-size:9px; color:var(--text-muted); }
+
+    .pd-body { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:0; }
+
+    /* ── FILE TREE ── */
+    .file-tree-section { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .section-label {
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .file-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background var(--transition);
+        border: 1px solid transparent;
+    }
+    .file-row:hover { background: var(--bg-hover); border-color: var(--border); }
+    .file-row.selected { background: var(--accent-dim); border-color: var(--accent); }
+    .file-row-icon { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+    .file-row-name { font-size: 11px; color: var(--text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-row-path { font-size: 9px; color: var(--text-muted); }
+    .file-row-badges { display: flex; gap: 4px; flex-shrink: 0; }
+
+    /* ── AGENT PANEL ── */
+    .agent-panel { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .agent-card {
+        background: var(--bg-hover);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+    }
+    .agent-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+    }
+    .agent-card-title {
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+    }
+    .agent-card-desc { font-size: 10px; color: var(--text-muted); line-height: 1.6; margin-bottom: 8px; }
+    .agent-output {
+        font-size: 10px;
+        line-height: 1.7;
+        color: var(--text-secondary);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 8px 10px;
+        max-height: 180px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        margin-top: 8px;
+    }
+
+    /* README section */
+    .readme-editor {
+        width: 100%;
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border-radius: 5px;
+        outline: none;
+        resize: vertical;
+        line-height: 1.7;
+        min-height: 200px;
+        margin-top: 8px;
+    }
+    .readme-editor:focus { border-color: var(--accent); }
+
+    /* ── MODAL ── */
+    .modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 400;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-box {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        width: 520px;
+        max-width: 95vw;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+    }
+    .modal-head {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .modal-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+    .modal-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:2px 6px; }
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .modal-foot {
+        padding: 12px 20px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    /* ── SPINNER ── */
+    .htmx-indicator { display: none; font-size: 9px; color: var(--text-muted); }
+    .htmx-request .htmx-indicator { display: inline; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-inline {
+        display: inline-block;
+        width: 10px; height: 10px;
+        border: 1.5px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin .6s linear infinite;
+        vertical-align: middle;
+    }
+
+    /* ── DEPTH SELECTOR ── */
+    .depth-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .depth-btn {
+        padding: 3px 10px;
+        font-family: 'DM Mono', monospace;
+        font-size: 9px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        border-radius: 3px;
+        cursor: pointer;
+        transition: all var(--transition);
+    }
+    .depth-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .depth-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
 </style>
 {% endblock %}
 
@@ -105,70 +291,73 @@
 <div class="ci-workspace">
 
     {# ── LEFT: PROJECT LIST ── #}
-    <div class="project-list-panel" id="project-list-panel">
-        {% include "partials/project_list.html" %}
+    <div class="project-list-panel">
+        <div class="project-list-header">
+            <div class="project-list-header-label">Projects</div>
+        </div>
+        <div class="project-list-scroll" id="project-list-panel">
+            {% include "partials/project_list.html" %}
+        </div>
     </div>
 
-    {# ── RIGHT: PROJECT DETAIL (HTMX target) ── #}
+    {# ── RIGHT: DETAIL PANEL ── #}
     <div class="ci-detail-panel" id="ci-detail-panel">
         <div class="ci-detail-empty">
             <div class="empty-icon">◈</div>
-            <p>Select a project to view its files<br>or create a new one to get started.</p>
+            <p>Select a project to explore its files<br>or create a new one to get started.</p>
         </div>
     </div>
 
 </div>
 
 {# ── NEW PROJECT MODAL ── #}
-<div class="modal-backdrop" id="new-project-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;align-items:center;justify-content:center;">
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:520px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
-        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">⊕ New Code Project</span>
-            <button onclick="closeNewProjectModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px;">✕</button>
+<div class="modal-backdrop" id="new-project-modal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <span class="modal-title">⊕ New Code Project</span>
+            <button class="modal-close" onclick="closeNewProjectModal()">✕</button>
         </div>
-        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+        <div class="modal-body">
             <div>
                 <label class="form-label">Project Name</label>
                 <input class="form-input" type="text" id="np-name" placeholder="Life OS FastAPI App">
             </div>
             <div>
-                <label class="form-label">GitHub Repo <span style="color:var(--text-muted);font-size:8px;">(owner/repo-name)</span></label>
+                <label class="form-label">GitHub Repo <span style="font-size:8px;color:var(--text-muted);">(owner/repo)</span></label>
                 <input class="form-input" type="text" id="np-repo" placeholder="pedro/data-playground-base">
             </div>
             <div>
-                <label class="form-label">
-                    Base Path
-                    <span style="color:var(--text-muted);font-size:8px;margin-left:6px;">optional — leave empty for whole repo</span>
-                </label>
-                <input class="form-input" type="text" id="np-path" placeholder="internal_dataplayground/routers">
+                <label class="form-label">Base Path <span style="font-size:8px;color:var(--text-muted);">optional — leave empty for whole repo</span></label>
+                <input class="form-input" type="text" id="np-path" placeholder="internal_dataplayground">
                 <div style="font-size:9px;color:var(--text-muted);margin-top:4px;">
-                    Examples: &nbsp;<code style="color:var(--accent)">internal_dataplayground</code> for the whole app &nbsp;·&nbsp;
-                    <code style="color:var(--accent)">internal_dataplayground/routers</code> for just routers
+                    Leave empty for whole repo · <code style="color:var(--accent)">internal_dataplayground</code> for a subfolder
                 </div>
             </div>
             <div>
-                <label class="form-label">Description <span style="color:var(--text-muted);font-size:8px;">optional</span></label>
+                <label class="form-label">Description <span style="font-size:8px;color:var(--text-muted);">optional</span></label>
                 <input class="form-input" type="text" id="np-desc" placeholder="FastAPI routes for the Finance module">
             </div>
             <div id="np-error" style="font-size:11px;color:var(--red);min-height:16px;"></div>
         </div>
-        <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">
+        <div class="modal-foot">
             <button class="btn" onclick="closeNewProjectModal()">Cancel</button>
             <button class="btn btn-primary" id="np-submit" onclick="submitNewProject()">Create Project →</button>
         </div>
     </div>
 </div>
+
+<div id="toast"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 // ── NEW PROJECT MODAL ──────────────────────────────────────────────────────────
 function openNewProjectModal() {
-    document.getElementById('new-project-modal').style.display = 'flex';
+    document.getElementById('new-project-modal').classList.add('open');
     setTimeout(() => document.getElementById('np-name').focus(), 100);
 }
 function closeNewProjectModal() {
-    document.getElementById('new-project-modal').style.display = 'none';
+    document.getElementById('new-project-modal').classList.remove('open');
     document.getElementById('np-error').textContent = '';
 }
 document.getElementById('new-project-modal').addEventListener('click', e => {
@@ -201,7 +390,6 @@ async function submitNewProject() {
         if (resp.ok) {
             document.getElementById('project-list-panel').innerHTML = html;
             closeNewProjectModal();
-            // Clear inputs
             ['np-name','np-repo','np-path','np-desc'].forEach(id => document.getElementById(id).value = '');
             showToast('Project created.');
         } else {
@@ -214,18 +402,31 @@ async function submitNewProject() {
     }
 }
 
-// ── LOAD PROJECT DETAIL ────────────────────────────────────────────────────────
+// ── OPEN PROJECT DETAIL ────────────────────────────────────────────────────────
 function openProject(projectId) {
-    // Highlight selected card
     document.querySelectorAll('.project-card').forEach(c => c.classList.remove('active'));
     const card = document.getElementById(`project-card-${projectId}`);
     if (card) card.classList.add('active');
 
-    // Load detail via HTMX
     htmx.ajax('GET', `/code-intel/projects/${projectId}/detail`, {
         target: '#ci-detail-panel',
         swap: 'innerHTML',
     });
+}
+
+// ── DELETE PROJECT ─────────────────────────────────────────────────────────────
+async function deleteProject(id, name) {
+    if (!confirm(`Delete project "${name}" and all its tracked files?`)) return;
+    const resp = await fetch(`/code-intel/projects/${id}`, { method: 'DELETE' });
+    if (resp.ok) {
+        document.getElementById('project-list-panel').innerHTML = await resp.text();
+        document.getElementById('ci-detail-panel').innerHTML = `
+            <div class="ci-detail-empty">
+                <div class="empty-icon">◈</div>
+                <p>Select a project to view its files.</p>
+            </div>`;
+        showToast('Project deleted.');
+    }
 }
 </script>
 {% endblock %}
