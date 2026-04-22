@@ -547,16 +547,6 @@ Order by severity (High first). Maximum 10 suggestions per file.
         f"{'Context: ' + narration[:500] + chr(10) if narration else ''}"
         f"Code:\n{code_content}"
     )
-    # Use Gemini Pro for deeper reasoning on code review
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-3-flash-preview:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2},  # Low temp for analytical tasks
-    }
-    resp = requests.post(url, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    
+    return _gemini_flash(system, prompt)
+
