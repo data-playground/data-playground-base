@@ -58,6 +58,26 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-intel", tags=["Code Intelligence"])
 templates = Jinja2Templates(directory="templates")
 
+CODE_NARRATE_DAG  = "life_os_code_narrate"
+CODE_COMMENT_DAG  = "life_os_code_comment"
+CODE_IMPROVE_DAG  = "life_os_code_improve"
+README_WRITER_DAG = "life_os_readme_writer"
+
+async def _trigger_airflow(dag_id: str, conf: dict) -> str:
+    """Trigger an Airflow DAG and return the run_id."""
+    import base64
+    from gcp_secrets import get_key
+    password = get_key("Airflow-Admin-Password")
+    token = base64.b64encode(f"admin:{password}".encode()).decode()
+    headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            "http://airflow-webserver:8080/api/v1/dagRuns".replace("dagRuns", f"dags/{dag_id}/dagRuns"),
+            headers=headers,
+            json={"conf": conf},
+        )
+        resp.raise_for_status()
+        return resp.json().get("dag_run_id", "unknown")
 
 # ── PROJECT MANAGEMENT ─────────────────────────────────────────────────────────
 
@@ -310,6 +330,34 @@ async def push_readme(
          "toast": f"README pushed to GitHub at {readme_path} ✓"},
     )
 
+@router.post("/projects/{project_id}/trigger-readme", response_class=HTMLResponse)
+async def trigger_readme(
+    project_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    form = await request.form()
+    folder_path = str(form.get("folder_path", "")).strip()
+    conf = {"project_id": project_id}
+    if folder_path:
+        conf["folder_path"] = folder_path
+    try:
+        run_id = await _trigger_airflow(README_WRITER_DAG, conf)
+        project = await db.get(CodeProject, project_id)
+        label = f"/{folder_path.split('/')[-1]}" if folder_path else "project"
+        return templates.TemplateResponse(
+            "partials/project_detail.html",
+            {"request": request, "project": project,
+             "toast": f"README for {label} queued (run: {run_id[:8]}…). Refresh in ~30s."},
+        )
+    except Exception as exc:
+        project = await db.get(CodeProject, project_id)
+        return templates.TemplateResponse(
+            "partials/project_detail.html",
+            {"request": request, "project": project,
+             "error": f"Airflow unreachable: {exc}"},
+        )
+
 
 # ── FILE OPERATIONS ────────────────────────────────────────────────────────────
 
@@ -404,6 +452,24 @@ async def narrate_file(
         {"request": request, "file": code_file, "toast": "Narration generated ✓"},
     )
 
+@router.post("/batch/narrate", response_class=HTMLResponse)
+async def trigger_batch_narrate(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Triggers Airflow to narrate a batch of files. Body: {file_ids: [...], project_id: N}"""
+    data = await request.json()
+    file_ids = data.get("file_ids", [])
+    project_id = data.get("project_id")
+    if not file_ids:
+        raise HTTPException(status_code=422, detail="file_ids required")
+    try:
+        run_id = await _trigger_airflow(CODE_NARRATE_DAG, {"file_ids": file_ids, "project_id": project_id})
+        return HTMLResponse(f'{{"run_id": "{run_id}", "status": "triggered", "count": {len(file_ids)}}}', status_code=200)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Airflow unreachable: {exc}")
+
+
 
 @router.post("/files/{file_id}/comment", response_class=HTMLResponse)
 async def comment_file(
@@ -435,6 +501,18 @@ async def comment_file(
         {"request": request, "file": code_file,
          "toast": "Commented version generated. Review before pushing."},
     )
+
+@router.post("/batch/comment", response_class=HTMLResponse)
+async def trigger_batch_comment(request: Request, db: AsyncSession = Depends(get_db)):
+    data = await request.json()
+    file_ids = data.get("file_ids", [])
+    if not file_ids:
+        raise HTTPException(status_code=422, detail="file_ids required")
+    try:
+        run_id = await _trigger_airflow(CODE_COMMENT_DAG, {"file_ids": file_ids})
+        return HTMLResponse(f'{{"run_id": "{run_id}", "status": "triggered", "count": {len(file_ids)}}}')
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Airflow unreachable: {exc}")
 
 
 @router.post("/files/{file_id}/improve", response_class=HTMLResponse)
@@ -471,6 +549,18 @@ async def improve_file(
         {"request": request, "file": code_file,
          "toast": "Improvement report generated. Review the suggestions."},
     )
+
+@router.post("/batch/improve", response_class=HTMLResponse)
+async def trigger_batch_improve(request: Request, db: AsyncSession = Depends(get_db)):
+    data = await request.json()
+    file_ids = data.get("file_ids", [])
+    if not file_ids:
+        raise HTTPException(status_code=422, detail="file_ids required")
+    try:
+        run_id = await _trigger_airflow(CODE_IMPROVE_DAG, {"file_ids": file_ids})
+        return HTMLResponse(f'{{"run_id": "{run_id}", "status": "triggered", "count": {len(file_ids)}}}')
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Airflow unreachable: {exc}")
 
 
 @router.post("/files/{file_id}/push-comments", response_class=HTMLResponse)
@@ -567,3 +657,32 @@ async def update_comment_status(
         {"request": request, "file": code_file,
          "toast": "Commented code marked as reviewed. Ready to push to GitHub."},
     )
+
+
+@router.get("/projects/{project_id}/status")
+async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Lightweight polling endpoint. Returns current narration/comment/improve
+    counts so the UI can detect when a DAG run has updated files.
+    """
+    from sqlalchemy import text
+    result = await db.execute(
+        text("""
+            SELECT
+                COUNT(*) as total,
+                SUM(narration IS NOT NULL) as narrated,
+                SUM(commented_status != 'none') as commented,
+                SUM(improvement_status != 'none') as improved,
+                MAX(updated_at) as last_updated
+            FROM code_files WHERE project_id = :pid
+        """),
+        {"pid": project_id}
+    )
+    row = result.mappings().one()
+    return {
+        "total": row["total"],
+        "narrated": row["narrated"] or 0,
+        "commented": row["commented"] or 0,
+        "improved": row["improved"] or 0,
+        "last_updated": str(row["last_updated"]) if row["last_updated"] else None,
+    }

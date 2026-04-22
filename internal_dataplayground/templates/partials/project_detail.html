@@ -376,4 +376,147 @@ document.addEventListener('htmx:afterSwap', (e) => {
         if (toast) showToast(toast);
     }
 });
+
+// Replace the runBatch function in project_detail.html
+
+async function runBatch(action) {
+    const ids = [...selectedFileIds];
+    if (!ids.length) { showToast('Select at least one file first.', true); return; }
+
+    const spinner = document.getElementById(`${action}-spinner`);
+    if (spinner) spinner.style.display = 'inline';
+
+    const urlMap = {
+        pull:    null,  // pull stays sync — handled separately below
+        narrate: '/code-intel/batch/narrate',
+        comment: '/code-intel/batch/comment',
+        improve: '/code-intel/batch/improve',
+    };
+
+    // Pull stays synchronous (fast GitHub API calls, no need for Airflow)
+    if (action === 'pull') {
+        await runPullBatch(ids);
+        if (spinner) spinner.style.display = 'none';
+        return;
+    }
+
+    try {
+        const resp = await fetch(urlMap[action], {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                file_ids: ids,
+                project_id: window._projectId,
+            }),
+        });
+
+        if (resp.ok) {
+            const data = await resp.json();
+            showToast(`${ids.length} files queued in Airflow (run: ${data.run_id?.substring(0,12)}…). Badges will update automatically.`);
+            // Start polling for completion
+            startPolling();
+        } else {
+            const err = await resp.text();
+            showToast(`⚠ Failed to queue: ${err.substring(0,80)}`, true);
+        }
+    } catch (e) {
+        showToast(`⚠ Network error: ${e.message}`, true);
+    } finally {
+        if (spinner) spinner.style.display = 'none';
+    }
+}
+
+// Pull stays synchronous (it's just a GitHub API call)
+async function runPullBatch(ids) {
+    const logEl = document.getElementById('pull-log');
+    const barEl = document.getElementById('pull-bar');
+    const progressEl = document.getElementById('pull-progress');
+    if (progressEl) progressEl.style.display = 'block';
+    if (logEl) logEl.textContent = '';
+
+    let done = 0;
+    for (const fileId of ids) {
+        const fileEl = document.getElementById(`tf-${fileId}`);
+        const name = fileEl?.dataset.fileName || `file ${fileId}`;
+        if (logEl) { logEl.textContent += `⟳ ${name}…\n`; logEl.scrollTop = logEl.scrollHeight; }
+
+        try {
+            const resp = await fetch(`/code-intel/files/${fileId}/pull`, { method: 'POST' });
+            done++;
+            if (logEl) { logEl.textContent = logEl.textContent.replace(`⟳ ${name}…`, `✓ ${name}`); logEl.scrollTop = logEl.scrollHeight; }
+        } catch(e) {
+            if (logEl) { logEl.textContent += `  ⚠ ${e.message}\n`; }
+        }
+        if (barEl) barEl.style.width = `${(done / ids.length) * 100}%`;
+        if (ids.indexOf(fileId) < ids.length - 1) await new Promise(r => setTimeout(r, 200));
+    }
+
+    showToast(`Pulled ${done}/${ids.length} files.`);
+    setTimeout(() => {
+        htmx.ajax('GET', `/code-intel/projects/${window._projectId}/detail`, {
+            target: '#ci-detail-panel', swap: 'innerHTML'
+        });
+    }, 500);
+}
+
+// Replace generateReadme to use the Airflow trigger
+async function generateReadme() {
+    const btn = document.getElementById('readme-gen-btn');
+    const spinner = document.getElementById('readme-spinner');
+    btn.disabled = true; spinner.style.display = 'inline';
+
+    const fd = new FormData();
+    if (selectedFolderPath) fd.append('folder_path', selectedFolderPath);
+
+    try {
+        const resp = await fetch(`/code-intel/projects/${window._projectId}/trigger-readme`, {
+            method: 'POST', body: fd
+        });
+        document.getElementById('ci-detail-panel').innerHTML = await resp.text();
+        // Start polling so README appears when done
+        startPolling();
+    } finally {
+        btn.disabled = false; spinner.style.display = 'none';
+    }
+}
+
+// ── POLLING — refresh badges when Airflow completes ───────────────────────────
+let _pollTimer = null;
+let _lastUpdated = null;
+let _pollCount = 0;
+
+function startPolling() {
+    if (_pollTimer) clearInterval(_pollTimer);
+    _pollCount = 0;
+    _pollTimer = setInterval(checkStatus, 8000); // check every 8s
+    showToast('Airflow job running… badges will update automatically.');
+}
+
+async function checkStatus() {
+    _pollCount++;
+    // Stop polling after 5 minutes (Airflow probably failed silently)
+    if (_pollCount > 37) {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+        return;
+    }
+    try {
+        const resp = await fetch(`/code-intel/projects/${window._projectId}/status`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        if (_lastUpdated && data.last_updated !== _lastUpdated) {
+            // Something changed — reload the detail panel
+            clearInterval(_pollTimer);
+            _pollTimer = null;
+            htmx.ajax('GET', `/code-intel/projects/${window._projectId}/detail`, {
+                target: '#ci-detail-panel', swap: 'innerHTML'
+            });
+            showToast(`Done! ${data.narrated}/${data.total} files narrated.`);
+        }
+        _lastUpdated = data.last_updated;
+    } catch(e) {
+        // silent — don't bother the user with polling errors
+    }
+}
 </script>
