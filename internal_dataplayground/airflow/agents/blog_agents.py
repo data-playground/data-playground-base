@@ -59,6 +59,19 @@ def _gemini_flash(system: str, prompt: str) -> str:
     resp.raise_for_status()
     return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
+def _gemini_flash_2_5(system: str, prompt: str) -> str:
+    """Calls Gemini Flash for fast, instruction-following tasks."""
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        f"models/gemini-2.5-flash-preview:generateContent?key={_gemini_key()}"
+    )
+    payload = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"parts": [{"text": prompt}]}],
+    }
+    resp = requests.post(url, json=payload, timeout=60)
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 def _gemini_pro_json(system: str, prompt: str, schema: dict, retries: int = 3) -> str:
     """Calls Gemini Pro with structured JSON output."""
@@ -314,7 +327,7 @@ Format as Markdown. Keep it under 600 words.
         f"{'Project context: ' + readme_context + chr(10) if readme_context else ''}"
         f"Code:\n{code_content}"
     )
-    return _claude_sonnet(system, prompt)
+    return _gemini_flash_2_5(system, prompt)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
