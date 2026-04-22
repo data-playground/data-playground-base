@@ -63,7 +63,7 @@ def _gemini_flash_2_5(system: str, prompt: str) -> str:
     """Calls Gemini Flash for fast, instruction-following tasks."""
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash-preview:generateContent?key={_gemini_key()}"
+        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
     )
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
