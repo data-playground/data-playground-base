@@ -659,31 +659,165 @@ async def update_comment_status(
          "toast": "Commented code marked as reviewed. Ready to push to GitHub."},
     )
 
+@router.get("/projects/{project_id}/file-statuses")
+async def get_file_statuses(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns lightweight status for every file in the project.
+    Used by the frontend to refresh badges in-place WITHOUT reloading the tree.
+    """
+    from sqlalchemy import text
+    result = await db.execute(
+        text("""
+            SELECT
+                id,
+                raw_code IS NOT NULL         AS has_code,
+                narration IS NOT NULL        AS narrated,
+                (narration IS NOT NULL AND code_pulled_at > narration_generated_at) AS narrate_stale,
+                commented_status,
+                improvement_status
+            FROM code_files
+            WHERE project_id = :pid
+            ORDER BY github_path
+        """),
+        {"pid": project_id}
+    )
+    rows = result.mappings().all()
+    return [
+        {
+            "id": r["id"],
+            "hasCode": bool(r["has_code"]),
+            "narrated": bool(r["narrated"]),
+            "narrateStale": bool(r["narrate_stale"]),
+            "commentStatus": r["commented_status"],
+            "improveStatus": r["improvement_status"],
+        }
+        for r in rows
+    ]
+
+
+@router.post("/projects/{project_id}/trigger-readme", response_class=HTMLResponse)
+async def trigger_readme(
+    project_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Triggers the README writer DAG.
+
+    If folder_path is provided: queues a folder-scoped README in Airflow and
+    returns JSON {"run_id": "...", "status": "queued"} so the frontend can poll.
+
+    If no folder_path: queues full project README and returns the project_detail
+    partial with a toast (existing behavior).
+    """
+    form = await request.form()
+    folder_path = str(form.get("folder_path", "")).strip().rstrip("/")
+    return_content = str(form.get("return_content", "false")).lower() == "true"
+
+    conf = {"project_id": project_id}
+    if folder_path:
+        conf["folder_path"] = folder_path
+
+    try:
+        run_id = await _trigger_airflow(README_WRITER_DAG, conf)
+    except Exception as exc:
+        if folder_path:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"error": str(exc)}, status_code=502)
+        project = await db.get(CodeProject, project_id)
+        return templates.TemplateResponse(
+            "partials/project_detail.html",
+            {"request": request, "project": project, "error": f"Airflow unreachable: {exc}"},
+        )
+
+    if folder_path:
+        # Return JSON so the frontend knows it's queued and can poll
+        from fastapi.responses import JSONResponse
+        return JSONResponse({
+            "run_id": run_id,
+            "status": "queued",
+            "folder_path": folder_path,
+        })
+    else:
+        # Full project README — return the partial with a toast
+        project = await db.get(CodeProject, project_id)
+        label = f"/{folder_path.split('/')[-1]}" if folder_path else "full project"
+        return templates.TemplateResponse(
+            "partials/project_detail.html",
+            {
+                "request": request,
+                "project": project,
+                "toast": f"README for {label} queued (run: {run_id[:8]}…). Badges will update when done.",
+            },
+        )
+
+
+@router.get("/projects/{project_id}/readme-content")
+async def get_readme_content(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the current readme_md and last folder_path used.
+    Called by the frontend after polling detects a change, to display
+    a folder README in the inline panel without reloading the tree.
+    """
+    project = await db.get(CodeProject, project_id)
+    if not project or not project.readme_md:
+        raise HTTPException(status_code=404, detail="No README available")
+
+    # We store the folder path in the readme_md generation flow via the DAG,
+    # but don't persist it separately. Return the content and let the frontend
+    # display it. The DAG log has the folder_path — for now just return content.
+    return {
+        "content": project.readme_md,
+        "folder_path": None,  # frontend will use selectedFolderPath it already knows
+        "generated_at": str(project.readme_generated_at) if project.readme_generated_at else None,
+    }
+
+
+# Also update the /projects/{project_id}/status endpoint to include readme_updated:
+# Replace the existing status endpoint with this version:
 
 @router.get("/projects/{project_id}/status")
 async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
     """
     Lightweight polling endpoint. Returns current narration/comment/improve
     counts so the UI can detect when a DAG run has updated files.
+    readme_updated: True if readme was generated more recently than any file.
     """
     from sqlalchemy import text
     result = await db.execute(
         text("""
             SELECT
-                COUNT(*) as total,
-                SUM(narration IS NOT NULL) as narrated,
-                SUM(commented_status != 'none') as commented,
-                SUM(improvement_status != 'none') as improved,
-                MAX(updated_at) as last_updated
+                COUNT(*)                        AS total,
+                SUM(narration IS NOT NULL)      AS narrated,
+                SUM(commented_status != 'none') AS commented,
+                SUM(improvement_status != 'none') AS improved,
+                MAX(updated_at)                 AS last_updated
             FROM code_files WHERE project_id = :pid
         """),
         {"pid": project_id}
     )
     row = result.mappings().one()
+
+    # Check if readme was recently updated
+    project = await db.get(CodeProject, project_id)
+    readme_updated = False
+    if project and project.readme_generated_at and row["last_updated"]:
+        from datetime import timezone
+        gen_at = project.readme_generated_at
+        last = row["last_updated"]
+        readme_updated = gen_at > last
+
     return {
         "total": row["total"],
         "narrated": row["narrated"] or 0,
         "commented": row["commented"] or 0,
         "improved": row["improved"] or 0,
         "last_updated": str(row["last_updated"]) if row["last_updated"] else None,
+        "readme_updated": readme_updated,
     }
