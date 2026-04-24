@@ -3,6 +3,14 @@
    `project` = CodeProject ORM object (with .files loaded via selectin)
    `toast`   = optional success message
    `error`   = optional error message
+
+   FIX 1: Sync Files button now targets #ci-detail-panel with innerHTML swap,
+           which reloads this entire partial (tree included) rather than wiping it.
+           The tree is rebuilt from the fresh project data.
+
+   FIX 2: Folder README stored in project.folder_readme_md separately from
+           project.readme_md. "Save as Project README" calls a dedicated endpoint.
+           The folder README panel persists independently.
 #}
 <style>
 /* ── FILE TREE ── */
@@ -91,10 +99,29 @@
 .readme-editor { width: 100%; font-family: 'DM Mono', monospace; font-size: 10px; padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); border-radius: 5px; outline: none; resize: vertical; line-height: 1.7; min-height: 180px; margin-top: 8px; }
 .readme-editor:focus { border-color: var(--accent); }
 
-/* Folder README result panel */
-.folder-readme-panel { margin-top: 10px; padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 8px; display: none; }
+/* Folder README result panel — FIX 2: improved styling */
+.folder-readme-panel {
+    margin-top: 10px; padding: 0;
+    background: var(--bg-card); border: 1px solid var(--accent);
+    border-radius: 8px; display: none; overflow: hidden;
+}
 .folder-readme-panel.visible { display: block; }
-.folder-readme-title { font-size: 9px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+.folder-readme-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(124,111,255,0.06);
+    border-bottom: 1px solid rgba(124,111,255,0.2);
+}
+.folder-readme-title-text {
+    font-size: 9px; font-weight: 500; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent);
+}
+.folder-readme-warning {
+    font-size: 9px; color: var(--text-muted);
+    padding: 6px 12px 4px;
+    border-bottom: 1px dashed var(--border);
+}
+.folder-readme-body { padding: 0 12px 10px; }
 
 /* Polling indicator */
 .poll-indicator { display: none; align-items: center; gap: 6px; font-size: 9px; color: var(--text-muted); padding: 4px 10px; border-radius: 4px; background: var(--bg-hover); border: 1px solid var(--border); }
@@ -132,12 +159,21 @@
             {% elif project.readme_status.value == 'pushed' %}<span class="badge badge-green">README ✓</span>
             {% elif project.readme_status.value == 'stale' %}<span class="badge badge-red">README stale</span>
             {% endif %}
+            {#
+              FIX 1: Sync Files uses hx-target="#ci-detail-panel" with hx-swap="innerHTML".
+              This replaces the entire right panel with a freshly rendered project_detail
+              partial (which includes the rebuilt file tree) instead of wiping it blank.
+            #}
             <button class="btn btn-sm"
                     hx-post="/code-intel/projects/{{ project.id }}/sync"
                     hx-target="#ci-detail-panel"
-                    hx-swap="innerHTML">
+                    hx-swap="innerHTML"
+                    hx-indicator="#sync-spinner-header">
                 ⟳ Sync Files
             </button>
+            <span id="sync-spinner-header" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">
+                <span class="spinner-inline"></span>
+            </span>
         </div>
     </div>
 
@@ -227,7 +263,7 @@
                 </div>
                 <div class="queued-banner" id="readme-queued"></div>
 
-                {# Project-level README editor (persisted in DB) #}
+                {# Project-level README editor #}
                 {% if project.readme_md %}
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
                     <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em;">Project README</div>
@@ -244,22 +280,34 @@
                 </div>
                 {% endif %}
 
-                {# Folder README result — shown inline, does NOT overwrite project README #}
-                <div class="folder-readme-panel" id="folder-readme-panel">
-                    <div class="folder-readme-title">
-                        <span id="folder-readme-label">📄 Folder README</span>
-                        <div style="display:flex;gap:6px;">
+                {#
+                  FIX 2: Folder README panel — stored separately from project README.
+                  Shows pre-existing folder README if one is stored in the DB,
+                  and is also shown when a new folder README is generated.
+                  "Save as Project README" calls a dedicated endpoint.
+                #}
+                <div class="folder-readme-panel" id="folder-readme-panel"
+                     {% if project.folder_readme_md %}style="display:block;"{% endif %}>
+                    <div class="folder-readme-header">
+                        <span class="folder-readme-title-text" id="folder-readme-label">
+                            📄 {% if project.folder_readme_path %}README for /{{ project.folder_readme_path.split('/')[-1] }}{% else %}Folder README{% endif %}
+                        </span>
+                        <div style="display:flex;gap:6px;align-items:center;">
                             <button class="btn btn-sm" onclick="copyFolderReadme()">⊕ Copy</button>
                             <button class="btn btn-sm btn-primary" onclick="saveFolderAsProject()">Save as Project README</button>
-                            <button onclick="document.getElementById('folder-readme-panel').classList.remove('visible')"
-                                    style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;">✕</button>
+                            <button onclick="document.getElementById('folder-readme-panel').style.display='none'"
+                                    style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
                         </div>
                     </div>
-                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:8px;">
-                        This README is scoped to the selected folder and shown here only — it does <strong>not</strong> overwrite your project README.
-                        Copy it or save it as the project README if you want to keep it.
+                    <div class="folder-readme-warning">
+                        This README is scoped to the selected folder and stored separately — it does <strong>not</strong> overwrite your project README unless you click "Save as Project README".
+                        {% if project.folder_readme_generated_at %}
+                        <span style="color:var(--text-muted);margin-left:6px;">Generated {{ project.folder_readme_generated_at.strftime('%b %d, %H:%M') }}</span>
+                        {% endif %}
                     </div>
-                    <textarea class="readme-editor" id="folder-readme-content" style="min-height:240px;"></textarea>
+                    <div class="folder-readme-body">
+                        <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ project.folder_readme_md or '' }}</textarea>
+                    </div>
                 </div>
             </div>
 
@@ -522,7 +570,7 @@ function updateUI() {
         clearBtn.style.display = 'inline';
         if (selectedFolderPath) {
             readmeBtn.textContent = `▶ README for /${selectedFolderPath.split('/').pop()}`;
-            readmeDesc.innerHTML = `Queued in Airflow · scoped to <code style="color:var(--accent)">${selectedFolderPath}</code> · shown here only, does not overwrite project README.`;
+            readmeDesc.innerHTML = `Queued in Airflow · scoped to <code style="color:var(--accent)">${selectedFolderPath}</code> · stored separately, does not overwrite project README.`;
         } else {
             readmeBtn.textContent = '▶ Full Project README';
             readmeDesc.textContent = 'Runs in Airflow · synthesizes narrations from all files. Select a folder to scope.';
@@ -537,19 +585,18 @@ function updateUI() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BADGE REFRESH — updates only the badge elements, tree stays intact
+// BADGE REFRESH — updates only badge elements, tree stays intact
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function refreshBadges() {
     try {
         const resp = await fetch(`/code-intel/projects/${window._projectId}/file-statuses`);
         if (!resp.ok) return;
-        const statuses = await resp.json(); // [{id, narrated, narrateStale, commentStatus, improveStatus, hasCode}]
+        const statuses = await resp.json();
         statuses.forEach(f => {
             const badgeEl = document.getElementById(`badges-${f.id}`);
             if (badgeEl) {
                 badgeEl.innerHTML = fileBadges(f);
-                // Also update the in-memory file data so future renders are correct
                 const fileData = window._projectFiles.find(p => p.id === f.id);
                 if (fileData) {
                     fileData.narrated = f.narrated;
@@ -560,13 +607,11 @@ async function refreshBadges() {
                 }
             }
         });
-    } catch(e) {
-        // Silent
-    }
+    } catch(e) { /* silent */ }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PULL — synchronous, updates badges in-place after
+// PULL — synchronous batch, updates badges in-place after
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function runPullBatch() {
@@ -589,7 +634,11 @@ async function runPullBatch() {
         if (logEl) { logEl.textContent += `⟳ ${name}…\n`; logEl.scrollTop = logEl.scrollHeight; }
 
         try {
-            await fetch(`/code-intel/files/${fileId}/pull`, { method: 'POST' });
+            // Pass Accept: application/json so the endpoint returns JSON instead of HTML
+            await fetch(`/code-intel/files/${fileId}/pull`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+            });
             done++;
             if (logEl) {
                 logEl.textContent = logEl.textContent.replace(`⟳ ${name}…\n`, `✓ ${name}\n`);
@@ -604,7 +653,6 @@ async function runPullBatch() {
 
     if (spinner) spinner.style.display = 'none';
     showToast(`Pulled ${done}/${ids.length} files.`);
-    // Refresh only the badges — tree stays intact
     await refreshBadges();
 }
 
@@ -664,9 +712,7 @@ async function triggerReadme() {
 
     const fd = new FormData();
     if (selectedFolderPath) {
-        // Folder-scoped: pass folder path, result comes back as plain text
         fd.append('folder_path', selectedFolderPath);
-        fd.append('return_content', 'true'); // tells endpoint to return content directly
     }
 
     try {
@@ -675,59 +721,77 @@ async function triggerReadme() {
         });
 
         if (selectedFolderPath) {
-            // For folder README: check if we got content back directly or just a queued response
+            // Folder-scoped — expect JSON back
             const contentType = resp.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
-                // Queued in Airflow — show banner, start polling
                 const data = await resp.json();
-                if (banner) {
-                    banner.textContent = `⟳ README for /${selectedFolderPath.split('/').pop()} queued. Will appear below when done.`;
-                    banner.classList.add('visible');
+                if (data.error) {
+                    showToast(`⚠ ${data.error}`, true);
+                } else {
+                    if (banner) {
+                        banner.textContent = `⟳ README for /${selectedFolderPath.split('/').pop()} queued (run: ${(data.run_id||'').slice(0,8)}…). Will appear below when done.`;
+                        banner.classList.add('visible');
+                    }
+                    startPollingForFolderReadme();
                 }
-                startPollingForFolderReadme(selectedFolderPath);
-            } else {
-                // Content returned directly — show in folder README panel
-                const content = await resp.text();
-                showFolderReadme(content, selectedFolderPath);
             }
         } else {
-            // Full project README — reload the panel (this is expected to replace the whole view)
-            document.getElementById('ci-detail-panel').innerHTML = await resp.text();
-            startPolling();
+            // Full project README — HTMX-style: the response is the new project_detail partial.
+            // We inject it into the detail panel directly, which rebuilds the tree too.
+            const html = await resp.text();
+            document.getElementById('ci-detail-panel').innerHTML = html;
+            // Re-fire toast from the freshly rendered partial
+            const t = document.getElementById('ci-detail-panel').querySelector('[data-toast]')?.dataset.toast;
+            if (t) showToast(t);
         }
+    } catch(e) {
+        showToast(`⚠ Network error: ${e.message}`, true);
     } finally {
         btn.disabled = false; spinner.style.display = 'none';
     }
 }
 
+// ── FIX 2: Folder README display & persistence ──────────────────────────────
+
 function showFolderReadme(content, folderPath) {
     const panel = document.getElementById('folder-readme-panel');
     const label = document.getElementById('folder-readme-label');
     const textarea = document.getElementById('folder-readme-content');
-    label.textContent = `📄 README for /${folderPath.split('/').pop()}`;
-    textarea.value = content;
-    panel.classList.add('visible');
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (label) label.textContent = `📄 README for /${(folderPath || '').split('/').pop()}`;
+    if (textarea) textarea.value = content;
+    if (panel) panel.style.display = 'block';
+    panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function copyFolderReadme() {
-    const content = document.getElementById('folder-readme-content').value;
-    navigator.clipboard.writeText(content).then(() => showToast('Copied to clipboard.'));
+    const content = document.getElementById('folder-readme-content')?.value;
+    if (content) navigator.clipboard.writeText(content).then(() => showToast('Copied to clipboard.'));
 }
 
-function saveFolderAsProject() {
-    // Saves the folder README as the project README (overwrites — user explicitly chose this)
-    const content = document.getElementById('folder-readme-content').value;
-    const projectEditor = document.getElementById(`readme-editor-${window._projectId}`);
-    if (projectEditor) {
-        projectEditor.value = content;
-        showToast('Copied to project README editor. Click Save Edits to persist.');
+async function saveFolderAsProject() {
+    const content = document.getElementById('folder-readme-content')?.value;
+    if (!content) return;
+
+    // FIX 2: Use dedicated endpoint that explicitly saves as project README
+    const resp = await fetch(`/code-intel/projects/${window._projectId}/folder-readme`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            content: content,
+            folder_path: selectedFolderPath || '',
+            save_as_project: true,
+        }),
+    });
+
+    if (resp.ok) {
+        // Also update the project README editor if it exists in the DOM
+        const projectEditor = document.getElementById(`readme-editor-${window._projectId}`);
+        if (projectEditor) {
+            projectEditor.value = content;
+        }
+        showToast('Saved as Project README ✓');
     } else {
-        // No project README editor visible yet — save directly
-        const fd = new FormData();
-        fd.append('readme_md', content);
-        fetch(`/code-intel/projects/${window._projectId}/readme`, { method: 'PATCH', body: fd })
-            .then(() => showToast('Saved as project README.'));
+        showToast('⚠ Could not save.', true);
     }
 }
 
@@ -737,16 +801,20 @@ async function saveReadme(projectId) {
     const fd = new FormData();
     fd.append('readme_md', content);
     const resp = await fetch(`/code-intel/projects/${projectId}/readme`, { method: 'PATCH', body: fd });
-    if (resp.ok) { document.getElementById('ci-detail-panel').innerHTML = await resp.text(); showToast('README saved.'); }
+    if (resp.ok) {
+        document.getElementById('ci-detail-panel').innerHTML = await resp.text();
+        showToast('README saved.');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// POLLING — refreshes ONLY badges, never the whole tree
+// POLLING
 // ═══════════════════════════════════════════════════════════════════════════
 
 let _pollTimer = null;
 let _lastUpdated = null;
 let _pollCount = 0;
+let _pollingForFolderReadme = false;
 const POLL_INTERVAL_MS = 8000;
 const POLL_MAX = 45;
 
@@ -754,6 +822,7 @@ function startPolling() {
     if (_pollTimer) return;
     _pollCount = 0;
     _lastUpdated = null;
+    _pollingForFolderReadme = false;
     document.getElementById('poll-indicator')?.classList.add('active');
 
     fetch(`/code-intel/projects/${window._projectId}/status`)
@@ -764,8 +833,8 @@ function startPolling() {
     _pollTimer = setInterval(checkStatus, POLL_INTERVAL_MS);
 }
 
-function startPollingForFolderReadme(folderPath) {
-    // Polls until readme_generated_at changes, then fetches and shows the readme
+function startPollingForFolderReadme() {
+    _pollingForFolderReadme = true;
     startPolling();
 }
 
@@ -788,33 +857,36 @@ async function checkStatus() {
         if (!resp.ok) return;
         const data = await resp.json();
 
-        if (_lastUpdated !== null && data.last_updated !== _lastUpdated) {
+        const filesChanged = _lastUpdated !== null && data.last_updated !== _lastUpdated;
+        const folderReadmeChanged = _pollingForFolderReadme && data.folder_readme_updated;
+
+        if (filesChanged || folderReadmeChanged) {
             clearInterval(_pollTimer); _pollTimer = null;
             indicator?.classList.remove('active');
 
-            // Refresh badges in-place — tree stays intact, selection preserved
-            await refreshBadges();
-
-            // Also check if a folder readme was written
-            if (data.readme_updated) {
-                // Fetch the readme content and show it in the folder panel
-                const readmeResp = await fetch(`/code-intel/projects/${window._projectId}/readme-content`);
-                if (readmeResp.ok) {
-                    const { content, folder_path } = await readmeResp.json();
-                    if (content && folder_path) showFolderReadme(content, folder_path);
-                }
+            if (filesChanged) {
+                await refreshBadges();
+                showToast(`Done! ${data.narrated}/${data.total} files narrated.`);
             }
 
-            showToast(`Done! ${data.narrated}/${data.total} files narrated.`);
+            // FIX 2: Fetch and display the folder README when the DAG completes
+            if (folderReadmeChanged) {
+                const readmeResp = await fetch(`/code-intel/projects/${window._projectId}/folder-readme`);
+                if (readmeResp.ok) {
+                    const d = await readmeResp.json();
+                    showFolderReadme(d.content, d.folder_path || selectedFolderPath || '');
+                    showToast('Folder README ready ✓');
+                }
+                _pollingForFolderReadme = false;
+            }
+
             return;
         }
         _lastUpdated = data.last_updated;
-    } catch(e) {
-        // Silent
-    }
+    } catch(e) { /* silent */ }
 }
 
-// Toast from HTMX swaps (for sync/push operations)
+// Toast from HTMX swaps
 document.addEventListener('htmx:afterSwap', e => {
     if (e.target.id === 'ci-detail-panel') {
         const t = e.target.querySelector('[data-toast]')?.dataset.toast;

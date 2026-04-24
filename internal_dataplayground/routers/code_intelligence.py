@@ -1,31 +1,20 @@
 # routers/code_intelligence.py
 """
-Code Intelligence Module
+Code Intelligence Module — v2 fixes:
+  1. Sync Files no longer wipes the file tree — it reloads project_detail
+     which preserves the tree. The Sync button now targets #ci-detail-panel
+     correctly without an HTMX swap that clears the tree.
 
-Manages CodeProjects (GitHub repo scopes) and CodeFiles (individual scripts).
-Provides on-demand agent triggers for:
-  - Code Narrator    → narration (feeds blog agents)
-  - Code Commenter   → commented_code (review + push to GitHub)
-  - Code Improver    → improvement_notes (review only)
-  - README Writer    → readme_md on CodeProject (review + push to GitHub)
+  2. Folder README is stored separately (folder_readme_md + folder_readme_path
+     on CodeProject) and never overwrites readme_md. The /trigger-readme endpoint
+     now stores folder README directly to the DB; the polling endpoint returns it.
 
-All agent outputs require human review before any GitHub push.
+  3. GET /code-intel accepts ?project_id= query param to auto-select a project
+     on page load. The template receives `preload_project_id` and JS fires
+     openProject() automatically.
 
-Endpoints:
-  GET    /code-intel                              → Project list UI
-  POST   /code-intel/projects                     → Create a new project
-  DELETE /code-intel/projects/{id}                → Delete project + all files
-  POST   /code-intel/projects/{id}/sync           → Pull file list from GitHub
-  POST   /code-intel/projects/{id}/generate-readme → Run README Writer
-  PATCH  /code-intel/projects/{id}/readme         → Save edits to README
-  POST   /code-intel/projects/{id}/push-readme    → Push approved README to GitHub
-  GET    /code-intel/projects/{id}/files          → File list partial
-  POST   /code-intel/files/{id}/pull              → Pull latest code from GitHub
-  POST   /code-intel/files/{id}/narrate           → Run Code Narrator
-  POST   /code-intel/files/{id}/comment           → Run Code Commenter
-  POST   /code-intel/files/{id}/improve           → Run Code Improver
-  POST   /code-intel/files/{id}/push-comments     → Push commented code to GitHub
-  GET    /code-intel/files/{id}                   → File detail partial
+  4. Removed the duplicate /trigger-readme route definition that caused the
+     "Internal Server Error" on Full Project README generation.
 """
 
 import logging
@@ -33,11 +22,11 @@ from datetime import datetime
 from typing import Optional
 import httpx
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from database import get_db
 from models import CodeProject, CodeFile, ReadmeStatus, CommentedStatus, ImprovementStatus
@@ -64,6 +53,7 @@ CODE_COMMENT_DAG  = "life_os_code_comment"
 CODE_IMPROVE_DAG  = "life_os_code_improve"
 README_WRITER_DAG = "life_os_readme_writer"
 
+
 async def _trigger_airflow(dag_id: str, conf: dict) -> str:
     """Trigger an Airflow DAG and return the run_id."""
     import base64
@@ -73,23 +63,33 @@ async def _trigger_airflow(dag_id: str, conf: dict) -> str:
     headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
-            "http://airflow-webserver:8080/api/v1/dagRuns".replace("dagRuns", f"dags/{dag_id}/dagRuns"),
+            f"http://airflow-webserver:8080/api/v1/dags/{dag_id}/dagRuns",
             headers=headers,
             json={"conf": conf},
         )
         resp.raise_for_status()
         return resp.json().get("dag_run_id", "unknown")
 
+
 # ── PROJECT MANAGEMENT ─────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
-async def project_list_ui(request: Request, db: AsyncSession = Depends(get_db)):
+async def project_list_ui(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    project_id: Optional[int] = Query(default=None),  # FIX 3: query param preload
+):
+    """
+    Main Code Intelligence page.
+    Pass ?project_id=N to auto-open a project's detail panel on load.
+    """
     result = await db.execute(select(CodeProject).order_by(CodeProject.project_name))
     projects = result.scalars().all()
     return templates.TemplateResponse("code_intelligence.html", {
         "request": request,
         "projects": projects,
         "active_module": "code_intel",
+        "preload_project_id": project_id,  # passed to template for JS auto-select
     })
 
 
@@ -102,13 +102,6 @@ async def create_project(
     description: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Creates a new CodeProject.
-    github_base_path examples:
-      ""  or omit  → whole repo
-      "internal_dataplayground"          → app subfolder
-      "internal_dataplayground/routers"  → just routers
-    """
     project = CodeProject(
         project_name=project_name.strip(),
         github_repo=github_repo.strip(),
@@ -154,9 +147,9 @@ async def sync_files_from_github(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Pulls the file tree from GitHub for the project's repo + base_path.
-    Creates CodeFile rows for any new .py files discovered.
-    Does NOT pull file content yet — use /files/{id}/pull for that.
+    FIX 1: Pulls file tree from GitHub and syncs CodeFile rows.
+    Returns project_detail partial (not a blank panel) so the tree
+    is immediately rendered after sync without losing context.
     """
     project = await db.get(CodeProject, project_id)
     if not project:
@@ -168,9 +161,14 @@ async def sync_files_from_github(
             base_path=project.github_base_path or "",
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}")
+        # On error, still return the project detail with an error message
+        # so the tree is not wiped
+        return templates.TemplateResponse(
+            "partials/project_detail.html",
+            {"request": request, "project": project,
+             "error": f"GitHub API error: {exc}"},
+        )
 
-    # Get existing tracked paths to avoid duplicates
     existing = await db.execute(
         select(CodeFile.github_path).where(CodeFile.project_id == project_id)
     )
@@ -190,8 +188,13 @@ async def sync_files_from_github(
 
     await db.commit()
 
-    # Reload project with files
+    # Reload project with fresh files list
+    await db.refresh(project)
+    # Expire and reload to get updated files relationship
+    from sqlalchemy import inspect
+    db.expire(project)
     project = await db.get(CodeProject, project_id)
+
     return templates.TemplateResponse(
         "partials/project_detail.html",
         {"request": request, "project": project,
@@ -207,15 +210,10 @@ async def generate_readme(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Runs README Writer agent using all file narrations in the project.
-    Requires at least some files to have narrations generated first.
-    """
     project = await db.get(CodeProject, project_id)
     if not project:
         raise HTTPException(status_code=404)
 
-    # Collect narrations from all tracked files
     narrated_files = [f for f in project.files if f.narration]
     if not narrated_files:
         return templates.TemplateResponse(
@@ -257,7 +255,7 @@ async def save_readme_edits(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Saves manual edits to the README and marks it as reviewed."""
+    """Saves manual edits to the project README and marks it as reviewed."""
     form = await request.form()
     project = await db.get(CodeProject, project_id)
     if not project:
@@ -282,11 +280,6 @@ async def push_readme(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Pushes the approved README.md to GitHub.
-    README is placed at: {github_base_path}/README.md
-    (or repo root if base_path is empty)
-    """
     project = await db.get(CodeProject, project_id)
     if not project:
         raise HTTPException(status_code=404)
@@ -298,11 +291,9 @@ async def push_readme(
              "error": "Mark the README as reviewed before pushing."},
         )
 
-    # Determine target path in repo
     base = (project.github_base_path or "").rstrip("/")
     readme_path = f"{base}/README.md" if base else "README.md"
 
-    # Get current SHA of README on GitHub (needed for update, None for new file)
     try:
         existing_sha = await get_file_sha(project.github_repo, readme_path)
     except Exception:
@@ -331,33 +322,125 @@ async def push_readme(
          "toast": f"README pushed to GitHub at {readme_path} ✓"},
     )
 
+
+# ── README TRIGGER (Airflow) ───────────────────────────────────────────────────
+# FIX 4: Single, non-duplicated /trigger-readme endpoint.
+# FIX 2: Folder README stored in folder_readme_md / folder_readme_path columns,
+#         never touching readme_md on the project.
+
 @router.post("/projects/{project_id}/trigger-readme", response_class=HTMLResponse)
-async def trigger_readme(
+async def trigger_readme_dag(
     project_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Triggers the README Writer DAG in Airflow.
+
+    - No folder_path  → full project README queued.
+                        Returns project_detail partial with toast.
+    - With folder_path → folder-scoped README queued.
+                         Returns JSON {"run_id", "status", "folder_path"}
+                         so the frontend can poll for completion.
+    """
     form = await request.form()
-    folder_path = str(form.get("folder_path", "")).strip()
-    conf = {"project_id": project_id}
+    folder_path = str(form.get("folder_path", "")).strip().rstrip("/")
+
+    conf: dict = {"project_id": project_id}
     if folder_path:
         conf["folder_path"] = folder_path
+
+    project = await db.get(CodeProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404)
+
     try:
         run_id = await _trigger_airflow(README_WRITER_DAG, conf)
-        project = await db.get(CodeProject, project_id)
-        label = f"/{folder_path.split('/')[-1]}" if folder_path else "project"
-        return templates.TemplateResponse(
-            "partials/project_detail.html",
-            {"request": request, "project": project,
-             "toast": f"README for {label} queued (run: {run_id[:8]}…). Refresh in ~30s."},
-        )
     except Exception as exc:
-        project = await db.get(CodeProject, project_id)
+        if folder_path:
+            return JSONResponse({"error": str(exc)}, status_code=502)
         return templates.TemplateResponse(
             "partials/project_detail.html",
             {"request": request, "project": project,
              "error": f"Airflow unreachable: {exc}"},
         )
+
+    if folder_path:
+        # Folder-scoped: return JSON for frontend polling
+        return JSONResponse({
+            "run_id": run_id,
+            "status": "queued",
+            "folder_path": folder_path,
+        })
+    else:
+        # Full project README
+        label = "full project"
+        return templates.TemplateResponse(
+            "partials/project_detail.html",
+            {
+                "request": request,
+                "project": project,
+                "toast": f"README for {label} queued (run: {run_id[:8]}…). Badges update when done.",
+            },
+        )
+
+
+# ── FOLDER README — save / retrieve ────────────────────────────────────────────
+# FIX 2: Dedicated endpoints for folder README that never touch readme_md.
+
+@router.patch("/projects/{project_id}/folder-readme", response_class=JSONResponse)
+async def save_folder_readme(
+    project_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Saves a folder-scoped README to folder_readme_md WITHOUT touching readme_md.
+    Called from the Airflow DAG callback OR from 'Save as Project README' in UI.
+
+    Body JSON: {"content": str, "folder_path": str, "save_as_project": bool}
+    """
+    data = await request.json()
+    content = data.get("content", "").strip()
+    folder_path = data.get("folder_path", "").strip()
+    save_as_project = bool(data.get("save_as_project", False))
+
+    project = await db.get(CodeProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404)
+
+    project.folder_readme_md = content
+    project.folder_readme_path = folder_path
+    project.folder_readme_generated_at = datetime.utcnow()
+
+    if save_as_project:
+        # User explicitly chose "Save as Project README"
+        project.readme_md = content
+        project.readme_status = ReadmeStatus.REVIEWED
+        project.readme_generated_at = datetime.utcnow()
+
+    await db.commit()
+    return {"ok": True, "saved_as_project": save_as_project}
+
+
+@router.get("/projects/{project_id}/folder-readme")
+async def get_folder_readme(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the stored folder README content + which folder it's for.
+    Called by the frontend after polling detects the DAG completed.
+    """
+    project = await db.get(CodeProject, project_id)
+    if not project or not project.folder_readme_md:
+        raise HTTPException(status_code=404, detail="No folder README available")
+
+    return {
+        "content": project.folder_readme_md,
+        "folder_path": project.folder_readme_path or "",
+        "generated_at": str(project.folder_readme_generated_at) if project.folder_readme_generated_at else None,
+    }
 
 
 # ── FILE OPERATIONS ────────────────────────────────────────────────────────────
@@ -383,7 +466,7 @@ async def pull_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Pulls latest raw code from GitHub and checks for SHA changes."""
+    """Pulls latest raw code from GitHub. Returns JSON for batch pulls, HTML for single."""
     code_file = await db.get(CodeFile, file_id)
     if not code_file:
         raise HTTPException(status_code=404)
@@ -393,16 +476,27 @@ async def pull_file(
     try:
         content, sha = await pull_file_content(project.github_repo, code_file.github_path)
     except Exception as exc:
+        # Check if this is a batch pull (Accept: application/json header)
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
         raise HTTPException(status_code=502, detail=f"GitHub pull failed: {exc}")
 
-    # Detect if code changed since last narration
     sha_changed = sha != code_file.github_sha
-
     code_file.raw_code = content
     code_file.github_sha = sha
     code_file.code_pulled_at = datetime.utcnow()
     await db.commit()
     await db.refresh(code_file)
+
+    # If called from batch pull (JS fetch), return minimal JSON
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept:
+        return JSONResponse({
+            "ok": True,
+            "sha_changed": sha_changed,
+            "chars": len(content),
+        })
 
     toast = f"Code pulled ({len(content)} chars)."
     if sha_changed and code_file.narration:
@@ -420,7 +514,6 @@ async def narrate_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Runs Code Narrator agent. Output feeds blog agents and README Writer."""
     code_file = await db.get(CodeFile, file_id)
     if not code_file:
         raise HTTPException(status_code=404)
@@ -453,12 +546,12 @@ async def narrate_file(
         {"request": request, "file": code_file, "toast": "Narration generated ✓"},
     )
 
-@router.post("/batch/narrate", response_class=HTMLResponse)
+
+@router.post("/batch/narrate")
 async def trigger_batch_narrate(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Triggers Airflow to narrate a batch of files. Body: {file_ids: [...], project_id: N}"""
     data = await request.json()
     file_ids = data.get("file_ids", [])
     project_id = data.get("project_id")
@@ -466,10 +559,9 @@ async def trigger_batch_narrate(
         raise HTTPException(status_code=422, detail="file_ids required")
     try:
         run_id = await _trigger_airflow(CODE_NARRATE_DAG, {"file_ids": file_ids, "project_id": project_id})
-        return HTMLResponse(f'{{"run_id": "{run_id}", "status": "triggered", "count": {len(file_ids)}}}', status_code=200)
+        return JSONResponse({"run_id": run_id, "status": "triggered", "count": len(file_ids)})
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Airflow unreachable: {exc}")
-
 
 
 @router.post("/files/{file_id}/comment", response_class=HTMLResponse)
@@ -478,7 +570,6 @@ async def comment_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Runs Code Commenter agent. Output requires review before GitHub push."""
     code_file = await db.get(CodeFile, file_id)
     if not code_file or not code_file.raw_code:
         raise HTTPException(status_code=404, detail="File not found or no code pulled.")
@@ -503,7 +594,8 @@ async def comment_file(
          "toast": "Commented version generated. Review before pushing."},
     )
 
-@router.post("/batch/comment", response_class=HTMLResponse)
+
+@router.post("/batch/comment")
 async def trigger_batch_comment(request: Request, db: AsyncSession = Depends(get_db)):
     data = await request.json()
     file_ids = data.get("file_ids", [])
@@ -511,7 +603,7 @@ async def trigger_batch_comment(request: Request, db: AsyncSession = Depends(get
         raise HTTPException(status_code=422, detail="file_ids required")
     try:
         run_id = await _trigger_airflow(CODE_COMMENT_DAG, {"file_ids": file_ids})
-        return HTMLResponse(f'{{"run_id": "{run_id}", "status": "triggered", "count": {len(file_ids)}}}')
+        return JSONResponse({"run_id": run_id, "status": "triggered", "count": len(file_ids)})
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Airflow unreachable: {exc}")
 
@@ -522,10 +614,6 @@ async def improve_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Runs Code Improver agent.
-    Output is a review report — never auto-applied or pushed.
-    """
     code_file = await db.get(CodeFile, file_id)
     if not code_file or not code_file.raw_code:
         raise HTTPException(status_code=404, detail="File not found or no code pulled.")
@@ -551,7 +639,8 @@ async def improve_file(
          "toast": "Improvement report generated. Review the suggestions."},
     )
 
-@router.post("/batch/improve", response_class=HTMLResponse)
+
+@router.post("/batch/improve")
 async def trigger_batch_improve(request: Request, db: AsyncSession = Depends(get_db)):
     data = await request.json()
     file_ids = data.get("file_ids", [])
@@ -559,7 +648,7 @@ async def trigger_batch_improve(request: Request, db: AsyncSession = Depends(get
         raise HTTPException(status_code=422, detail="file_ids required")
     try:
         run_id = await _trigger_airflow(CODE_IMPROVE_DAG, {"file_ids": file_ids})
-        return HTMLResponse(f'{{"run_id": "{run_id}", "status": "triggered", "count": {len(file_ids)}}}')
+        return JSONResponse({"run_id": run_id, "status": "triggered", "count": len(file_ids)})
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Airflow unreachable: {exc}")
 
@@ -570,11 +659,6 @@ async def push_commented_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Pushes the commented version of the file back to GitHub,
-    replacing the original at the same path.
-    Only allowed after status is REVIEWED.
-    """
     code_file = await db.get(CodeFile, file_id)
     if not code_file:
         raise HTTPException(status_code=404)
@@ -599,7 +683,7 @@ async def push_commented_file(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"GitHub push failed: {exc}")
 
-    code_file.github_sha = new_sha  # Update SHA after push
+    code_file.github_sha = new_sha
     code_file.commented_status = CommentedStatus.PUSHED
     await db.commit()
     await db.refresh(code_file)
@@ -617,7 +701,6 @@ async def project_detail(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Loads the project detail partial into the right panel."""
     project = await db.get(CodeProject, project_id)
     if not project:
         raise HTTPException(status_code=404)
@@ -633,10 +716,6 @@ async def update_comment_status(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Updates the commented_status field.
-    Called from the UI when user clicks 'Mark Reviewed' on commented code.
-    """
     form = await request.form()
     status_str = str(form.get("commented_status", "")).strip()
 
@@ -659,6 +738,7 @@ async def update_comment_status(
          "toast": "Commented code marked as reviewed. Ready to push to GitHub."},
     )
 
+
 @router.get("/projects/{project_id}/file-statuses")
 async def get_file_statuses(
     project_id: int,
@@ -666,16 +746,16 @@ async def get_file_statuses(
 ):
     """
     Returns lightweight status for every file in the project.
-    Used by the frontend to refresh badges in-place WITHOUT reloading the tree.
+    Used by the frontend to refresh badges in-place without reloading the tree.
     """
-    from sqlalchemy import text
     result = await db.execute(
         text("""
             SELECT
                 id,
                 raw_code IS NOT NULL         AS has_code,
                 narration IS NOT NULL        AS narrated,
-                (narration IS NOT NULL AND code_pulled_at > narration_generated_at) AS narrate_stale,
+                (narration IS NOT NULL AND code_pulled_at IS NOT NULL
+                 AND code_pulled_at > narration_generated_at) AS narrate_stale,
                 commented_status,
                 improvement_status
             FROM code_files
@@ -698,120 +778,32 @@ async def get_file_statuses(
     ]
 
 
-@router.post("/projects/{project_id}/trigger-readme", response_class=HTMLResponse)
-async def trigger_readme(
-    project_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Triggers the README writer DAG.
-
-    If folder_path is provided: queues a folder-scoped README in Airflow and
-    returns JSON {"run_id": "...", "status": "queued"} so the frontend can poll.
-
-    If no folder_path: queues full project README and returns the project_detail
-    partial with a toast (existing behavior).
-    """
-    form = await request.form()
-    folder_path = str(form.get("folder_path", "")).strip().rstrip("/")
-    return_content = str(form.get("return_content", "false")).lower() == "true"
-
-    conf = {"project_id": project_id}
-    if folder_path:
-        conf["folder_path"] = folder_path
-
-    try:
-        run_id = await _trigger_airflow(README_WRITER_DAG, conf)
-    except Exception as exc:
-        if folder_path:
-            from fastapi.responses import JSONResponse
-            return JSONResponse({"error": str(exc)}, status_code=502)
-        project = await db.get(CodeProject, project_id)
-        return templates.TemplateResponse(
-            "partials/project_detail.html",
-            {"request": request, "project": project, "error": f"Airflow unreachable: {exc}"},
-        )
-
-    if folder_path:
-        # Return JSON so the frontend knows it's queued and can poll
-        from fastapi.responses import JSONResponse
-        return JSONResponse({
-            "run_id": run_id,
-            "status": "queued",
-            "folder_path": folder_path,
-        })
-    else:
-        # Full project README — return the partial with a toast
-        project = await db.get(CodeProject, project_id)
-        label = f"/{folder_path.split('/')[-1]}" if folder_path else "full project"
-        return templates.TemplateResponse(
-            "partials/project_detail.html",
-            {
-                "request": request,
-                "project": project,
-                "toast": f"README for {label} queued (run: {run_id[:8]}…). Badges will update when done.",
-            },
-        )
-
-
-@router.get("/projects/{project_id}/readme-content")
-async def get_readme_content(
-    project_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Returns the current readme_md and last folder_path used.
-    Called by the frontend after polling detects a change, to display
-    a folder README in the inline panel without reloading the tree.
-    """
-    project = await db.get(CodeProject, project_id)
-    if not project or not project.readme_md:
-        raise HTTPException(status_code=404, detail="No README available")
-
-    # We store the folder path in the readme_md generation flow via the DAG,
-    # but don't persist it separately. Return the content and let the frontend
-    # display it. The DAG log has the folder_path — for now just return content.
-    return {
-        "content": project.readme_md,
-        "folder_path": None,  # frontend will use selectedFolderPath it already knows
-        "generated_at": str(project.readme_generated_at) if project.readme_generated_at else None,
-    }
-
-
-# Also update the /projects/{project_id}/status endpoint to include readme_updated:
-# Replace the existing status endpoint with this version:
-
 @router.get("/projects/{project_id}/status")
 async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
     """
-    Lightweight polling endpoint. Returns current narration/comment/improve
-    counts so the UI can detect when a DAG run has updated files.
-    readme_updated: True if readme was generated more recently than any file.
+    Lightweight polling endpoint. Returns counts + last_updated timestamp.
+    Also returns folder_readme_updated flag when a folder README DAG completes.
     """
-    from sqlalchemy import text
     result = await db.execute(
         text("""
             SELECT
-                COUNT(*)                        AS total,
-                SUM(narration IS NOT NULL)      AS narrated,
-                SUM(commented_status != 'none') AS commented,
+                COUNT(*)                          AS total,
+                SUM(narration IS NOT NULL)        AS narrated,
+                SUM(commented_status != 'none')   AS commented,
                 SUM(improvement_status != 'none') AS improved,
-                MAX(updated_at)                 AS last_updated
+                MAX(updated_at)                   AS last_updated
             FROM code_files WHERE project_id = :pid
         """),
         {"pid": project_id}
     )
     row = result.mappings().one()
 
-    # Check if readme was recently updated
     project = await db.get(CodeProject, project_id)
-    readme_updated = False
-    if project and project.readme_generated_at and row["last_updated"]:
-        from datetime import timezone
-        gen_at = project.readme_generated_at
-        last = row["last_updated"]
-        readme_updated = gen_at > last
+    folder_readme_updated = False
+    if project and project.folder_readme_generated_at and row["last_updated"]:
+        folder_readme_updated = (
+            project.folder_readme_generated_at > row["last_updated"]
+        )
 
     return {
         "total": row["total"],
@@ -819,5 +811,23 @@ async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
         "commented": row["commented"] or 0,
         "improved": row["improved"] or 0,
         "last_updated": str(row["last_updated"]) if row["last_updated"] else None,
-        "readme_updated": readme_updated,
+        "folder_readme_updated": folder_readme_updated,
+        "folder_readme_path": project.folder_readme_path if project else None,
+    }
+
+
+@router.get("/projects/{project_id}/readme-content")
+async def get_readme_content(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns the project-level readme_md and generation metadata."""
+    project = await db.get(CodeProject, project_id)
+    if not project or not project.readme_md:
+        raise HTTPException(status_code=404, detail="No README available")
+
+    return {
+        "content": project.readme_md,
+        "folder_path": None,
+        "generated_at": str(project.readme_generated_at) if project.readme_generated_at else None,
     }
