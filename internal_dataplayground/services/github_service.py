@@ -86,8 +86,12 @@ async def list_repo_files(repo: str, base_path: str = "") -> list[dict]:
         if base_path and not path.startswith(base_path.rstrip("/") + "/"):
             continue
 
-        # Only track Python files — adjust this filter as needed
-        if not path.endswith(".py"):
+        TRACKED_EXTENSIONS = {
+            ".py", ".html", ".css", ".js", ".ts",
+            ".md", ".yml", ".yaml", ".sql", ".sh",
+            ".json", ".toml", ".txt", ".env",
+        }
+        if not any(path.endswith(ext) for ext in TRACKED_EXTENSIONS):
             continue
 
         files.append({
