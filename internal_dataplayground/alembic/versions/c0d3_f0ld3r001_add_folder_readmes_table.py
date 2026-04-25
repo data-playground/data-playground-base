@@ -23,6 +23,18 @@ Table: folder_readmes
   - folder_display_name: short human label e.g. "routers" (derived from
     folder_path but stored to avoid repeated string splits in queries)
 """
+"""add folder_readmes table for per-folder README tracking
+
+Revision ID: c0d3_f0ld3r001
+Revises: c0d3bl0g001
+Create Date: 2026-04-24
+
+Fix: removed the explicit create_index for ix_folder_readmes_project_id
+because MariaDB automatically creates it from index=True on the FK column
+inside create_table. Creating it again raises error 1061 (duplicate key name).
+The status index is kept — it has no index=True on its column so MariaDB
+does NOT create it automatically.
+"""
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
@@ -41,6 +53,8 @@ def upgrade() -> None:
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
 
         # ── Ownership ─────────────────────────────────────────────────────────
+        # index=True causes MariaDB to auto-create ix_folder_readmes_project_id.
+        # Do NOT add a separate create_index call for this — it will duplicate.
         sa.Column(
             'project_id',
             sa.Integer(),
@@ -54,10 +68,10 @@ def upgrade() -> None:
         sa.Column('folder_path', sa.String(500), nullable=False),
 
         # Short label for display: "routers", "dags", "partials", etc.
-        # Stored explicitly so the UI doesn't need to parse folder_path every time.
+        # Stored explicitly to avoid string splitting in every query/template.
         sa.Column('folder_display_name', sa.String(255), nullable=False),
 
-        # Where the README.md would live on GitHub if pushed:
+        # Where the README.md would live on GitHub if pushed.
         # e.g. "internal_dataplayground/routers/README.md"
         sa.Column('github_path', sa.String(500), nullable=True),
 
@@ -66,8 +80,7 @@ def upgrade() -> None:
 
         # ── Pipeline state ────────────────────────────────────────────────────
         # Lifecycle: none → draft → reviewed → pushed → stale
-        # 'stale' is set when any code_file in the folder has
-        # code_pulled_at > readme_generated_at
+        # 'stale' is set when any file in the folder was pulled after generation.
         sa.Column(
             'status',
             sa.Enum(
@@ -79,8 +92,7 @@ def upgrade() -> None:
         ),
 
         # ── GitHub push tracking ──────────────────────────────────────────────
-        # SHA of the file on GitHub after last push.
-        # Required for updates — GitHub rejects a PUT without the current SHA.
+        # SHA of the file on GitHub after last push — required for updates.
         sa.Column('github_sha', sa.String(64), nullable=True),
 
         # ── Timestamps ────────────────────────────────────────────────────────
@@ -101,24 +113,18 @@ def upgrade() -> None:
         ),
     )
 
-    # ── Indexes ───────────────────────────────────────────────────────────────
-
-    # Unique constraint: one README record per folder per project.
-    # This means upserts can target (project_id, folder_path) cleanly.
+    # ── Unique constraint ─────────────────────────────────────────────────────
+    # One README record per folder per project.
+    # Enables clean upserts targeting (project_id, folder_path).
     op.create_unique_constraint(
         'uq_folder_readmes_project_folder',
         'folder_readmes',
         ['project_id', 'folder_path'],
     )
 
-    # Fast lookup by project (most common query: "give me all folders for project X")
-    op.create_index(
-        'ix_folder_readmes_project_id',
-        'folder_readmes',
-        ['project_id'],
-    )
-
-    # Fast lookup by status (for the coverage dashboard: "show me all stale READMEs")
+    # ── Status index ──────────────────────────────────────────────────────────
+    # Powers the coverage dashboard: WHERE status = 'stale' / 'none' etc.
+    # This column has no index=True so MariaDB does NOT create it automatically.
     op.create_index(
         'ix_folder_readmes_status',
         'folder_readmes',
@@ -128,7 +134,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index('ix_folder_readmes_status', table_name='folder_readmes')
-    op.drop_index('ix_folder_readmes_project_id', table_name='folder_readmes')
     op.drop_constraint(
         'uq_folder_readmes_project_folder',
         'folder_readmes',
