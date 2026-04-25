@@ -22,7 +22,7 @@
 .filter-clear { font-size:10px; color:var(--text-muted); background:none; border:none; cursor:pointer; padding:4px 6px; font-family:'DM Mono',monospace; transition:color var(--transition); }
 .filter-clear:hover { color:var(--score-low); }
 
-.main-content { grid-column:2; grid-row:2; background:var(--bg-card); padding:16px 20px; overflow-y:auto; overflow-x:auto; transition:background var(--transition); }
+.main-content { grid-column:2; grid-row:2; background:var(--bg-card); /*padding:16px 20px;*/ overflow-y:auto; overflow-x:auto; transition:background var(--transition); }
 [data-theme="dark"] .main-content { background:var(--bg); }
 
 /* ── STAGING PANEL ── */

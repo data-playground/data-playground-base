@@ -10,7 +10,7 @@
 .btn-primary:hover { opacity:.85; color:#fff; }
 
 /* ── MAIN ── */
-.main-content { grid-column:2; grid-row:2; padding:20px 24px; overflow-y:auto; background:var(--bg-card); }
+.main-content { grid-column:2; grid-row:2; padding:10px 12px; overflow-y:auto; background:var(--bg-card); }
 [data-theme="dark"] .main-content { background:var(--bg); }
 
 /* ── MONTH PICKER ── */

@@ -411,7 +411,7 @@ body {
     grid-column: 2;
     grid-row: 2;
     background: var(--bg-card);
-    padding: 16px 20px;      /* was 20px 24px — tighter top */
+    /*padding: 16px 20px;/*      /* was 20px 24px — tighter top */
     overflow-y: auto;
     overflow-x: hidden;
     transition: background var(--transition);
