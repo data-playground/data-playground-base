@@ -1,9 +1,8 @@
 // static/js/base.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared JS for all Life OS pages.
+// Life OS — v2.1 Shared JS
 // Provides: setTheme(), toggleSidebar(), showToast(),
 //           openMobileSidebar(), closeMobileSidebar()
-// Loaded by base.html at the bottom of every page.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
@@ -27,7 +26,9 @@ function setTheme(t, btn) {
 let sidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
 
 function applyCollapsed() {
-    document.getElementById('layout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    const layout = document.getElementById('layout');
+    if (!layout) return;
+    layout.classList.toggle('sidebar-collapsed', sidebarCollapsed);
     const icon = document.getElementById('collapse-icon');
     if (icon) icon.textContent = sidebarCollapsed ? '▶' : '◀';
 }
@@ -38,21 +39,34 @@ function toggleSidebar() {
     applyCollapsed();
 }
 
-// Apply on load (desktop only — mobile uses slide-in pattern)
-if (window.innerWidth > 768) applyCollapsed();
+// Apply on load — desktop only
+if (window.innerWidth > 768) {
+    applyCollapsed();
+}
 
 // ── MOBILE SIDEBAR ────────────────────────────────────────────────────────────
 function openMobileSidebar() {
-    document.getElementById('sidebar').classList.add('mobile-open');
+    const sidebar = document.getElementById('sidebar');
     const bd = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.add('mobile-open');
     if (bd) bd.classList.add('visible');
+    document.body.style.overflow = 'hidden';
 }
 
 function closeMobileSidebar() {
-    document.getElementById('sidebar').classList.remove('mobile-open');
+    const sidebar = document.getElementById('sidebar');
     const bd = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.remove('mobile-open');
     if (bd) bd.classList.remove('visible');
+    document.body.style.overflow = '';
 }
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeMobileSidebar();
+    }
+});
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
 let _toastTimer;
@@ -69,7 +83,7 @@ function showToast(msg, isError = false) {
 
 // Auto-show toast from HTMX partial data-toast attribute
 document.addEventListener('htmx:afterSwap', function (evt) {
-    const drawer = evt.target.closest('[data-toast]') || evt.target;
-    const toast = drawer && drawer.dataset && drawer.dataset.toast;
+    const el = evt.target.closest('[data-toast]') || evt.target;
+    const toast = el && el.dataset && el.dataset.toast;
     if (toast) showToast(toast);
 });

@@ -4,7 +4,7 @@
    Child templates use: {% extends "base.html" %}
 
    Available blocks:
-     title           → <title> content (after "Life OS — ")
+     title           → <title> content
      extra_css       → page-specific <link> or <style> tags in <head>
      page_title      → text in the topbar left
      topbar_meta     → optional subtitle/count next to page_title
@@ -21,16 +21,17 @@
 <html lang="en" data-theme="mixed">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Life OS — {% block title %}{% endblock %}</title>
 
     {# Shared foundation styles — theme tokens, layout, sidebar, topbar #}
     <link rel="stylesheet" href="/static/css/base.css">
-	
+
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <!-- CodeMirror for SQL syntax highlighting -->
+
+    <!-- CodeMirror for SQL Explorer -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
@@ -39,14 +40,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
 
-    {# Page-specific CSS injected by child templates #}
+    {# Page-specific CSS #}
     {% block extra_css %}{% endblock %}
 </head>
 <body>
 
 <div class="layout" id="layout">
 
-    {# Mobile sidebar backdrop #}
+    {# Mobile sidebar backdrop — tap to close #}
     <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
 
     {# ── SIDEBAR ── #}
@@ -55,7 +56,10 @@
     {# ── TOPBAR ── #}
     <header class="topbar">
         <div class="topbar-left">
-            <button class="hamburger" onclick="openMobileSidebar()">☰</button>
+            {# Hamburger — only visible on mobile via CSS #}
+            <button class="hamburger" onclick="openMobileSidebar()" aria-label="Open menu">
+                <i class="fas fa-bars"></i>
+            </button>
             <span class="page-title">{% block page_title %}{% endblock %}</span>
             {% block topbar_meta %}{% endblock %}
         </div>
@@ -72,16 +76,13 @@
 
 </div>
 
-{# Shared toast element — populated by showToast() in base.js #}
+{# Shared toast #}
 <div id="toast"></div>
 
-{# Shared JS: theme, sidebar, toast, mobile — loaded for every page #}
+{# Shared JS: theme, sidebar, toast, mobile #}
 <script src="/static/js/base.js"></script>
-
-{# HTMX — loaded globally so all pages can use hx-* attributes #}
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 
-{# Page-specific scripts injected by child templates #}
 {% block extra_js %}{% endblock %}
 
 </body>

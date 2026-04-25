@@ -1,9 +1,8 @@
 {# templates/partials/sidebar_js.html
-   Include at the bottom of every page's <script> block, or just before </body>.
+   Include at the bottom of every standalone page's <script> block, or just before </body>.
+   For pages that extend base.html, base.js handles this automatically.
    Provides: setTheme(), toggleSidebar(), applyCollapsed(),
              openMobileSidebar(), closeMobileSidebar()
-   Requires: #layout element with .sidebar-collapsed class support,
-             #collapse-icon span, .theme-btn buttons
 #}
 <script>
 // ── Theme ──────────────────────────────────────────────────────────────────────
@@ -11,8 +10,9 @@ function setTheme(t, btn) {
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('life-os-theme', t);
     document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    if (btn) btn.classList.add('active');
 }
+
 (function () {
     const s = localStorage.getItem('life-os-theme') || 'mixed';
     document.documentElement.setAttribute('data-theme', s);
@@ -31,23 +31,38 @@ function toggleSidebar() {
 }
 
 function applyCollapsed() {
-    document.getElementById('layout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+    const layout = document.getElementById('layout');
+    if (!layout) return;
+    layout.classList.toggle('sidebar-collapsed', sidebarCollapsed);
     const icon = document.getElementById('collapse-icon');
     if (icon) icon.textContent = sidebarCollapsed ? '▶' : '◀';
 }
 
 // Mobile sidebar
 function openMobileSidebar() {
-    document.getElementById('sidebar').classList.add('mobile-open');
+    const sidebar = document.getElementById('sidebar');
     const bd = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.add('mobile-open');
     if (bd) bd.classList.add('visible');
-}
-function closeMobileSidebar() {
-    document.getElementById('sidebar').classList.remove('mobile-open');
-    const bd = document.getElementById('sidebar-backdrop');
-    if (bd) bd.classList.remove('visible');
+    // Prevent body scroll while sidebar open
+    document.body.style.overflow = 'hidden';
 }
 
-// Apply on load (desktop only)
-if (window.innerWidth > 768) applyCollapsed();
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const bd = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+    if (bd) bd.classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+// Close mobile sidebar on Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMobileSidebar();
+});
+
+// Apply on load — desktop only
+if (window.innerWidth > 768) {
+    applyCollapsed();
+}
 </script>

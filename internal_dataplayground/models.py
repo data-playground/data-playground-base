@@ -435,6 +435,12 @@ class ReadmeStatus(enum.Enum):
     PUSHED    = "pushed"
     STALE     = "stale"      # code changed after README was generated
 
+class FolderReadmeStatus(enum.Enum):
+    NONE     = "none"
+    DRAFT    = "draft"
+    REVIEWED = "reviewed"
+    PUSHED   = "pushed"
+    STALE    = "stale"  # set when any file in the folder was pulled after generation
 
 class CommentedStatus(enum.Enum):
     NONE      = "none"
@@ -506,6 +512,13 @@ class CodeProject(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    folder_readmes: Mapped[list["FolderReadme"]] = relationship(
+        "FolderReadme",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="FolderReadme.folder_path",
+    )
     blog_ideas: Mapped[list["BlogIdea"]] = relationship(
         "BlogIdea", back_populates="code_project",
         foreign_keys="BlogIdea.code_project_id",
@@ -528,6 +541,28 @@ class CodeProject(Base):
             f.code_pulled_at and f.code_pulled_at > self.readme_generated_at
             for f in self.files
         )
+
+    @property
+    def folder_readme_coverage(self) -> dict:
+        """
+        Returns a summary of README coverage across all tracked folders.
+        Used by the coverage dashboard to show which folders need attention.
+
+        Returns:
+          {
+              "total": int,       # folders with at least one tracked file
+              "none": int,        # no README generated
+              "draft": int,       # generated, not yet reviewed
+              "reviewed": int,    # reviewed, not yet pushed
+              "pushed": int,      # live on GitHub
+              "stale": int,       # pushed but code has changed since
+          }
+        """
+        counts = {"total": 0, "none": 0, "draft": 0, "reviewed": 0, "pushed": 0, "stale": 0}
+        for fr in self.folder_readmes:
+            counts["total"] += 1
+            counts[fr.status.value] += 1
+        return counts
 
 
 class CodeFile(Base):
@@ -601,25 +636,103 @@ class CodeFile(Base):
         return self.code_pulled_at > self.narration_generated_at
 
 
-# ── UPDATED BLOG IDEA (additions to existing BlogIdea model) ──────────────────
-# Add these columns/relationships to your existing BlogIdea class in models.py:
-#
-#   draft_v2: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-#
-#   code_file_id: Mapped[Optional[int]] = mapped_column(
-#       Integer, ForeignKey("code_files.id", ondelete="SET NULL"), nullable=True
-#   )
-#   code_project_id: Mapped[Optional[int]] = mapped_column(
-#       Integer, ForeignKey("code_projects.id", ondelete="SET NULL"), nullable=True
-#   )
-#   code_file: Mapped[Optional["CodeFile"]] = relationship(
-#       "CodeFile", back_populates="blog_ideas",
-#       foreign_keys=[code_file_id],
-#   )
-#   code_project: Mapped[Optional["CodeProject"]] = relationship(
-#       "CodeProject", back_populates="blog_ideas",
-#       foreign_keys=[code_project_id],
-#   )
+class FolderReadme(Base):
+    """
+    Tracks the README for a single folder within a CodeProject.
+
+    One row per (project_id, folder_path) pair — enforced by the unique
+    constraint in the migration.
+
+    Lifecycle:
+        none → draft (AI generated) → reviewed (human approved)
+             → pushed (on GitHub) → stale (code changed since generation)
+
+    The `stale` status should be set by the router or a background check
+    whenever any CodeFile in folder_path has code_pulled_at > readme_generated_at.
+
+    github_path is the full repo path where the README.md would live:
+        e.g. "internal_dataplayground/routers/README.md"
+    It is stored rather than computed so pushes don't need to reconstruct it.
+    """
+    __tablename__ = "folder_readmes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # ── Ownership ─────────────────────────────────────────────────────────────
+    project_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("code_projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # ── Folder identity ───────────────────────────────────────────────────────
+    # Full path within the repo — the unique key alongside project_id.
+    # e.g. "internal_dataplayground/routers"
+    folder_path: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    # Short label shown in the UI — avoids splitting strings everywhere.
+    # e.g. "routers", "dags", "partials"
+    folder_display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Where the README.md would live on GitHub if pushed.
+    # e.g. "internal_dataplayground/routers/README.md"
+    # Nullable until the user decides the push target.
+    github_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # ── Content ───────────────────────────────────────────────────────────────
+    readme_md: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # ── Pipeline state ────────────────────────────────────────────────────────
+    status: Mapped[FolderReadmeStatus] = mapped_column(
+        Enum(FolderReadmeStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=FolderReadmeStatus.NONE,
+    )
+
+    # ── GitHub push tracking ──────────────────────────────────────────────────
+    # SHA returned by GitHub after the last push.
+    # Required to update an existing file (GitHub rejects PUT without it).
+    github_sha: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    # ── Timestamps ────────────────────────────────────────────────────────────
+    readme_generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    readme_pushed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+        nullable=False,
+    )
+
+    # ── Relationships ─────────────────────────────────────────────────────────
+    project: Mapped["CodeProject"] = relationship(
+        "CodeProject", back_populates="folder_readmes"
+    )
+
+    # ── Computed properties ───────────────────────────────────────────────────
+
+    @property
+    def is_stale(self) -> bool:
+        """True when the README exists but the folder's code has since changed."""
+        return self.status == FolderReadmeStatus.STALE
+
+    @property
+    def needs_readme(self) -> bool:
+        """True when no README has been generated yet for this folder."""
+        return self.status == FolderReadmeStatus.NONE
+
+    @property
+    def is_published(self) -> bool:
+        """True when the README has been pushed to GitHub and is current."""
+        return self.status == FolderReadmeStatus.PUSHED
 
 
 # ── PYDANTIC SCHEMAS ──────────────────────────────────────────────────────────
@@ -659,4 +772,23 @@ class CodeFileResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class FolderReadmeResponse(BaseModel):
+    id: int
+    project_id: int
+    folder_path: str
+    folder_display_name: str
+    github_path: Optional[str]
+    status: FolderReadmeStatus
+    readme_generated_at: Optional[datetime.datetime]
+    readme_pushed_at: Optional[datetime.datetime]
 
+    class Config:
+        from_attributes = True
+
+
+class FolderReadmeCreate(BaseModel):
+    """Used when the router creates or upserts a folder README record."""
+    project_id: int
+    folder_path: str
+    folder_display_name: str
+    github_path: Optional[str] = None
