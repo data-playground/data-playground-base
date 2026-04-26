@@ -1,0 +1,200 @@
+{# templates/partials/project_agent_panel.html
+   Injected into #ci-agent-panel via hx-swap="innerHTML" by endpoints that
+   update README state but do NOT need to rebuild the file tree.
+
+   Used by:
+     - PATCH /code-intel/projects/{id}/readme      (save README edits)
+     - POST  /code-intel/projects/{id}/push-readme  (push to GitHub)
+     - POST  /code-intel/projects/{id}/trigger-readme (full project README queued)
+
+   Context variables:
+     project  = CodeProject ORM object
+     toast    = optional success message string
+     error    = optional error message string
+
+   The tree zone (#ci-tree-panel) is never touched when this partial is used.
+   The README status badge in the header IS stale after a push, but it lives
+   in #ci-tree-panel. We handle that with a lightweight JS badge refresh
+   rather than reloading the tree — see the <script> block at the bottom.
+#}
+
+{# Toast marker — picked up by the htmx:afterSwap listener in base.js #}
+<div data-toast="{{ toast or '' }}" style="display:none;"></div>
+
+{% if error %}
+<div style="padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);margin-bottom:10px;">⚠ {{ error }}</div>
+{% endif %}
+
+{# ── README Writer card ───────────────────────────────────────────────────── #}
+<div class="agent-card">
+    <div class="agent-card-header">
+        <span class="agent-card-title" style="color:var(--accent);">📄 README Writer</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm" id="readme-gen-btn" onclick="triggerReadme()">
+                ▶ Full Project README
+            </button>
+            {% if project.readme_status.value == 'reviewed' %}
+            <button class="btn btn-sm btn-green"
+                    hx-post="/code-intel/projects/{{ project.id }}/push-readme"
+                    hx-target="#ci-agent-panel"
+                    hx-swap="innerHTML">
+                ↑ Push to GitHub
+            </button>
+            {% endif %}
+            <span id="readme-spinner" style="display:none;font-size:9px;color:var(--text-muted);">
+                <span class="spinner-inline"></span>
+            </span>
+        </div>
+    </div>
+    <div class="agent-card-desc" id="readme-desc">
+        Runs in Airflow · synthesizes narrations from all files.
+        Select a folder first to generate a scoped README for just that folder.
+        {% if not project.files|selectattr('narration')|list %}
+        <span style="color:var(--yellow);">⚠ Narrate files first.</span>
+        {% endif %}
+    </div>
+    <div class="queued-banner" id="readme-queued"></div>
+
+    {# Project README editor — shown once a README has been generated #}
+    {% if project.readme_md %}
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em;">
+            Project README
+            <span style="margin-left:8px;">
+                {% if project.readme_status.value == 'pushed' %}
+                <span class="badge badge-green">pushed ✓</span>
+                {% elif project.readme_status.value == 'reviewed' %}
+                <span class="badge badge-accent">reviewed</span>
+                {% elif project.readme_status.value == 'draft' %}
+                <span class="badge badge-yellow">draft</span>
+                {% elif project.readme_status.value == 'stale' %}
+                <span class="badge badge-red">stale</span>
+                {% endif %}
+            </span>
+        </div>
+        <textarea class="readme-editor" id="readme-editor-{{ project.id }}">{{ project.readme_md }}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-primary" onclick="saveReadme({{ project.id }})">Save Edits</button>
+            {% if project.readme_generated_at %}
+            <span style="font-size:9px;color:var(--text-muted);">
+                Generated {{ project.readme_generated_at.strftime('%b %d, %H:%M') }}
+            </span>
+            {% endif %}
+            {% if project.readme_pushed_at %}
+            <span style="font-size:9px;color:var(--green);">
+                Pushed {{ project.readme_pushed_at.strftime('%b %d, %H:%M') }}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Folder README panel — persists independently of project README #}
+    <div class="folder-readme-panel" id="folder-readme-panel"
+         {% if project.folder_readme_md %}style="display:block;"{% endif %}>
+        <div class="folder-readme-header">
+            <span class="folder-readme-title-text" id="folder-readme-label">
+                📄 {% if project.folder_readme_path %}README for /{{ project.folder_readme_path.split('/')[-1] }}{% else %}Folder README{% endif %}
+            </span>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <button class="btn btn-sm" onclick="copyFolderReadme()">⊕ Copy</button>
+                <button class="btn btn-sm btn-primary" onclick="saveFolderAsProject()">Save as Project README</button>
+                <button onclick="document.getElementById('folder-readme-panel').style.display='none'"
+                        style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
+            </div>
+        </div>
+        <div class="folder-readme-warning">
+            Scoped to the selected folder — does <strong>not</strong> overwrite your project README unless you click "Save as Project README".
+            {% if project.folder_readme_generated_at %}
+            <span style="color:var(--text-muted);margin-left:6px;">
+                Generated {{ project.folder_readme_generated_at.strftime('%b %d, %H:%M') }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="folder-readme-body">
+            <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ project.folder_readme_md or '' }}</textarea>
+        </div>
+    </div>
+</div>
+
+{# ── Pull card ── #}
+<div class="agent-card" id="pull-card" style="display:none;">
+    <div class="agent-card-header">
+        <span class="agent-card-title" style="color:var(--text-secondary);">① Pull from GitHub</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm" onclick="runPullBatch()">⟳ Pull Selected</button>
+            <span id="pull-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+        </div>
+    </div>
+    <div class="agent-card-desc">Fetches latest code from GitHub. Runs immediately — no queue needed.</div>
+    <div class="batch-progress" id="pull-progress"><div class="batch-progress-bar" id="pull-bar"></div></div>
+    <div class="batch-log" id="pull-log"></div>
+</div>
+
+{# ── Narrate card ── #}
+<div class="agent-card" id="narrate-card" style="display:none;">
+    <div class="agent-card-header">
+        <span class="agent-card-title" style="color:var(--accent);">② Code Narrator</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm" onclick="triggerBatch('narrate')">▶ Narrate Selected</button>
+            <span id="narrate-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+        </div>
+    </div>
+    <div class="agent-card-desc">Queued in Airflow · Claude Sonnet · feeds blog pipeline + README Writer.</div>
+    <div class="queued-banner" id="narrate-queued"></div>
+</div>
+
+{# ── Comment card ── #}
+<div class="agent-card" id="comment-card" style="display:none;">
+    <div class="agent-card-header">
+        <span class="agent-card-title" style="color:var(--blue);">③ Code Commenter</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm" onclick="triggerBatch('comment')">▶ Comment Selected</button>
+            <span id="comment-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+        </div>
+    </div>
+    <div class="agent-card-desc">Queued in Airflow · Gemini Flash · adds docstrings + inline comments. No logic changes.</div>
+    <div class="queued-banner" id="comment-queued"></div>
+</div>
+
+{# ── Improve card ── #}
+<div class="agent-card" id="improve-card" style="display:none;">
+    <div class="agent-card-header">
+        <span class="agent-card-title" style="color:var(--yellow);">④ Code Improver</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm" onclick="triggerBatch('improve')">▶ Review Selected</button>
+            <span id="improve-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+        </div>
+    </div>
+    <div class="agent-card-desc">Queued in Airflow · Gemini Flash · structured improvement report. Never auto-applied.</div>
+    <div class="queued-banner" id="improve-queued"></div>
+</div>
+
+{# ── Refresh the README status badge in the tree header without reloading it ── #}
+<script>
+(function() {
+    // After a save or push, the README status badge in #ci-tree-panel is stale.
+    // We fetch the current status from the lightweight status endpoint and update
+    // just the badge — no tree reload needed.
+    const statusBadgeEl = document.getElementById('readme-status-badge');
+    if (!statusBadgeEl || !window._projectId) return;
+
+    fetch(`/code-intel/projects/${window._projectId}/status`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.readme_status) {
+                const map = {
+                    'none':     ['badge-muted',   'no README'],
+                    'draft':    ['badge-yellow',  'README draft'],
+                    'reviewed': ['badge-accent',  'README reviewed'],
+                    'pushed':   ['badge-green',   'README ✓'],
+                    'stale':    ['badge-red',     'README stale'],
+                };
+                const [cls, label] = map[data.readme_status] || ['badge-muted', 'no README'];
+                statusBadgeEl.className = `badge ${cls}`;
+                statusBadgeEl.textContent = label;
+            }
+        })
+        .catch(() => {});
+})();
+</script>

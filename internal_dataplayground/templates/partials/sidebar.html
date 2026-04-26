@@ -1,12 +1,4 @@
-{# templates/partials/sidebar.html
-   Included by every page. Pass `active_module` from the router context
-   to highlight the correct nav item.
-
-   Valid values for active_module:
-     "jobs", "finance", "finance_ledger", "finance_upload",
-     "finance_settings", "workouts", "blog", "blog_new",
-     "explorer", "code_intel"
-#}
+{# templates/partials/sidebar.html — updated with Dashboard link #}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <aside class="sidebar" id="sidebar">
@@ -17,6 +9,13 @@
 
     <nav class="sidebar-nav">
         <div class="nav-label">Modules</div>
+
+        {# Dashboard — new home screen #}
+        <a class="nav-item {% if active_module == 'dashboard' %}active{% endif %}" href="/dashboard">
+            <i class="fas fa-house icon"></i>
+            <span class="sidebar-text">Dashboard</span>
+        </a>
+
         <a class="nav-item {% if active_module == 'jobs' %}active{% endif %}" href="/jobs">
             <i class="fas fa-briefcase icon"></i>
             <span class="sidebar-text">Job Tracker</span>
@@ -84,17 +83,13 @@
     </nav>
 
     <div class="sidebar-footer">
-        {# Theme label — hidden when collapsed #}
         <div class="theme-label sidebar-text">Theme</div>
-
-        {# Theme switcher + collapse button in one row #}
         <div class="footer-controls">
             <div class="theme-switcher sidebar-text">
                 <button class="theme-btn" onclick="setTheme('dark',this)">Dark</button>
                 <button class="theme-btn" onclick="setTheme('light',this)">Light</button>
                 <button class="theme-btn active" onclick="setTheme('mixed',this)">Mixed</button>
             </div>
-            {# Collapse button inline — much cleaner #}
             <button class="collapse-btn" id="collapse-btn" onclick="toggleSidebar()" title="Toggle sidebar">
                 <span id="collapse-icon">◀</span>
             </button>

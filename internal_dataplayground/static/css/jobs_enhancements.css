@@ -1,0 +1,226 @@
+/* static/css/jobs_enhancements.css
+   ─────────────────────────────────────────────────────────────────────────
+   Life OS — Jobs Page Visual Enhancements
+   Load after jobs.css in jobs.html via {% block extra_css %}.
+
+   Covers:
+     1. ATS button micro-animations
+     2. Status-aware row tinting
+     3. Keyboard-focused row highlight
+     4. Column sort header styling
+     5. Score histogram (in dashboard, reused here if needed)
+   ─────────────────────────────────────────────────────────────────────────
+*/
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. ATS BUTTON MICRO-ANIMATIONS
+   The HTMX swap already handles the color change. These layers add:
+   - A quick scale pop when a button becomes active
+   - A ripple flash on the containing row
+   - A smooth transition for the active state border glow
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Active state glow — more visible than the default color swap */
+.ats-btn.status-applied       { box-shadow: 0 0 0 1px rgba(108,99,255,0.3); }
+.ats-btn.status-phone_screen  { box-shadow: 0 0 0 1px rgba(0,191,255,0.3); }
+.ats-btn.status-interviewing  { box-shadow: 0 0 0 1px rgba(255,176,32,0.3); }
+.ats-btn.status-technical     { box-shadow: 0 0 0 1px rgba(255,140,66,0.3); }
+.ats-btn.status-rejected      { box-shadow: 0 0 0 1px rgba(255,80,80,0.3); }
+.ats-btn.status-offer         { box-shadow: 0 0 0 1px rgba(0,229,160,0.4); }
+.ats-btn.status-closed        { box-shadow: 0 0 0 1px rgba(136,136,168,0.2); }
+
+/* Button press feel */
+.ats-btn:active {
+    transform: scale(0.95);
+    transition: transform 0.08s ease;
+}
+
+/* Pop animation when a button becomes the active status */
+@keyframes ats-pop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.12); }
+    70%  { transform: scale(0.96); }
+    100% { transform: scale(1); }
+}
+
+/* Row flash after a status is logged */
+@keyframes row-flash {
+    0%   { background: rgba(124,111,255,0.12); }
+    100% { background: transparent; }
+}
+
+/* Applied to the .ats-buttons div by HTMX's htmx-settled class */
+.ats-buttons.htmx-settled {
+    animation: row-flash 0.7s ease forwards;
+}
+
+/* Pop animation triggered via JS after HTMX swap */
+.ats-btn.just-activated {
+    animation: ats-pop 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Smooth transitions on all ATS state properties */
+.ats-btn {
+    transition: background 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease,
+                box-shadow 0.18s ease,
+                transform 0.08s ease;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. STATUS-AWARE ROW TINTING
+   Rejected/Closed rows fade back — your eye skips them naturally.
+   Offer/Interviewing rows get a subtle left accent.
+   Applied rows get a gentle baseline highlight.
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Rejected — significantly faded, clearly de-prioritised */
+#jobs-table tbody tr.tint-rejected {
+    opacity: 0.38;
+    filter: grayscale(0.3);
+}
+
+#jobs-table tbody tr.tint-rejected:hover {
+    opacity: 0.65;
+    filter: none;
+}
+
+/* Closed — faded but less so than Rejected */
+#jobs-table tbody tr.tint-closed {
+    opacity: 0.45;
+}
+
+#jobs-table tbody tr.tint-closed:hover {
+    opacity: 0.7;
+}
+
+/* Offer — celebrate with a green left accent */
+#jobs-table tbody tr.tint-offer {
+    border-left: 3px solid var(--score-high);
+    background: rgba(0, 229, 160, 0.04);
+}
+
+#jobs-table tbody tr.tint-offer:hover {
+    background: rgba(0, 229, 160, 0.08);
+}
+
+/* Interviewing — amber accent, things are heating up */
+#jobs-table tbody tr.tint-interviewing {
+    border-left: 3px solid var(--score-mid);
+    background: rgba(255, 176, 32, 0.03);
+}
+
+#jobs-table tbody tr.tint-interviewing:hover {
+    background: rgba(255, 176, 32, 0.07);
+}
+
+/* Applied — very subtle, just a tiny left line */
+#jobs-table tbody tr.tint-applied {
+    border-left: 3px solid var(--accent);
+}
+
+/* Phone Screen — light blue accent */
+#jobs-table tbody tr.tint-phone {
+    border-left: 3px solid var(--blue);
+}
+
+/* Ensure score badge opacity doesn't collapse on faded rows */
+#jobs-table tbody tr.tint-rejected .score-badge,
+#jobs-table tbody tr.tint-closed  .score-badge {
+    opacity: 1;
+    filter: none;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. KEYBOARD NAVIGATION — FOCUSED ROW
+   A clear but unobtrusive highlight for the j/k selected row.
+══════════════════════════════════════════════════════════════════════════ */
+
+#jobs-table tbody tr.row-focused {
+    background: var(--accent-dim) !important;
+    outline: none;
+    position: relative;
+}
+
+/* Left rail indicator */
+#jobs-table tbody tr.row-focused::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+}
+
+/* Keep job title readable when row is focused */
+#jobs-table tbody tr.row-focused .job-title-link {
+    color: var(--accent);
+}
+
+/* Score badge pops on focused row */
+#jobs-table tbody tr.row-focused .score-badge {
+    transform: scale(1.08);
+    transition: transform 0.15s ease;
+}
+
+/* Keyboard shortcut hint label on focused row */
+#jobs-table tbody tr.row-focused::before {
+    content: '↵ open  a/p/i/t/r/o/c log status';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 8px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    font-family: 'DM Mono', monospace;
+    opacity: 0.6;
+    pointer-events: none;
+    /* Only show when row has enough width */
+    white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+    #jobs-table tbody tr.row-focused::before { display: none; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4. COLUMN SORT HEADERS
+══════════════════════════════════════════════════════════════════════════ */
+
+#jobs-table thead th {
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+#jobs-table thead th:hover {
+    color: var(--accent);
+    background: var(--accent-dim);
+}
+
+#jobs-table thead th .sort-indicator {
+    display: inline-block;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5. ATS POP — triggered by JS adding .just-activated class
+   Remove the class after animation ends (handled in jobs_enhancements.js)
+══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes status-logged {
+    0%   { background: rgba(124,111,255,0.2); }
+    100% { background: transparent; }
+}
+
+/* Whole table row briefly flashes when an ATS action fires */
+#jobs-table tbody tr.status-just-logged {
+    animation: status-logged 0.6s ease forwards;
+}

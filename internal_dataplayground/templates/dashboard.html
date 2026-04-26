@@ -1,0 +1,739 @@
+{% extends "base.html" %}
+{% block title %}Life OS — Dashboard{% endblock %}
+{% block page_title %}Life OS{% endblock %}
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);letter-spacing:.08em;">command center</span>
+{% endblock %}
+{% block topbar_actions %}
+    <a class="btn btn-primary" href="/jobs">Job Tracker →</a>
+{% endblock %}
+{% block extra_css %}
+<style>
+/* ── DASHBOARD LAYOUT ────────────────────────────────────────────────────── */
+.dash-wrap {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto auto auto;
+    gap: 16px;
+    padding: 20px;
+    max-width: 1400px;
+    height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+/* ── SECTION HEADER ─────────────────────────────────────────────────────── */
+.section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.section-title {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.section-link {
+    font-size: 9px;
+    color: var(--accent);
+    text-decoration: none;
+    letter-spacing: .05em;
+    opacity: 0.8;
+    transition: opacity .15s;
+}
+
+.section-link:hover { opacity: 1; }
+
+/* ── STAT STRIP ─────────────────────────────────────────────────────────── */
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    grid-column: 1 / -1;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .18s, transform .18s;
+}
+
+.stat-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-line, var(--accent));
+    opacity: 0.6;
+}
+
+.stat-label {
+    font-size: 9px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.stat-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.stat-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* ── HISTOGRAM ──────────────────────────────────────────────────────────── */
+.histogram-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.histogram-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+    margin-bottom: 6px;
+}
+
+.hist-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+}
+
+.hist-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    background: var(--accent);
+    opacity: 0.7;
+    transition: opacity .15s, transform .15s;
+    min-height: 3px;
+    cursor: default;
+    position: relative;
+}
+
+.hist-bar:hover { opacity: 1; }
+
+/* Tooltip on hover */
+.hist-bar::after {
+    content: attr(data-count);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 9px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+}
+
+.hist-bar:hover::after { opacity: 1; }
+
+/* Color gradient across buckets */
+.hist-col:nth-child(1) .hist-bar { background: var(--score-high); }
+.hist-col:nth-child(2) .hist-bar { background: var(--score-high); opacity: .85; }
+.hist-col:nth-child(3) .hist-bar { background: var(--score-high); opacity: .6; }
+.hist-col:nth-child(4) .hist-bar { background: var(--score-mid); }
+.hist-col:nth-child(5) .hist-bar { background: var(--score-mid); opacity: .7; }
+.hist-col:nth-child(6) .hist-bar { background: var(--score-mid); opacity: .5; }
+.hist-col:nth-child(7) .hist-bar { background: var(--score-low); opacity: .7; }
+.hist-col:nth-child(8) .hist-bar { background: var(--score-low); opacity: .5; }
+.hist-col:nth-child(9) .hist-bar { background: var(--text-muted); opacity: .4; }
+
+.hist-label {
+    font-size: 8px;
+    color: var(--text-muted);
+    text-align: center;
+    white-space: nowrap;
+    letter-spacing: -.02em;
+}
+
+.hist-labels {
+    display: flex;
+    gap: 4px;
+}
+
+.hist-labels span { flex: 1; text-align: center; font-size: 8px; color: var(--text-muted); }
+
+/* ── ATS PIPELINE FUNNEL ────────────────────────────────────────────────── */
+.pipeline-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.pipeline-stages {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pipeline-stage {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pipeline-stage-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    width: 64px;
+    flex-shrink: 0;
+}
+
+.pipeline-stage-bar-wrap {
+    flex: 1;
+    background: var(--bg-hover);
+    border-radius: 3px;
+    height: 6px;
+    overflow: hidden;
+}
+
+.pipeline-stage-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s cubic-bezier(.4,0,.2,1);
+    min-width: 3px;
+}
+
+.pipeline-stage-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ── TOP JOBS ────────────────────────────────────────────────────────────── */
+.top-jobs-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.top-job-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .15s;
+    border-radius: 4px;
+    margin: 0 -6px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.top-job-row:last-child { border-bottom: none; }
+.top-job-row:hover { background: var(--bg-hover); }
+
+.top-job-score {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.top-job-info { flex: 1; min-width: 0; }
+
+.top-job-title {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.top-job-company {
+    font-size: 9px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-job-apply {
+    font-size: 9px;
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--accent);
+    padding: 3px 8px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s;
+    font-family: 'DM Mono', monospace;
+}
+
+.top-job-row:hover .top-job-apply { opacity: 1; }
+
+/* ── FINANCE CARD ────────────────────────────────────────────────────────── */
+.finance-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.fin-kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.fin-kpi {
+    text-align: center;
+    padding: 8px 6px;
+    border-radius: 6px;
+    background: var(--bg-hover);
+}
+
+.fin-kpi-label {
+    font-size: 8px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.fin-kpi-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.fin-empty {
+    text-align: center;
+    padding: 20px 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+.fin-empty a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+/* ── BLOG PANEL ──────────────────────────────────────────────────────────── */
+.blog-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.blog-pipeline-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+}
+
+.blog-bucket {
+    background: var(--bg-hover);
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.blog-bucket-count {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.blog-bucket-label {
+    font-size: 8px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* ── STAGING PANEL ───────────────────────────────────────────────────────── */
+.staging-mini {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.staging-mini-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+}
+
+.staging-mini-row:last-child { border-bottom: none; }
+
+.staging-mini-label { color: var(--text-secondary); }
+
+.staging-mini-count {
+    font-weight: 600;
+    font-family: 'Syne', sans-serif;
+}
+
+/* ── GREETING ────────────────────────────────────────────────────────────── */
+.greeting-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px 4px;
+}
+
+.greeting-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.greeting-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.greeting-date {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .dash-wrap { grid-template-columns: 1fr 300px; }
+}
+
+@media (max-width: 900px) {
+    .dash-wrap { grid-template-columns: 1fr; }
+    .stat-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    .dash-wrap { padding: 12px; gap: 12px; }
+    .stat-strip { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-value { font-size: 20px; }
+    .fin-kpi-value { font-size: 13px; }
+}
+
+@media (max-width: 400px) {
+    .stat-strip { grid-template-columns: 1fr 1fr; }
+    .blog-pipeline-row { grid-template-columns: 1fr; gap: 6px; }
+    .blog-bucket { display: flex; align-items: center; gap: 12px; }
+    .blog-bucket-count { font-size: 18px; margin-bottom: 0; }
+}
+
+/* ── PULSE ANIMATION for pending staging ─────────────────────────────────── */
+@keyframes pulse-count {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+}
+
+.pulse { animation: pulse-count 2s ease infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dash-wrap">
+
+    {# ── GREETING ── #}
+    <div class="greeting-bar">
+        <div>
+            <div class="greeting-text" id="greeting-text">Good morning</div>
+            <div class="greeting-sub">Here's where everything stands.</div>
+        </div>
+        <div class="greeting-date">
+            {{ today.strftime('%A, %B %-d') }}<br>
+            <span style="color:var(--accent);">{{ today.year }}</span>
+        </div>
+    </div>
+
+    {# ── STAT STRIP ── #}
+    <div class="stat-strip">
+
+        <div class="stat-card" style="--accent-line: var(--score-high);">
+            <div class="stat-label">High Fit Jobs</div>
+            <div class="stat-value">{{ high_fit_count }}</div>
+            <div class="stat-sub">score ≥ 90 · of {{ total_jobs }} total</div>
+        </div>
+
+        <div class="stat-card" style="--accent-line: var(--accent);">
+            <div class="stat-label">In Pipeline</div>
+            <div class="stat-value">{{ total_in_pipeline }}</div>
+            <div class="stat-sub">active applications</div>
+        </div>
+
+        <div class="stat-card" style="--accent-line: var(--yellow);">
+            <div class="stat-label">Blog Ideas</div>
+            <div class="stat-value">{{ blog_total }}</div>
+            <div class="stat-sub">{{ blog_ready }} ready to publish</div>
+        </div>
+
+        <div class="stat-card" style="--accent-line: {% if staging_pending > 0 %}var(--yellow){% else %}var(--green){% endif %};">
+            <div class="stat-label">Staging Queue</div>
+            <div class="stat-value {% if staging_pending > 0 %}pulse{% endif %}">{{ staging_pending }}</div>
+            <div class="stat-sub">pending enrichment</div>
+        </div>
+
+    </div>
+
+    {# ── LEFT COLUMN ── #}
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0;">
+
+        {# Score Histogram #}
+        <div class="histogram-panel">
+            <div class="section-head">
+                <span class="section-title">Fit Score Distribution</span>
+                <a href="/jobs" class="section-link">View all →</a>
+            </div>
+            <div class="histogram-bars">
+                {% for bucket, count in histogram %}
+                <div class="hist-col">
+                    <div class="hist-bar"
+                         data-count="{{ count }}"
+                         style="height: {{ ((count / hist_max) * 100) | round | int }}%;"></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="hist-labels">
+                {% for bucket, count in histogram %}
+                <span>{{ bucket }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Top Unapplied Jobs #}
+        <div class="top-jobs-panel">
+            <div class="section-head">
+                <span class="section-title">Top Unapplied Jobs</span>
+                <a href="/jobs" class="section-link">All jobs →</a>
+            </div>
+
+            {% if top_jobs %}
+            <div class="pipeline-stages" style="gap:0;">
+                {% for job in top_jobs %}
+                <div class="top-job-row">
+                    <div class="top-job-score score-badge {% if job.fit_score >= 90 %}score-high{% elif job.fit_score >= 75 %}score-mid{% else %}score-low{% endif %}">
+                        {{ job.fit_score }}
+                    </div>
+                    <div class="top-job-info">
+                        <div class="top-job-title">{{ job.job_title }}</div>
+                        <div class="top-job-company">{{ job.company_name or '—' }}{% if job.location %} · {{ job.location }}{% endif %}</div>
+                    </div>
+                    {% if job.job_link %}
+                    <a href="{{ job.job_link }}" target="_blank" class="top-job-apply">Apply →</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="fin-empty">
+                No unapplied high-fit jobs right now.<br>
+                <a href="/jobs">Check the job tracker →</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ATS Pipeline #}
+        <div class="pipeline-panel">
+            <div class="section-head">
+                <span class="section-title">ATS Pipeline</span>
+                <span style="font-size:9px;color:var(--text-muted);">{{ total_in_pipeline }} total</span>
+            </div>
+            <div class="pipeline-stages">
+                {% for stage in pipeline %}
+                {% if stage.count > 0 %}
+                <div class="pipeline-stage">
+                    <div class="pipeline-stage-label">{{ stage.label }}</div>
+                    <div class="pipeline-stage-bar-wrap">
+                        <div class="pipeline-stage-bar"
+                             style="width: {{ ((stage.count / [total_in_pipeline, 1] | max) * 100) | round | int }}%; background: {{ stage.color }};"></div>
+                    </div>
+                    <div class="pipeline-stage-count">{{ stage.count }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+                {% if total_in_pipeline == 0 %}
+                <div class="fin-empty" style="padding:12px 0;">
+                    No applications logged yet.<br>
+                    <a href="/jobs">Start tracking →</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    {# ── RIGHT COLUMN ── #}
+    <div style="display:flex;flex-direction:column;gap:16px;min-width:0;">
+
+        {# Finance Summary #}
+        <div class="finance-panel">
+            <div class="section-head">
+                <span class="section-title">Finance · {{ today.strftime('%b %Y') }}</span>
+                <a href="/finance" class="section-link">Details →</a>
+            </div>
+
+            {% if has_finance %}
+            <div class="fin-kpi-row">
+                <div class="fin-kpi">
+                    <div class="fin-kpi-label">Income</div>
+                    <div class="fin-kpi-value" style="color:var(--green);">+${{ "%.0f"|format(fin_income) }}</div>
+                </div>
+                <div class="fin-kpi">
+                    <div class="fin-kpi-label">Expenses</div>
+                    <div class="fin-kpi-value" style="color:var(--red);">${{ "%.0f"|format(fin_expenses|abs) }}</div>
+                </div>
+                <div class="fin-kpi">
+                    <div class="fin-kpi-label">Net</div>
+                    <div class="fin-kpi-value" style="color:{% if fin_net >= 0 %}var(--green){% else %}var(--red){% endif %};">
+                        {% if fin_net >= 0 %}+{% endif %}${{ "%.0f"|format(fin_net) }}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="fin-empty">
+                No transactions for {{ today.strftime('%B') }} yet.<br>
+                <a href="/finance/upload">Import a CSV →</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Blog Pipeline #}
+        <div class="blog-panel">
+            <div class="section-head">
+                <span class="section-title">Blog Pipeline</span>
+                <a href="/blog" class="section-link">Kanban →</a>
+            </div>
+            <div class="blog-pipeline-row">
+                <div class="blog-bucket">
+                    <div class="blog-bucket-count">{{ blog_backlog }}</div>
+                    <div class="blog-bucket-label">Backlog</div>
+                </div>
+                <div class="blog-bucket">
+                    <div class="blog-bucket-count" style="color:var(--yellow);">{{ blog_active }}</div>
+                    <div class="blog-bucket-label">In Progress</div>
+                </div>
+                <div class="blog-bucket">
+                    <div class="blog-bucket-count" style="color:var(--green);">{{ blog_ready }}</div>
+                    <div class="blog-bucket-label">Ready</div>
+                </div>
+            </div>
+        </div>
+
+        {# Staging Queue #}
+        <div class="staging-mini">
+            <div class="section-head">
+                <span class="section-title">Staging Queue</span>
+                <a href="/jobs" class="section-link">Open tracker →</a>
+            </div>
+            <div>
+                <div class="staging-mini-row">
+                    <span class="staging-mini-label">⏳ Pending enrichment</span>
+                    <span class="staging-mini-count {% if staging_pending > 0 %}pulse{% endif %}"
+                          style="color:{% if staging_pending > 0 %}var(--yellow){% else %}var(--text-muted){% endif %};">
+                        {{ staging_pending }}
+                    </span>
+                </div>
+                <div class="staging-mini-row">
+                    <span class="staging-mini-label">⚙ Processing</span>
+                    <span class="staging-mini-count" style="color:var(--accent);">{{ staging_processing }}</span>
+                </div>
+                <div class="staging-mini-row">
+                    <span class="staging-mini-label">✓ Enriched total</span>
+                    <span class="staging-mini-count" style="color:var(--green);">{{ staging_done }}</span>
+                </div>
+            </div>
+        </div>
+
+        {# Quick Actions #}
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+            <div class="section-head" style="margin-bottom:10px;">
+                <span class="section-title">Quick Actions</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <a href="/jobs" class="btn" style="justify-content:space-between;">
+                    <span>⊞ Job Tracker</span>
+                    <span style="color:var(--text-muted);font-size:9px;">{{ high_fit_count }} high fit</span>
+                </a>
+                <a href="/finance/upload" class="btn" style="justify-content:space-between;">
+                    <span>⊕ Import CSV</span>
+                    <span style="color:var(--text-muted);font-size:9px;">Finance</span>
+                </a>
+                <a href="/blog" class="btn" style="justify-content:space-between;">
+                    <span>✎ Blog Ideas</span>
+                    <span style="color:var(--text-muted);font-size:9px;">{{ blog_total }} ideas</span>
+                </a>
+                <a href="/explorer" class="btn" style="justify-content:space-between;">
+                    <span>⊟ SQL Explorer</span>
+                    <span style="color:var(--text-muted);font-size:9px;">Read-only</span>
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+// Dynamic greeting based on time of day
+(function() {
+    const h = new Date().getHours();
+    const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    const el = document.getElementById('greeting-text');
+    if (el) el.textContent = greet;
+})();
+</script>
+{% endblock %}

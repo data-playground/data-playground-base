@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from database import init_db
-from routers import jobs, ats, staging, finance, blog, explorer, code_intelligence
+from routers import jobs, ats, staging, finance, blog, explorer, code_intelligence, dashboard
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,7 +24,10 @@ app.include_router(finance.router)
 app.include_router(blog.router)
 app.include_router(explorer.router)
 app.include_router(code_intelligence.router)
+app.include_router(dashboard.router)
+
+from fastapi.responses import RedirectResponse
 
 @app.get("/")
 async def root():
-    return {"message": "Life OS is online. Visit /jobs to see your tracker."}
+    return RedirectResponse(url="/dashboard")

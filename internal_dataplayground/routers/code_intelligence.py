@@ -217,7 +217,7 @@ async def generate_readme(
     narrated_files = [f for f in project.files if f.narration]
     if not narrated_files:
         return templates.TemplateResponse(
-            "partials/project_detail.html",
+            "partials/project_agent_panel.html",
             {"request": request, "project": project,
              "error": "No file narrations found. Narrate at least one file first."},
         )
@@ -243,7 +243,7 @@ async def generate_readme(
     await db.refresh(project)
 
     return templates.TemplateResponse(
-        "partials/project_detail.html",
+        "partials/project_agent_panel.html",
         {"request": request, "project": project,
          "toast": "README generated. Review and edit before pushing."},
     )
@@ -268,7 +268,7 @@ async def save_readme_edits(
     await db.refresh(project)
 
     return templates.TemplateResponse(
-        "partials/project_detail.html",
+        "partials/project_agent_panel.html",
         {"request": request, "project": project,
          "toast": "README saved and marked as reviewed."},
     )
@@ -286,7 +286,7 @@ async def push_readme(
 
     if project.readme_status not in (ReadmeStatus.REVIEWED, ReadmeStatus.APPROVED):
         return templates.TemplateResponse(
-            "partials/project_detail.html",
+            "partials/project_agent_panel.html",
             {"request": request, "project": project,
              "error": "Mark the README as reviewed before pushing."},
         )
@@ -317,7 +317,7 @@ async def push_readme(
     await db.refresh(project)
 
     return templates.TemplateResponse(
-        "partials/project_detail.html",
+        "partials/project_agent_panel.html",
         {"request": request, "project": project,
          "toast": f"README pushed to GitHub at {readme_path} ✓"},
     )
@@ -360,27 +360,24 @@ async def trigger_readme_dag(
         if folder_path:
             return JSONResponse({"error": str(exc)}, status_code=502)
         return templates.TemplateResponse(
-            "partials/project_detail.html",
+            "partials/project_agent_panel.html",
             {"request": request, "project": project,
              "error": f"Airflow unreachable: {exc}"},
         )
 
     if folder_path:
-        # Folder-scoped: return JSON for frontend polling
         return JSONResponse({
             "run_id": run_id,
             "status": "queued",
             "folder_path": folder_path,
         })
     else:
-        # Full project README
-        label = "full project"
         return templates.TemplateResponse(
-            "partials/project_detail.html",
+            "partials/project_agent_panel.html",
             {
                 "request": request,
                 "project": project,
-                "toast": f"README for {label} queued (run: {run_id[:8]}…). Badges update when done.",
+                "toast": f"README queued (run: {run_id[:8]}…). Badges update when done.",
             },
         )
 
@@ -813,6 +810,7 @@ async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
         "last_updated": str(row["last_updated"]) if row["last_updated"] else None,
         "folder_readme_updated": folder_readme_updated,
         "folder_readme_path": project.folder_readme_path if project else None,
+        "readme_status": project.readme_status.value if project else "none",
     }
 
 

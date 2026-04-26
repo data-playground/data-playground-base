@@ -27,6 +27,9 @@
     {# Shared foundation styles — theme tokens, layout, sidebar, topbar #}
     <link rel="stylesheet" href="/static/css/base.css">
 
+    {# Mobile-specific overrides — loaded after base so specificity wins #}
+    <link rel="stylesheet" href="/static/css/mobile.css">
+
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -79,9 +82,11 @@
 {# Shared toast #}
 <div id="toast"></div>
 
-{# Shared JS: theme, sidebar, toast, mobile #}
+{# Shared JS: theme, sidebar, toast, mobile sidebar #}
 <script src="/static/js/base.js"></script>
-<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+{# Mobile enhancements: card views, bottom sheets, explorer toggle #}
+<script src="/static/js/mobile.js"></script>
 
 {% block extra_js %}{% endblock %}
 

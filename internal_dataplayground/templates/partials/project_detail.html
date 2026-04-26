@@ -1,18 +1,32 @@
 {# templates/partials/project_detail.html
    Loaded into #ci-detail-panel via HTMX GET /code-intel/projects/{id}/detail
-   `project` = CodeProject ORM object (with .files loaded via selectin)
-   `toast`   = optional success message
-   `error`   = optional error message
 
-   FIX 1: Sync Files button now targets #ci-detail-panel with innerHTML swap,
-           which reloads this entire partial (tree included) rather than wiping it.
-           The tree is rebuilt from the fresh project data.
+   Layout: two sibling divs inside #ci-detail-panel:
+     #ci-tree-panel  — file tree + header. Never swapped after initial load.
+                       Only Sync Files replaces the entire #ci-detail-panel.
+     #ci-agent-panel — README editor, agent cards, queued banners.
+                       Safe to swap independently without losing the tree.
 
-   FIX 2: Folder README stored in project.folder_readme_md separately from
-           project.readme_md. "Save as Project README" calls a dedicated endpoint.
-           The folder README panel persists independently.
+   Rule: any hx-target that previously pointed at #ci-detail-panel now points
+   at #ci-agent-panel UNLESS it is Sync Files (which legitimately rebuilds
+   the whole panel including the tree).
 #}
 <style>
+/* ── TWO-ZONE LAYOUT ─────────────────────────────────────────────────────── */
+/* The detail panel is split horizontally: tree on top, agents below.
+   Tree zone has a fixed min-height so it never collapses when agents swap. */
+#ci-tree-panel {
+    flex-shrink: 0;
+    border-bottom: 2px solid var(--border);
+    overflow: hidden;
+}
+#ci-agent-panel {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
 /* ── FILE TREE ── */
 .tree-root { padding: 4px 0; }
 .tree-folder { user-select: none; }
@@ -42,7 +56,6 @@
     padding-left: 4px; margin-top: 2px; margin-bottom: 2px;
 }
 .tree-folder-children.collapsed { display: none; }
-
 .tree-file {
     display: flex; align-items: center; gap: 6px;
     padding: 4px 8px; border-radius: 4px; cursor: pointer;
@@ -50,19 +63,16 @@
 }
 .tree-file:hover { background: var(--bg-hover); border-color: var(--border); }
 .tree-file.selected { background: var(--accent-dim); border-color: var(--accent); }
-.tree-file-cb {
-    width: 13px; height: 13px; accent-color: var(--accent);
-    cursor: pointer; flex-shrink: 0;
-}
-.tree-file-name {
-    font-size: 11px; color: var(--text-primary); flex: 1;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+.tree-file-cb { width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.tree-file-name { font-size: 11px; color: var(--text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree-file-badges { display: flex; gap: 3px; flex-shrink: 0; }
-.folder-cb {
-    width: 12px; height: 12px; accent-color: var(--accent);
-    cursor: pointer; flex-shrink: 0;
-}
+.folder-cb { width: 12px; height: 12px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+
+/* ── AGENT CARDS ── */
+.agent-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.agent-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.agent-card-title { font-size: 10px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }
+.agent-card-desc { font-size: 10px; color: var(--text-muted); line-height: 1.6; }
 
 /* ── FLOATING ACTION BAR ── */
 .action-bar {
@@ -74,59 +84,25 @@
 .action-bar.visible { display: flex; }
 .action-bar-count { font-size: 10px; color: var(--accent); font-weight: 500; flex: 1; }
 
-/* ── AGENT CARDS ── */
-.agent-card {
-    background: var(--bg-hover); border: 1px solid var(--border);
-    border-radius: 8px; padding: 12px 14px;
-}
-.agent-card-header {
-    display: flex; align-items: center;
-    justify-content: space-between; margin-bottom: 4px;
-}
-.agent-card-title { font-size: 10px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }
-.agent-card-desc { font-size: 10px; color: var(--text-muted); line-height: 1.6; }
-
-/* Pull progress */
 .batch-progress { margin-top: 8px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; display: none; }
 .batch-progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; width: 0%; }
 .batch-log { font-size: 9px; color: var(--text-muted); margin-top: 4px; max-height: 80px; overflow-y: auto; line-height: 1.6; font-family: 'DM Mono', monospace; white-space: pre; }
 
-/* Airflow queued banner */
 .queued-banner { display: none; margin-top: 8px; padding: 6px 10px; background: rgba(124,111,255,0.08); border: 1px solid rgba(124,111,255,0.25); border-radius: 5px; font-size: 10px; color: var(--accent); }
 .queued-banner.visible { display: block; }
 
-/* README editor */
 .readme-editor { width: 100%; font-family: 'DM Mono', monospace; font-size: 10px; padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); border-radius: 5px; outline: none; resize: vertical; line-height: 1.7; min-height: 180px; margin-top: 8px; }
 .readme-editor:focus { border-color: var(--accent); }
 
-/* Folder README result panel — FIX 2: improved styling */
-.folder-readme-panel {
-    margin-top: 10px; padding: 0;
-    background: var(--bg-card); border: 1px solid var(--accent);
-    border-radius: 8px; display: none; overflow: hidden;
-}
+.folder-readme-panel { margin-top: 10px; padding: 0; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 8px; display: none; overflow: hidden; }
 .folder-readme-panel.visible { display: block; }
-.folder-readme-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px;
-    background: rgba(124,111,255,0.06);
-    border-bottom: 1px solid rgba(124,111,255,0.2);
-}
-.folder-readme-title-text {
-    font-size: 9px; font-weight: 500; letter-spacing: .14em;
-    text-transform: uppercase; color: var(--accent);
-}
-.folder-readme-warning {
-    font-size: 9px; color: var(--text-muted);
-    padding: 6px 12px 4px;
-    border-bottom: 1px dashed var(--border);
-}
+.folder-readme-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(124,111,255,0.06); border-bottom: 1px solid rgba(124,111,255,0.2); }
+.folder-readme-title-text { font-size: 9px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.folder-readme-warning { font-size: 9px; color: var(--text-muted); padding: 6px 12px 4px; border-bottom: 1px dashed var(--border); }
 .folder-readme-body { padding: 0 12px 10px; }
 
-/* Polling indicator */
 .poll-indicator { display: none; align-items: center; gap: 6px; font-size: 9px; color: var(--text-muted); padding: 4px 10px; border-radius: 4px; background: var(--bg-hover); border: 1px solid var(--border); }
 .poll-indicator.active { display: flex; }
-
 .section-label { font-size: 9px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -135,57 +111,59 @@
 .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; animation: pulse-dot 1.5s infinite; }
 </style>
 
+{# Root container — flex column so tree + agents stack vertically #}
 <div style="height:100%;display:flex;flex-direction:column;position:relative;"
      data-toast="{{ toast or '' }}"
      data-project-id="{{ project.id }}">
 
-    {# ── HEADER ── #}
-    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;background:var(--bg-hover);">
-        <div style="flex:1;min-width:0;">
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:2px;">{{ project.project_name }}</div>
-            <div style="font-size:9px;color:var(--text-muted);">
-                {{ project.github_repo }}{% if project.github_base_path %} / <code style="color:var(--accent)">{{ project.github_base_path }}</code>{% endif %}
-                · {{ project.files|length }} file{{ 's' if project.files|length != 1 else '' }} tracked
+    {# ══════════════════════════════════════════════════════════════════════
+       ZONE 1 — TREE PANEL
+       Never swapped after initial load. Sync Files is the only action that
+       replaces the entire #ci-detail-panel (which rebuilds this zone too).
+    ══════════════════════════════════════════════════════════════════════ #}
+    <div id="ci-tree-panel">
+
+        {# ── HEADER ── #}
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;background:var(--bg-hover);">
+            <div style="flex:1;min-width:0;">
+                <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:2px;">{{ project.project_name }}</div>
+                <div style="font-size:9px;color:var(--text-muted);">
+                    {{ project.github_repo }}{% if project.github_base_path %} / <code style="color:var(--accent)">{{ project.github_base_path }}</code>{% endif %}
+                    · {{ project.files|length }} file{{ 's' if project.files|length != 1 else '' }} tracked
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:12px;">
+                <div class="poll-indicator" id="poll-indicator">
+                    <span class="pulse-dot"></span>
+                    <span id="poll-label">Airflow running…</span>
+                </div>
+                {% if project.readme_status.value == 'none' %}<span id="readme-status-badge" class="badge badge-muted">no README</span>
+                {% elif project.readme_status.value == 'draft' %}<span id="readme-status-badge" class="badge badge-yellow">README draft</span>
+                {% elif project.readme_status.value == 'reviewed' %}<span id="readme-status-badge" class="badge badge-accent">README reviewed</span>
+                {% elif project.readme_status.value == 'pushed' %}<span id="readme-status-badge" class="badge badge-green">README ✓</span>
+                {% elif project.readme_status.value == 'stale' %}<span id="readme-status-badge" class="badge badge-red">README stale</span>
+                {% endif %}
+                {# Sync Files legitimately rebuilds the whole panel — tree included.
+                   This is intentional: a sync may add/remove files from the tree. #}
+                <button class="btn btn-sm"
+                        hx-post="/code-intel/projects/{{ project.id }}/sync"
+                        hx-target="#ci-detail-panel"
+                        hx-swap="innerHTML"
+                        hx-indicator="#sync-spinner-header">
+                    ⟳ Sync Files
+                </button>
+                <span id="sync-spinner-header" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">
+                    <span class="spinner-inline"></span>
+                </span>
             </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:12px;">
-            <div class="poll-indicator" id="poll-indicator">
-                <span class="pulse-dot"></span>
-                <span id="poll-label">Airflow running…</span>
-            </div>
-            {% if project.readme_status.value == 'none' %}<span class="badge badge-muted">no README</span>
-            {% elif project.readme_status.value == 'draft' %}<span class="badge badge-yellow">README draft</span>
-            {% elif project.readme_status.value == 'reviewed' %}<span class="badge badge-accent">README reviewed</span>
-            {% elif project.readme_status.value == 'pushed' %}<span class="badge badge-green">README ✓</span>
-            {% elif project.readme_status.value == 'stale' %}<span class="badge badge-red">README stale</span>
-            {% endif %}
-            {#
-              FIX 1: Sync Files uses hx-target="#ci-detail-panel" with hx-swap="innerHTML".
-              This replaces the entire right panel with a freshly rendered project_detail
-              partial (which includes the rebuilt file tree) instead of wiping it blank.
-            #}
-            <button class="btn btn-sm"
-                    hx-post="/code-intel/projects/{{ project.id }}/sync"
-                    hx-target="#ci-detail-panel"
-                    hx-swap="innerHTML"
-                    hx-indicator="#sync-spinner-header">
-                ⟳ Sync Files
-            </button>
-            <span id="sync-spinner-header" class="htmx-indicator" style="font-size:9px;color:var(--text-muted);">
-                <span class="spinner-inline"></span>
-            </span>
-        </div>
-    </div>
 
-    {% if error %}
-    <div style="margin:10px 18px;padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);">⚠ {{ error }}</div>
-    {% endif %}
-
-    {# ── SCROLLABLE BODY ── #}
-    <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
+        {% if error %}
+        <div style="margin:10px 18px;padding:10px 12px;background:rgba(240,64,64,0.08);border:1px solid var(--red);border-radius:6px;font-size:11px;color:var(--red);">⚠ {{ error }}</div>
+        {% endif %}
 
         {# ── FILE TREE ── #}
-        <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+        <div style="padding:14px 18px;max-height:340px;overflow-y:auto;">
             <div class="section-label">
                 <span>Files</span>
                 <div style="display:flex;gap:8px;">
@@ -223,161 +201,157 @@
             {% endif %}
         </div>
 
-        {# ── AGENT AREA ── #}
-        <div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px;">
-
-            <div class="section-label">
-                <span id="agent-ctx-label" style="color:var(--text-muted);">Select files or a folder to run agents</span>
-                <button id="clear-sel-btn" onclick="clearSelection()"
-                        style="display:none;background:none;border:none;font-size:9px;color:var(--text-muted);cursor:pointer;font-family:'DM Mono',monospace;padding:0;">
-                    ✕ clear selection
-                </button>
+        {# ── SELECTION CONTEXT + FLOATING BAR ── #}
+        <div style="padding:8px 18px;border-top:1px solid var(--border);background:var(--bg-hover);display:flex;align-items:center;gap:8px;min-height:36px;">
+            <span id="agent-ctx-label" style="font-size:9px;color:var(--text-muted);flex:1;">Select files or a folder to run agents</span>
+            <button id="clear-sel-btn" onclick="clearSelection()"
+                    style="display:none;background:none;border:none;font-size:9px;color:var(--text-muted);cursor:pointer;font-family:'DM Mono',monospace;padding:0;">
+                ✕ clear
+            </button>
+            {# Inline action buttons — visible only when files are selected #}
+            <div id="inline-action-bar" style="display:none;gap:5px;flex-wrap:wrap;">
+                <button class="btn btn-sm" onclick="runPullBatch()" title="Pull latest code">⟳ Pull</button>
+                <button class="btn btn-sm" style="color:var(--accent);border-color:var(--accent);" onclick="triggerBatch('narrate')">▶ Narrate</button>
+                <button class="btn btn-sm" style="color:var(--blue);border-color:var(--blue);" onclick="triggerBatch('comment')">▶ Comment</button>
+                <button class="btn btn-sm" style="color:var(--yellow);border-color:var(--yellow);" onclick="triggerBatch('improve')">▶ Improve</button>
             </div>
+        </div>
 
-            {# README Writer — always visible #}
-            <div class="agent-card">
-                <div class="agent-card-header">
-                    <span class="agent-card-title" style="color:var(--accent);">📄 README Writer</span>
-                    <div style="display:flex;gap:6px;align-items:center;">
-                        <button class="btn btn-sm" id="readme-gen-btn" onclick="triggerReadme()">
-                            ▶ Full Project README
-                        </button>
-                        {% if project.readme_status.value == 'reviewed' %}
-                        <button class="btn btn-sm btn-green"
-                                hx-post="/code-intel/projects/{{ project.id }}/push-readme"
-                                hx-target="#ci-detail-panel" hx-swap="innerHTML">
-                            ↑ Push to GitHub
-                        </button>
-                        {% endif %}
-                        <span id="readme-spinner" style="display:none;font-size:9px;color:var(--text-muted);">
-                            <span class="spinner-inline"></span>
-                        </span>
-                    </div>
+    </div>{# end #ci-tree-panel #}
+
+    {# ══════════════════════════════════════════════════════════════════════
+       ZONE 2 — AGENT PANEL
+       Safe to swap with hx-target="#ci-agent-panel" hx-swap="innerHTML".
+       The tree zone above is completely unaffected by swaps here.
+    ══════════════════════════════════════════════════════════════════════ #}
+    <div id="ci-agent-panel" style="flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:10px;">
+
+        {# README Writer #}
+        <div class="agent-card">
+            <div class="agent-card-header">
+                <span class="agent-card-title" style="color:var(--accent);">📄 README Writer</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="btn btn-sm" id="readme-gen-btn" onclick="triggerReadme()">
+                        ▶ Full Project README
+                    </button>
+                    {% if project.readme_status.value == 'reviewed' %}
+                    {# Push to GitHub targets only the agent panel — tree stays intact #}
+                    <button class="btn btn-sm btn-green"
+                            hx-post="/code-intel/projects/{{ project.id }}/push-readme"
+                            hx-target="#ci-agent-panel"
+                            hx-swap="innerHTML">
+                        ↑ Push to GitHub
+                    </button>
+                    {% endif %}
+                    <span id="readme-spinner" style="display:none;font-size:9px;color:var(--text-muted);">
+                        <span class="spinner-inline"></span>
+                    </span>
                 </div>
-                <div class="agent-card-desc" id="readme-desc">
-                    Runs in Airflow · synthesizes narrations from all files.
-                    Select a folder first to generate a scoped README for just that folder.
-                    {% if not project.files|selectattr('narration')|list %}
-                    <span style="color:var(--yellow);">⚠ Narrate files first.</span>
+            </div>
+            <div class="agent-card-desc" id="readme-desc">
+                Runs in Airflow · synthesizes narrations from all files.
+                Select a folder first to generate a scoped README for just that folder.
+                {% if not project.files|selectattr('narration')|list %}
+                <span style="color:var(--yellow);">⚠ Narrate files first.</span>
+                {% endif %}
+            </div>
+            <div class="queued-banner" id="readme-queued"></div>
+
+            {% if project.readme_md %}
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+                <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em;">Project README</div>
+                <textarea class="readme-editor" id="readme-editor-{{ project.id }}">{{ project.readme_md }}</textarea>
+                <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+                    <button class="btn btn-sm btn-primary" onclick="saveReadme({{ project.id }})">Save Edits</button>
+                    {% if project.readme_generated_at %}
+                    <span style="font-size:9px;color:var(--text-muted);">Generated {{ project.readme_generated_at.strftime('%b %d, %H:%M') }}</span>
+                    {% endif %}
+                    {% if project.readme_pushed_at %}
+                    <span style="font-size:9px;color:var(--green);">Pushed {{ project.readme_pushed_at.strftime('%b %d, %H:%M') }}</span>
                     {% endif %}
                 </div>
-                <div class="queued-banner" id="readme-queued"></div>
-
-                {# Project-level README editor #}
-                {% if project.readme_md %}
-                <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em;">Project README</div>
-                    <textarea class="readme-editor" id="readme-editor-{{ project.id }}">{{ project.readme_md }}</textarea>
-                    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-                        <button class="btn btn-sm btn-primary" onclick="saveReadme({{ project.id }})">Save Edits</button>
-                        {% if project.readme_generated_at %}
-                        <span style="font-size:9px;color:var(--text-muted);">Generated {{ project.readme_generated_at.strftime('%b %d, %H:%M') }}</span>
-                        {% endif %}
-                        {% if project.readme_pushed_at %}
-                        <span style="font-size:9px;color:var(--green);">Pushed {{ project.readme_pushed_at.strftime('%b %d, %H:%M') }}</span>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-
-                {#
-                  FIX 2: Folder README panel — stored separately from project README.
-                  Shows pre-existing folder README if one is stored in the DB,
-                  and is also shown when a new folder README is generated.
-                  "Save as Project README" calls a dedicated endpoint.
-                #}
-                <div class="folder-readme-panel" id="folder-readme-panel"
-                     {% if project.folder_readme_md %}style="display:block;"{% endif %}>
-                    <div class="folder-readme-header">
-                        <span class="folder-readme-title-text" id="folder-readme-label">
-                            📄 {% if project.folder_readme_path %}README for /{{ project.folder_readme_path.split('/')[-1] }}{% else %}Folder README{% endif %}
-                        </span>
-                        <div style="display:flex;gap:6px;align-items:center;">
-                            <button class="btn btn-sm" onclick="copyFolderReadme()">⊕ Copy</button>
-                            <button class="btn btn-sm btn-primary" onclick="saveFolderAsProject()">Save as Project README</button>
-                            <button onclick="document.getElementById('folder-readme-panel').style.display='none'"
-                                    style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
-                        </div>
-                    </div>
-                    <div class="folder-readme-warning">
-                        This README is scoped to the selected folder and stored separately — it does <strong>not</strong> overwrite your project README unless you click "Save as Project README".
-                        {% if project.folder_readme_generated_at %}
-                        <span style="color:var(--text-muted);margin-left:6px;">Generated {{ project.folder_readme_generated_at.strftime('%b %d, %H:%M') }}</span>
-                        {% endif %}
-                    </div>
-                    <div class="folder-readme-body">
-                        <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ project.folder_readme_md or '' }}</textarea>
-                    </div>
-                </div>
             </div>
+            {% endif %}
 
-            {# Pull (sync) — shown when files selected #}
-            <div class="agent-card" id="pull-card" style="display:none;">
-                <div class="agent-card-header">
-                    <span class="agent-card-title" style="color:var(--text-secondary);">① Pull from GitHub</span>
+            <div class="folder-readme-panel" id="folder-readme-panel"
+                 {% if project.folder_readme_md %}style="display:block;"{% endif %}>
+                <div class="folder-readme-header">
+                    <span class="folder-readme-title-text" id="folder-readme-label">
+                        📄 {% if project.folder_readme_path %}README for /{{ project.folder_readme_path.split('/')[-1] }}{% else %}Folder README{% endif %}
+                    </span>
                     <div style="display:flex;gap:6px;align-items:center;">
-                        <button class="btn btn-sm" onclick="runPullBatch()">⟳ Pull Selected</button>
-                        <span id="pull-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+                        <button class="btn btn-sm" onclick="copyFolderReadme()">⊕ Copy</button>
+                        <button class="btn btn-sm btn-primary" onclick="saveFolderAsProject()">Save as Project README</button>
+                        <button onclick="document.getElementById('folder-readme-panel').style.display='none'"
+                                style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
                     </div>
                 </div>
-                <div class="agent-card-desc">Fetches latest code from GitHub. Runs immediately — no queue needed.</div>
-                <div class="batch-progress" id="pull-progress"><div class="batch-progress-bar" id="pull-bar"></div></div>
-                <div class="batch-log" id="pull-log"></div>
-            </div>
-
-            {# Narrate (Airflow) — shown when files selected #}
-            <div class="agent-card" id="narrate-card" style="display:none;">
-                <div class="agent-card-header">
-                    <span class="agent-card-title" style="color:var(--accent);">② Code Narrator</span>
-                    <div style="display:flex;gap:6px;align-items:center;">
-                        <button class="btn btn-sm" onclick="triggerBatch('narrate')">▶ Narrate Selected</button>
-                        <span id="narrate-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
-                    </div>
+                <div class="folder-readme-warning">
+                    Scoped to the selected folder — does <strong>not</strong> overwrite your project README unless you click "Save as Project README".
+                    {% if project.folder_readme_generated_at %}
+                    <span style="color:var(--text-muted);margin-left:6px;">Generated {{ project.folder_readme_generated_at.strftime('%b %d, %H:%M') }}</span>
+                    {% endif %}
                 </div>
-                <div class="agent-card-desc">Queued in Airflow · Claude Sonnet · feeds blog pipeline + README Writer.</div>
-                <div class="queued-banner" id="narrate-queued"></div>
-            </div>
-
-            {# Comment (Airflow) — shown when files selected #}
-            <div class="agent-card" id="comment-card" style="display:none;">
-                <div class="agent-card-header">
-                    <span class="agent-card-title" style="color:var(--blue);">③ Code Commenter</span>
-                    <div style="display:flex;gap:6px;align-items:center;">
-                        <button class="btn btn-sm" onclick="triggerBatch('comment')">▶ Comment Selected</button>
-                        <span id="comment-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
-                    </div>
+                <div class="folder-readme-body">
+                    <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ project.folder_readme_md or '' }}</textarea>
                 </div>
-                <div class="agent-card-desc">Queued in Airflow · Gemini Flash · adds docstrings + inline comments. No logic changes.</div>
-                <div class="queued-banner" id="comment-queued"></div>
             </div>
-
-            {# Improve (Airflow) — shown when files selected #}
-            <div class="agent-card" id="improve-card" style="display:none;">
-                <div class="agent-card-header">
-                    <span class="agent-card-title" style="color:var(--yellow);">④ Code Improver</span>
-                    <div style="display:flex;gap:6px;align-items:center;">
-                        <button class="btn btn-sm" onclick="triggerBatch('improve')">▶ Review Selected</button>
-                        <span id="improve-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
-                    </div>
-                </div>
-                <div class="agent-card-desc">Queued in Airflow · Gemini Flash · structured improvement report. Never auto-applied.</div>
-                <div class="queued-banner" id="improve-queued"></div>
-            </div>
-
         </div>
-    </div>
 
-    {# ── FLOATING ACTION BAR ── #}
-    <div class="action-bar" id="action-bar">
-        <span class="action-bar-count" id="action-bar-count">0 files selected</span>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn btn-sm" onclick="runPullBatch()" title="Pull latest code from GitHub">⟳ Pull</button>
-            <button class="btn btn-sm" style="color:var(--accent);border-color:var(--accent);" onclick="triggerBatch('narrate')">▶ Narrate</button>
-            <button class="btn btn-sm" style="color:var(--blue);border-color:var(--blue);" onclick="triggerBatch('comment')">▶ Comment</button>
-            <button class="btn btn-sm" style="color:var(--yellow);border-color:var(--yellow);" onclick="triggerBatch('improve')">▶ Improve</button>
-            <button class="btn btn-sm" onclick="clearSelection()">✕</button>
+        {# Pull card — shown when files selected #}
+        <div class="agent-card" id="pull-card" style="display:none;">
+            <div class="agent-card-header">
+                <span class="agent-card-title" style="color:var(--text-secondary);">① Pull from GitHub</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="btn btn-sm" onclick="runPullBatch()">⟳ Pull Selected</button>
+                    <span id="pull-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+                </div>
+            </div>
+            <div class="agent-card-desc">Fetches latest code from GitHub. Runs immediately — no queue needed.</div>
+            <div class="batch-progress" id="pull-progress"><div class="batch-progress-bar" id="pull-bar"></div></div>
+            <div class="batch-log" id="pull-log"></div>
         </div>
-    </div>
+
+        {# Narrate card #}
+        <div class="agent-card" id="narrate-card" style="display:none;">
+            <div class="agent-card-header">
+                <span class="agent-card-title" style="color:var(--accent);">② Code Narrator</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="btn btn-sm" onclick="triggerBatch('narrate')">▶ Narrate Selected</button>
+                    <span id="narrate-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+                </div>
+            </div>
+            <div class="agent-card-desc">Queued in Airflow · Claude Sonnet · feeds blog pipeline + README Writer.</div>
+            <div class="queued-banner" id="narrate-queued"></div>
+        </div>
+
+        {# Comment card #}
+        <div class="agent-card" id="comment-card" style="display:none;">
+            <div class="agent-card-header">
+                <span class="agent-card-title" style="color:var(--blue);">③ Code Commenter</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="btn btn-sm" onclick="triggerBatch('comment')">▶ Comment Selected</button>
+                    <span id="comment-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+                </div>
+            </div>
+            <div class="agent-card-desc">Queued in Airflow · Gemini Flash · adds docstrings + inline comments. No logic changes.</div>
+            <div class="queued-banner" id="comment-queued"></div>
+        </div>
+
+        {# Improve card #}
+        <div class="agent-card" id="improve-card" style="display:none;">
+            <div class="agent-card-header">
+                <span class="agent-card-title" style="color:var(--yellow);">④ Code Improver</span>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button class="btn btn-sm" onclick="triggerBatch('improve')">▶ Review Selected</button>
+                    <span id="improve-spinner" style="display:none;font-size:9px;color:var(--text-muted);"><span class="spinner-inline"></span></span>
+                </div>
+            </div>
+            <div class="agent-card-desc">Queued in Airflow · Gemini Flash · structured improvement report. Never auto-applied.</div>
+            <div class="queued-banner" id="improve-queued"></div>
+        </div>
+
+    </div>{# end #ci-agent-panel #}
 
 </div>
 
@@ -408,7 +382,7 @@ function fileBadges(f) {
     let b = '';
     if (!f.hasCode) b += `<span class="badge badge-muted" style="font-size:8px;" title="Not yet pulled">unpulled</span>`;
     if (f.narrated) b += f.narrateStale
-        ? `<span class="badge badge-red" style="font-size:8px;" title="Code changed since last narration">stale</span>`
+        ? `<span class="badge badge-red" style="font-size:8px;" title="Stale">stale</span>`
         : `<span class="badge badge-green" style="font-size:8px;" title="Narrated">✓</span>`;
     if (f.commentStatus !== 'none') b += `<span class="badge badge-accent" style="font-size:8px;" title="Comments: ${f.commentStatus}">💬</span>`;
     if (f.improveStatus !== 'none') b += `<span class="badge badge-yellow" style="font-size:8px;" title="Review: ${f.improveStatus}">📋</span>`;
@@ -458,7 +432,7 @@ function renderNode(node, container, pathPrefix, depth) {
         fileDiv.innerHTML = `
             <input type="checkbox" class="tree-file-cb" data-file-id="${file.id}"
                    id="cb-${file.id}" onclick="event.stopPropagation()" onchange="onFileCb(${file.id})">
-            <span style="font-size:10px;flex-shrink:0;">🐍</span>
+            <span style="font-size:10px;flex-shrink:0;">📄</span>
             <span class="tree-file-name" title="${file.path}">${file.name}</span>
             <div class="tree-file-badges" id="badges-${file.id}">${fileBadges(file)}</div>
         `;
@@ -479,7 +453,6 @@ function renderNode(node, container, pathPrefix, depth) {
     if (root) renderNode(tree, root, '', 0);
 })();
 
-// ── Tree controls ──
 function toggleFolder(safeId) {
     const chv = document.getElementById(`chv-${safeId}`);
     const fc = document.getElementById(`fc-${safeId}`);
@@ -550,16 +523,17 @@ function clearSelection() {
 
 function updateUI() {
     const count = selectedFileIds.size;
-    document.getElementById('action-bar').classList.toggle('visible', count > 0);
-    document.getElementById('action-bar-count').textContent = `${count} file${count !== 1 ? 's' : ''} selected`;
+    const ctxLabel = document.getElementById('agent-ctx-label');
+    const clearBtn = document.getElementById('clear-sel-btn');
+    const inlineBar = document.getElementById('inline-action-bar');
+    const readmeBtn = document.getElementById('readme-gen-btn');
+    const readmeDesc = document.getElementById('readme-desc');
+
+    // Show/hide agent cards in the agent panel
     ['pull','narrate','comment','improve'].forEach(a => {
         const card = document.getElementById(`${a}-card`);
         if (card) card.style.display = count > 0 ? 'block' : 'none';
     });
-    const ctxLabel = document.getElementById('agent-ctx-label');
-    const clearBtn = document.getElementById('clear-sel-btn');
-    const readmeBtn = document.getElementById('readme-gen-btn');
-    const readmeDesc = document.getElementById('readme-desc');
 
     if (count > 0) {
         const folderShort = selectedFolderPath ? selectedFolderPath.split('/').pop() : null;
@@ -568,6 +542,7 @@ function updateUI() {
             : `${count} file${count !== 1 ? 's' : ''} selected`;
         ctxLabel.style.color = 'var(--accent)';
         clearBtn.style.display = 'inline';
+        inlineBar.style.display = 'flex';
         if (selectedFolderPath) {
             readmeBtn.textContent = `▶ README for /${selectedFolderPath.split('/').pop()}`;
             readmeDesc.innerHTML = `Queued in Airflow · scoped to <code style="color:var(--accent)">${selectedFolderPath}</code> · stored separately, does not overwrite project README.`;
@@ -579,13 +554,14 @@ function updateUI() {
         ctxLabel.textContent = 'Select files or a folder to run agents';
         ctxLabel.style.color = 'var(--text-muted)';
         clearBtn.style.display = 'none';
+        inlineBar.style.display = 'none';
         readmeBtn.textContent = '▶ Full Project README';
         readmeDesc.textContent = 'Runs in Airflow · synthesizes narrations from all files. Select a folder to scope.';
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BADGE REFRESH — updates only badge elements, tree stays intact
+// BADGE REFRESH — in-place, never touches the tree structure
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function refreshBadges() {
@@ -611,7 +587,7 @@ async function refreshBadges() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PULL — synchronous batch, updates badges in-place after
+// PULL BATCH
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function runPullBatch() {
@@ -634,7 +610,6 @@ async function runPullBatch() {
         if (logEl) { logEl.textContent += `⟳ ${name}…\n`; logEl.scrollTop = logEl.scrollHeight; }
 
         try {
-            // Pass Accept: application/json so the endpoint returns JSON instead of HTML
             await fetch(`/code-intel/files/${fileId}/pull`, {
                 method: 'POST',
                 headers: { 'Accept': 'application/json' },
@@ -690,8 +665,7 @@ async function triggerBatch(action) {
             showToast(`${ids.length} files queued in Airflow.`);
             startPolling();
         } else {
-            const errText = await resp.text();
-            showToast(`⚠ Failed: ${errText.substring(0, 100)}`, true);
+            showToast(`⚠ Failed: ${(await resp.text()).substring(0, 100)}`, true);
         }
     } catch(e) {
         showToast(`⚠ Network error: ${e.message}`, true);
@@ -711,9 +685,7 @@ async function triggerReadme() {
     btn.disabled = true; spinner.style.display = 'inline';
 
     const fd = new FormData();
-    if (selectedFolderPath) {
-        fd.append('folder_path', selectedFolderPath);
-    }
+    if (selectedFolderPath) fd.append('folder_path', selectedFolderPath);
 
     try {
         const resp = await fetch(`/code-intel/projects/${window._projectId}/trigger-readme`, {
@@ -721,7 +693,6 @@ async function triggerReadme() {
         });
 
         if (selectedFolderPath) {
-            // Folder-scoped — expect JSON back
             const contentType = resp.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
                 const data = await resp.json();
@@ -736,12 +707,10 @@ async function triggerReadme() {
                 }
             }
         } else {
-            // Full project README — HTMX-style: the response is the new project_detail partial.
-            // We inject it into the detail panel directly, which rebuilds the tree too.
+            // Full project README — inject into agent panel only, tree untouched
             const html = await resp.text();
-            document.getElementById('ci-detail-panel').innerHTML = html;
-            // Re-fire toast from the freshly rendered partial
-            const t = document.getElementById('ci-detail-panel').querySelector('[data-toast]')?.dataset.toast;
+            document.getElementById('ci-agent-panel').innerHTML = html;
+            const t = document.querySelector('[data-toast]')?.dataset.toast;
             if (t) showToast(t);
         }
     } catch(e) {
@@ -750,8 +719,6 @@ async function triggerReadme() {
         btn.disabled = false; spinner.style.display = 'none';
     }
 }
-
-// ── FIX 2: Folder README display & persistence ──────────────────────────────
 
 function showFolderReadme(content, folderPath) {
     const panel = document.getElementById('folder-readme-panel');
@@ -771,24 +738,14 @@ function copyFolderReadme() {
 async function saveFolderAsProject() {
     const content = document.getElementById('folder-readme-content')?.value;
     if (!content) return;
-
-    // FIX 2: Use dedicated endpoint that explicitly saves as project README
     const resp = await fetch(`/code-intel/projects/${window._projectId}/folder-readme`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            content: content,
-            folder_path: selectedFolderPath || '',
-            save_as_project: true,
-        }),
+        body: JSON.stringify({ content, folder_path: selectedFolderPath || '', save_as_project: true }),
     });
-
     if (resp.ok) {
-        // Also update the project README editor if it exists in the DOM
         const projectEditor = document.getElementById(`readme-editor-${window._projectId}`);
-        if (projectEditor) {
-            projectEditor.value = content;
-        }
+        if (projectEditor) projectEditor.value = content;
         showToast('Saved as Project README ✓');
     } else {
         showToast('⚠ Could not save.', true);
@@ -800,9 +757,10 @@ async function saveReadme(projectId) {
     if (!content) return;
     const fd = new FormData();
     fd.append('readme_md', content);
+    // Targets agent panel only — tree unaffected
     const resp = await fetch(`/code-intel/projects/${projectId}/readme`, { method: 'PATCH', body: fd });
     if (resp.ok) {
-        document.getElementById('ci-detail-panel').innerHTML = await resp.text();
+        document.getElementById('ci-agent-panel').innerHTML = await resp.text();
         showToast('README saved.');
     }
 }
@@ -820,16 +778,10 @@ const POLL_MAX = 45;
 
 function startPolling() {
     if (_pollTimer) return;
-    _pollCount = 0;
-    _lastUpdated = null;
-    _pollingForFolderReadme = false;
+    _pollCount = 0; _lastUpdated = null; _pollingForFolderReadme = false;
     document.getElementById('poll-indicator')?.classList.add('active');
-
     fetch(`/code-intel/projects/${window._projectId}/status`)
-        .then(r => r.json())
-        .then(d => { _lastUpdated = d.last_updated; })
-        .catch(() => {});
-
+        .then(r => r.json()).then(d => { _lastUpdated = d.last_updated; }).catch(() => {});
     _pollTimer = setInterval(checkStatus, POLL_INTERVAL_MS);
 }
 
@@ -863,13 +815,10 @@ async function checkStatus() {
         if (filesChanged || folderReadmeChanged) {
             clearInterval(_pollTimer); _pollTimer = null;
             indicator?.classList.remove('active');
-
             if (filesChanged) {
                 await refreshBadges();
                 showToast(`Done! ${data.narrated}/${data.total} files narrated.`);
             }
-
-            // FIX 2: Fetch and display the folder README when the DAG completes
             if (folderReadmeChanged) {
                 const readmeResp = await fetch(`/code-intel/projects/${window._projectId}/folder-readme`);
                 if (readmeResp.ok) {
@@ -879,18 +828,9 @@ async function checkStatus() {
                 }
                 _pollingForFolderReadme = false;
             }
-
             return;
         }
         _lastUpdated = data.last_updated;
     } catch(e) { /* silent */ }
 }
-
-// Toast from HTMX swaps
-document.addEventListener('htmx:afterSwap', e => {
-    if (e.target.id === 'ci-detail-panel') {
-        const t = e.target.querySelector('[data-toast]')?.dataset.toast;
-        if (t) showToast(t);
-    }
-});
 </script>

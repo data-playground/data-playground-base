@@ -14,7 +14,10 @@
 {% block topbar_actions %}            
 	<button class="filter-pill" id="adv-toggle" onclick="toggleAdvancedFilters(this)">⚙ Filters</button>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="/static/css/jobs.css">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/jobs.css">
+<link rel="stylesheet" href="/static/css/jobs_enhancements.css"> 
+{% endblock %}
 {% block content %}
 
     <!-- FILTER PANEL -->
@@ -152,6 +155,8 @@
     </main>
 
 <div id="toast"></div>
+
+<script src="/static/js/jobs_enhancements.js"></script>
 
 <script>
     // THEME
@@ -334,13 +339,39 @@
     function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
 
     // HTMX: sync ATS status on row after swap
-    document.body.addEventListener('htmx:afterSwap',function(evt){
-        const target=evt.target;
-        if(!target.classList.contains('ats-buttons'))return;
-        const activeBtn=target.querySelector('.ats-btn[class*="status-"]');
-        const row=target.closest('tr');
-        if(activeBtn&&row){const cls=[...activeBtn.classList].find(c=>c.startsWith('status-'));if(cls)row.dataset.status=cls.replace('status-','').toUpperCase();}
-    });
+	document.body.addEventListener('htmx:afterSwap', function(evt) {
+		const target = evt.target;
+		if (!target.classList.contains('ats-buttons')) return;
+	 
+		// 1. Sync the row's data-status so filters + tinting stay correct
+		const activeBtn = target.querySelector('.ats-btn[class*="status-"]');
+		const row = target.closest('tr');
+		if (activeBtn && row) {
+			const cls = [...activeBtn.classList].find(c => c.startsWith('status-'));
+			if (cls) row.dataset.status = cls.replace('status-', '').toUpperCase();
+		}
+	 
+		// 2. Pop animation on the newly active button
+		if (activeBtn) {
+			activeBtn.classList.add('just-activated');
+			activeBtn.addEventListener('animationend', () => {
+				activeBtn.classList.remove('just-activated');
+			}, { once: true });
+		}
+	 
+		// 3. Row flash
+		if (row) {
+			row.classList.add('status-just-logged');
+			row.addEventListener('animationend', () => {
+				row.classList.remove('status-just-logged');
+			}, { once: true });
+		}
+	 
+		// 4. Re-apply tinting (the new status may change the row's tint class)
+		if (typeof window._reapplyStatusTinting === 'function') {
+			window._reapplyStatusTinting();
+		}
+	});
 
     // DETAIL PANEL
     function openDetailPanel(){
