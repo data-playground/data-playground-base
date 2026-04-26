@@ -356,8 +356,12 @@
 </div>
 
 <script>
+(function() {
 // ═══════════════════════════════════════════════════════════════════════════
 // FILE TREE
+// Wrapped in an IIFE so let/const declarations don't collide when HTMX
+// re-injects this partial on Sync Files or project re-selection.
+// Functions called from inline onclick attributes are exposed on window.
 // ═══════════════════════════════════════════════════════════════════════════
 
 function buildTree(files) {
@@ -833,4 +837,22 @@ async function checkStatus() {
         _lastUpdated = data.last_updated;
     } catch(e) { /* silent */ }
 }
+
+// ── Expose functions called from inline onclick attributes ─────────────────
+// IIFE scope means onclick="toggleFolder(...)" can't find them otherwise.
+window.toggleFolder      = toggleFolder;
+window.expandAll         = expandAll;
+window.collapseAll       = collapseAll;
+window.selectAllVisible  = selectAllVisible;
+window.clearSelection    = clearSelection;
+window.selectFolder      = selectFolder;
+window.onFileCb          = onFileCb;
+window.runPullBatch      = runPullBatch;
+window.triggerBatch      = triggerBatch;
+window.triggerReadme     = triggerReadme;
+window.copyFolderReadme  = copyFolderReadme;
+window.saveFolderAsProject = saveFolderAsProject;
+window.saveReadme        = saveReadme;
+
+})(); // end IIFE
 </script>
