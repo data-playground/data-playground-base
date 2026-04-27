@@ -67,8 +67,14 @@ async def _trigger_airflow(dag_id: str, conf: dict) -> str:
             headers=headers,
             json={"conf": conf},
         )
-        resp.raise_for_status()
-        return resp.json().get("dag_run_id", "unknown")
+
+        # Log the actual error body instead of just raising blindly
+        if resp.status_code not in (200, 201, 409):  # 409 = already running, still OK
+            log.error("Airflow trigger failed: %s — %s", resp.status_code, resp.text)
+            resp.raise_for_status()
+        
+        data = resp.json()
+        return data.get("dag_run_id", "unknown")
 
 
 # ── PROJECT MANAGEMENT ─────────────────────────────────────────────────────────
