@@ -1,20 +1,15 @@
 {# templates/partials/project_detail.html
-   Loaded into #ci-detail-panel via HTMX GET /code-intel/projects/{id}/detail
+   v2 — adds per-file detail drawer so improvement notes / narration / comments
+   are accessible without leaving the Code Intelligence page.
 
-   Layout: two sibling divs inside #ci-detail-panel:
-     #ci-tree-panel  — file tree + header. Never swapped after initial load.
-                       Only Sync Files replaces the entire #ci-detail-panel.
-     #ci-agent-panel — README editor, agent cards, queued banners.
-                       Safe to swap independently without losing the tree.
-
-   Rule: any hx-target that previously pointed at #ci-detail-panel now points
-   at #ci-agent-panel UNLESS it is Sync Files (which legitimately rebuilds
-   the whole panel including the tree).
+   Changes from original:
+     1. .file-inspect-btn CSS + .file-detail-drawer / .file-detail-overlay CSS
+     2. renderNode() fileDiv.innerHTML gains an ⊞ inspect button
+     3. openFileDetail() / closeFileDetail() functions added to IIFE
+     4. Drawer + overlay HTML added at bottom of root container
 #}
 <style>
 /* ── TWO-ZONE LAYOUT ─────────────────────────────────────────────────────── */
-/* The detail panel is split horizontally: tree on top, agents below.
-   Tree zone has a fixed min-height so it never collapses when agents swap. */
 #ci-tree-panel {
     flex-shrink: 0;
     border-bottom: 2px solid var(--border);
@@ -68,6 +63,52 @@
 .tree-file-badges { display: flex; gap: 3px; flex-shrink: 0; }
 .folder-cb { width: 12px; height: 12px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
 
+/* ── INSPECT BUTTON (NEW) ── */
+.file-inspect-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+    font-family: 'DM Mono', monospace;
+    line-height: 1.4;
+}
+.tree-file:hover .file-inspect-btn { opacity: 1; }
+.file-inspect-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+/* ── FILE DETAIL DRAWER (NEW) ── */
+.file-detail-drawer {
+    position: fixed;
+    top: 0;
+    right: -580px;
+    width: 580px;
+    height: 100vh;
+    background: var(--bg-card);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 28px rgba(0,0,0,0.20);
+    z-index: 400;
+    overflow-y: auto;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.file-detail-drawer.open { right: 0; }
+.file-detail-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.28);
+    z-index: 399;
+}
+.file-detail-overlay.visible { display: block; }
+
 /* ── AGENT CARDS ── */
 .agent-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
 .agent-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
@@ -118,8 +159,6 @@
 
     {# ══════════════════════════════════════════════════════════════════════
        ZONE 1 — TREE PANEL
-       Never swapped after initial load. Sync Files is the only action that
-       replaces the entire #ci-detail-panel (which rebuilds this zone too).
     ══════════════════════════════════════════════════════════════════════ #}
     <div id="ci-tree-panel">
 
@@ -143,8 +182,6 @@
                 {% elif project.readme_status.value == 'pushed' %}<span id="readme-status-badge" class="badge badge-green">README ✓</span>
                 {% elif project.readme_status.value == 'stale' %}<span id="readme-status-badge" class="badge badge-red">README stale</span>
                 {% endif %}
-                {# Sync Files legitimately rebuilds the whole panel — tree included.
-                   This is intentional: a sync may add/remove files from the tree. #}
                 <button class="btn btn-sm"
                         hx-post="/code-intel/projects/{{ project.id }}/sync"
                         hx-target="#ci-detail-panel"
@@ -165,7 +202,7 @@
         {# ── FILE TREE ── #}
         <div style="padding:14px 18px;max-height:340px;overflow-y:auto;">
             <div class="section-label">
-                <span>Files</span>
+                <span>Files <span style="font-size:8px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">(hover a file → click ⊞ to view results)</span></span>
                 <div style="display:flex;gap:8px;">
                     <button onclick="expandAll()" style="background:none;border:none;font-size:9px;color:var(--text-muted);cursor:pointer;font-family:'DM Mono',monospace;padding:0;">expand all</button>
                     <span style="color:var(--border);">|</span>
@@ -201,14 +238,13 @@
             {% endif %}
         </div>
 
-        {# ── SELECTION CONTEXT + FLOATING BAR ── #}
+        {# ── SELECTION CONTEXT + INLINE ACTION BAR ── #}
         <div style="padding:8px 18px;border-top:1px solid var(--border);background:var(--bg-hover);display:flex;align-items:center;gap:8px;min-height:36px;">
             <span id="agent-ctx-label" style="font-size:9px;color:var(--text-muted);flex:1;">Select files or a folder to run agents</span>
             <button id="clear-sel-btn" onclick="clearSelection()"
                     style="display:none;background:none;border:none;font-size:9px;color:var(--text-muted);cursor:pointer;font-family:'DM Mono',monospace;padding:0;">
                 ✕ clear
             </button>
-            {# Inline action buttons — visible only when files are selected #}
             <div id="inline-action-bar" style="display:none;gap:5px;flex-wrap:wrap;">
                 <button class="btn btn-sm" onclick="runPullBatch()" title="Pull latest code">⟳ Pull</button>
                 <button class="btn btn-sm" style="color:var(--accent);border-color:var(--accent);" onclick="triggerBatch('narrate')">▶ Narrate</button>
@@ -221,8 +257,6 @@
 
     {# ══════════════════════════════════════════════════════════════════════
        ZONE 2 — AGENT PANEL
-       Safe to swap with hx-target="#ci-agent-panel" hx-swap="innerHTML".
-       The tree zone above is completely unaffected by swaps here.
     ══════════════════════════════════════════════════════════════════════ #}
     <div id="ci-agent-panel" style="flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:10px;">
 
@@ -235,7 +269,6 @@
                         ▶ Full Project README
                     </button>
                     {% if project.readme_status.value == 'reviewed' %}
-                    {# Push to GitHub targets only the agent panel — tree stays intact #}
                     <button class="btn btn-sm btn-green"
                             hx-post="/code-intel/projects/{{ project.id }}/push-readme"
                             hx-target="#ci-agent-panel"
@@ -298,7 +331,7 @@
             </div>
         </div>
 
-        {# Pull card — shown when files selected #}
+        {# Pull card #}
         <div class="agent-card" id="pull-card" style="display:none;">
             <div class="agent-card-header">
                 <span class="agent-card-title" style="color:var(--text-secondary);">① Pull from GitHub</span>
@@ -353,15 +386,16 @@
 
     </div>{# end #ci-agent-panel #}
 
+    {# ── FILE DETAIL DRAWER (NEW) ─────────────────────────────────────────── #}
+    <div class="file-detail-overlay" id="file-detail-overlay" onclick="closeFileDetail()"></div>
+    <div class="file-detail-drawer" id="file-detail-drawer"></div>
+
 </div>
 
 <script>
 (function() {
 // ═══════════════════════════════════════════════════════════════════════════
 // FILE TREE
-// Wrapped in an IIFE so let/const declarations don't collide when HTMX
-// re-injects this partial on Sync Files or project re-selection.
-// Functions called from inline onclick attributes are exposed on window.
 // ═══════════════════════════════════════════════════════════════════════════
 
 function buildTree(files) {
@@ -433,18 +467,19 @@ function renderNode(node, container, pathPrefix, depth) {
         fileDiv.dataset.fileId = file.id;
         fileDiv.dataset.fileName = file.name;
         fileDiv.dataset.filePath = file.path;
+        // CHANGED: added inspect button ⊞
         fileDiv.innerHTML = `
             <input type="checkbox" class="tree-file-cb" data-file-id="${file.id}"
                    id="cb-${file.id}" onclick="event.stopPropagation()" onchange="onFileCb(${file.id})">
             <span style="font-size:10px;flex-shrink:0;">📄</span>
             <span class="tree-file-name" title="${file.path}">${file.name}</span>
             <div class="tree-file-badges" id="badges-${file.id}">${fileBadges(file)}</div>
+            <button class="file-inspect-btn" title="View narration, comments & improvement notes"
+                    onclick="event.stopPropagation(); openFileDetail(${file.id})">⊞</button>
         `;
         fileDiv.addEventListener('click', e => {
-            if (e.target.tagName === 'INPUT') return;
-            const cb = document.getElementById(`cb-${file.id}`);
-            cb.checked = !cb.checked;
-            onFileCb(file.id);
+			if (e.target.tagName === 'INPUT' || e.target.classList.contains('file-inspect-btn')) return;
+			openFileDetail(file.id);
         });
         container.appendChild(fileDiv);
     });
@@ -533,7 +568,6 @@ function updateUI() {
     const readmeBtn = document.getElementById('readme-gen-btn');
     const readmeDesc = document.getElementById('readme-desc');
 
-    // Show/hide agent cards in the agent panel
     ['pull','narrate','comment','improve'].forEach(a => {
         const card = document.getElementById(`${a}-card`);
         if (card) card.style.display = count > 0 ? 'block' : 'none';
@@ -565,7 +599,7 @@ function updateUI() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BADGE REFRESH — in-place, never touches the tree structure
+// BADGE REFRESH
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function refreshBadges() {
@@ -588,6 +622,51 @@ async function refreshBadges() {
             }
         });
     } catch(e) { /* silent */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE DETAIL DRAWER (NEW)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openFileDetail(fileId) {
+    const drawer = document.getElementById('file-detail-drawer');
+    const overlay = document.getElementById('file-detail-overlay');
+    if (!drawer) return;
+
+    // Show loading state immediately so the user gets feedback
+    drawer.innerHTML = `
+        <div style="padding:24px 20px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:11px;">
+            <span class="spinner-inline"></span>
+            Loading file details…
+        </div>`;
+    drawer.classList.add('open');
+    overlay.classList.add('visible');
+
+    fetch(`/code-intel/files/${fileId}`)
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.text();
+        })
+        .then(html => {
+            drawer.innerHTML = html;
+            // Wire up the close button that lives inside the partial
+            const closeBtn = drawer.querySelector('[onclick*="closeDetailPanel"]');
+            if (closeBtn) closeBtn.setAttribute('onclick', 'closeFileDetail()');
+        })
+        .catch(err => {
+            drawer.innerHTML = `
+                <div style="padding:24px 20px;">
+                    <div style="color:var(--red);font-size:11px;margin-bottom:12px;">⚠ Failed to load: ${err.message}</div>
+                    <button class="btn btn-sm" onclick="closeFileDetail()">Close</button>
+                </div>`;
+        });
+}
+
+function closeFileDetail() {
+    document.getElementById('file-detail-drawer')?.classList.remove('open');
+    document.getElementById('file-detail-overlay')?.classList.remove('visible');
+    // Refresh badges in case the user pulled/narrated from inside the drawer
+    refreshBadges();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -711,7 +790,6 @@ async function triggerReadme() {
                 }
             }
         } else {
-            // Full project README — inject into agent panel only, tree untouched
             const html = await resp.text();
             document.getElementById('ci-agent-panel').innerHTML = html;
             const t = document.querySelector('[data-toast]')?.dataset.toast;
@@ -761,7 +839,6 @@ async function saveReadme(projectId) {
     if (!content) return;
     const fd = new FormData();
     fd.append('readme_md', content);
-    // Targets agent panel only — tree unaffected
     const resp = await fetch(`/code-intel/projects/${projectId}/readme`, { method: 'PATCH', body: fd });
     if (resp.ok) {
         document.getElementById('ci-agent-panel').innerHTML = await resp.text();
@@ -838,21 +915,22 @@ async function checkStatus() {
     } catch(e) { /* silent */ }
 }
 
-// ── Expose functions called from inline onclick attributes ─────────────────
-// IIFE scope means onclick="toggleFolder(...)" can't find them otherwise.
-window.toggleFolder      = toggleFolder;
-window.expandAll         = expandAll;
-window.collapseAll       = collapseAll;
-window.selectAllVisible  = selectAllVisible;
-window.clearSelection    = clearSelection;
-window.selectFolder      = selectFolder;
-window.onFileCb          = onFileCb;
-window.runPullBatch      = runPullBatch;
-window.triggerBatch      = triggerBatch;
-window.triggerReadme     = triggerReadme;
-window.copyFolderReadme  = copyFolderReadme;
+// ── Expose to inline onclick ───────────────────────────────────────────────
+window.toggleFolder        = toggleFolder;
+window.expandAll           = expandAll;
+window.collapseAll         = collapseAll;
+window.selectAllVisible    = selectAllVisible;
+window.clearSelection      = clearSelection;
+window.selectFolder        = selectFolder;
+window.onFileCb            = onFileCb;
+window.runPullBatch        = runPullBatch;
+window.triggerBatch        = triggerBatch;
+window.triggerReadme       = triggerReadme;
+window.copyFolderReadme    = copyFolderReadme;
 window.saveFolderAsProject = saveFolderAsProject;
-window.saveReadme        = saveReadme;
+window.saveReadme          = saveReadme;
+window.openFileDetail      = openFileDetail;   // NEW
+window.closeFileDetail     = closeFileDetail;  // NEW
 
 })(); // end IIFE
 </script>
