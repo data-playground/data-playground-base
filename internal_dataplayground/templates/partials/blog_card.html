@@ -3,7 +3,7 @@
    `idea` = BlogIdea ORM object
 #}
 <div class="idea-card" id="blog-card-{{ idea.id }}" onclick="openDetail({{ idea.id }})">
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;justify-content:space-between;">
 
         {# Project type badge #}
         <div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% elif idea.project_type.value == 'tutorial' %}badge-tutorial{% else %}badge-new{% endif %}">
@@ -23,7 +23,7 @@
 
         {% if not idea.the_build %}
         <div style="font-size:9px; letter-spacing:.14em; text-transform:uppercase;
-                    color:var(--yellow); justify-content:space-between;">
+                    color:var(--yellow);">
             ⏳ Enriching…
         </div>
         {% endif %}
