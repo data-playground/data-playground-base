@@ -347,7 +347,7 @@
         background: var(--topbar-bg);
         flex-shrink: 0;
         position: sticky;
-        top: 56px; /* height of topbar */
+        /*top: 56px;*/ /* height of topbar */
         z-index: 50;
     }
 

@@ -48,6 +48,95 @@
 .pip-done    { background:var(--green); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
+/* ── DIFFICULTY BADGES ───────────────────────────────────────────────────────
+   Appended to static/css/blog.css
+   These badges appear on kanban cards and the detail drawer header.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Base difficulty badge — shares structure with card-type-badge */
+.card-difficulty-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+/* Starter — green, approachable */
+.difficulty-starter {
+    background: rgba(0, 201, 128, 0.10);
+    color: var(--score-high);
+    border: 1px solid rgba(0, 201, 128, 0.25);
+}
+
+/* Weekend — amber, moderate effort */
+.difficulty-weekend {
+    background: rgba(232, 160, 32, 0.10);
+    color: var(--score-mid);
+    border: 1px solid rgba(232, 160, 32, 0.25);
+}
+
+/* Ambitious — red/accent, significant commitment */
+.difficulty-ambitious {
+    background: rgba(240, 64, 64, 0.10);
+    color: var(--score-low);
+    border: 1px solid rgba(240, 64, 64, 0.25);
+}
+
+/* Tutorial project type badge */
+.badge-tutorial {
+    background: rgba(0, 191, 255, 0.10);
+    color: var(--blue);
+    border: 1px solid rgba(0, 191, 255, 0.2);
+}
+
+/* ── KANBAN COLUMN DIFFICULTY COUNTS ─────────────────────────────────────────
+   Small breakdown pill inside each column header showing the difficulty mix.
+   Optional — rendered by JS if data is available.
+   ─────────────────────────────────────────────────────────────────────────── */
+.col-difficulty-pills {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.col-difficulty-pill {
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: .04em;
+}
+
+.col-difficulty-pill.starter  { background: rgba(0,201,128,0.12); color: var(--score-high); }
+.col-difficulty-pill.weekend  { background: rgba(232,160,32,0.12); color: var(--score-mid);  }
+.col-difficulty-pill.ambitious{ background: rgba(240,64,64,0.12);  color: var(--score-low);  }
+
+/* ── DETAIL DRAWER DIFFICULTY DISPLAY ───────────────────────────────────────
+   Larger pill shown in the blog detail drawer header row.
+   ─────────────────────────────────────────────────────────────────────────── */
+.detail-difficulty-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+/* Reuse the same colour classes */
+.detail-difficulty-badge.difficulty-starter   { background: rgba(0,201,128,0.10);  color: var(--score-high); border: 1px solid rgba(0,201,128,0.25);  }
+.detail-difficulty-badge.difficulty-weekend   { background: rgba(232,160,32,0.10); color: var(--score-mid);  border: 1px solid rgba(232,160,32,0.25);  }
+.detail-difficulty-badge.difficulty-ambitious { background: rgba(240,64,64,0.10);  color: var(--score-low);  border: 1px solid rgba(240,64,64,0.25);   }
+
 .empty-col { text-align:center; padding:32px 16px; color:var(--text-muted); font-size:11px; }
 .empty-col .empty-icon { font-size:24px; margin-bottom:8px; opacity:.4; }
 
