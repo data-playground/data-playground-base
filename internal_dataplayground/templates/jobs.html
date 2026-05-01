@@ -92,7 +92,9 @@
 		<div class="detail-overlay" id="detail-overlay" onclick="closeDetailPanel()"></div>
 		<div id="job-detail-panel" class="detail-drawer"></div>
 		
-        <!-- JOBS TABLE -->
+        <!-- ═══════════════════════════════════════════════════════════
+             DESKTOP JOBS TABLE (hidden on mobile via CSS)
+        ═══════════════════════════════════════════════════════════ -->
         {% if jobs %}
         <table class="jobs-table" id="jobs-table">
             <thead>
@@ -116,10 +118,7 @@
                     </span>
                 </td>
                 <td class="job-title-cell">
-                    <!--<a class="job-title-link" href="{{ job.job_link }}" target="_blank" title="{{ job.job_title }}">{{ job.job_title }}</a>-->
-					<!--<a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel">{{ job.job_title }}</a>-->
 					<a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel" hx-swap="innerHTML" hx-on::after-request="openDetailPanel()">{{ job.job_title }}</a>
-
                     <div class="job-company">{{ job.company_name or '—' }}</div>
                 </td>
                 <td>
@@ -146,12 +145,100 @@
             {% endfor %}
             </tbody>
         </table>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             MOBILE CARD LIST (hidden on desktop via CSS)
+             Same data, same HTMX endpoints — layout only changes.
+        ═══════════════════════════════════════════════════════════ -->
+        <div id="jobs-mobile-list">
+            {% for job in jobs %}
+            {% set current = job.latest_status | upper | replace(' ', '_') if job.latest_status else 'NONE' %}
+            <div class="job-card-mobile"
+                data-job-id="{{ job.ID }}"
+                data-score="{{ job.fit_score }}"
+                data-remote="{{ job.remote | lower }}"
+                data-status="{{ current }}"
+                data-company="{{ job.company_name | lower if job.company_name else '' }}"
+                data-postdate="{{ job.search_date.strftime('%Y-%m-%d') if job.search_date else '' }}">
+
+                <div class="job-card-mobile-header">
+                    <div class="job-card-mobile-score score-badge {% if job.fit_score >= 90 %}score-high{% elif job.fit_score >= 50 %}score-mid{% else %}score-low{% endif %}">
+                        {{ job.fit_score }}
+                    </div>
+                    <div class="job-card-mobile-info">
+                        <div class="job-card-mobile-title"
+                            hx-get="/jobs/detail/{{ job.ID }}"
+                            hx-target="#job-detail-panel"
+                            hx-swap="innerHTML"
+                            hx-on::after-request="openDetailPanel()"
+                            style="cursor:pointer;">
+                            {{ job.job_title }}
+                        </div>
+                        <div class="job-card-mobile-company">{{ job.company_name or '—' }}</div>
+                    </div>
+                    {% if job.job_link %}
+                    <a href="{{ job.job_link }}" target="_blank" class="job-card-mobile-apply">Apply →</a>
+                    {% endif %}
+                </div>
+
+                <div class="job-card-mobile-meta">
+                    {% if job.remote %}
+                    <span class="tag tag-remote" style="font-size:9px;padding:2px 7px;">Remote</span>
+                    {% elif job.location %}
+                    <span class="tag" style="font-size:9px;padding:2px 7px;">{{ job.location }}</span>
+                    {% endif %}
+                    {% if job.search_date %}
+                    <span style="font-size:9px;color:var(--text-muted);margin-left:auto;">{{ job.search_date.strftime('%b %d') }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- ATS buttons — same hx-post endpoints, scroll horizontally -->
+                <div class="ats-buttons" id="ats-mob-{{ job.ID }}"
+                     hx-target="#ats-mob-{{ job.ID }}"
+                     hx-swap="outerHTML settle:300ms">
+                    <button class="ats-btn {% if current == 'APPLIED' %}status-applied{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"APPLIED"}'
+                        onclick="showToast('Marked as Applied')">Applied</button>
+                    <button class="ats-btn {% if current == 'PHONE_SCREEN' %}status-phone_screen{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"PHONE_SCREEN"}'
+                        onclick="showToast('Marked as Phone Screen')">Phone</button>
+                    <button class="ats-btn {% if current == 'INTERVIEWING' %}status-interviewing{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"INTERVIEWING"}'
+                        onclick="showToast('Marked as Interviewing')">Interview</button>
+                    <button class="ats-btn {% if current == 'TECHNICAL_ASSESSMENT' %}status-technical{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"TECHNICAL_ASSESSMENT"}'
+                        onclick="showToast('Marked as Technical')">Technical</button>
+                    <button class="ats-btn {% if current == 'REJECTED' %}status-rejected{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"REJECTED"}'
+                        onclick="showToast('Marked as Rejected')">Rejected</button>
+                    <button class="ats-btn {% if current == 'OFFER' %}status-offer{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"OFFER"}'
+                        onclick="showToast('🎉 Offer logged!')">Offer</button>
+                    <button class="ats-btn {% if current == 'CLOSED' %}status-closed{% endif %}"
+                        hx-post="/ats/log"
+                        hx-vals='{"job_id":{{ job.ID }},"status":"CLOSED"}'
+                        onclick="showToast('Marked as Closed')">Closed</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
         {% else %}
         <div class="empty-state">
             <div class="empty-icon">◈</div>
             <p>No jobs found. Use the Add Job panel above to get started.</p>
         </div>
         {% endif %}
+
+        <!-- Sticky FAB: mobile only, opens the staging panel -->
+        <button class="jobs-mobile-fab" onclick="openStagingPanel()">⊕ Queue New Job Link</button>
+
     </main>
 
 <div id="toast"></div>
@@ -281,7 +368,7 @@
         }
     });
 
-    // MASTER FILTER
+    // MASTER FILTER — applies to BOTH the desktop table rows and mobile cards
     function applyAllFilters(){
         const company = document.getElementById('filter-company').value.toLowerCase().trim();
         const scoreMin = parseInt(document.getElementById('filter-score-min').value)||0;
@@ -289,36 +376,33 @@
         const dateTo   = document.getElementById('filter-date-to').value;
         hideApplied    = document.getElementById('hide-applied-toggle').checked;
 
+        // Selector covers both desktop <tr> and mobile .job-card-mobile
+        const rows = document.querySelectorAll(
+            '#jobs-table tbody tr, #jobs-mobile-list .job-card-mobile'
+        );
+
         let visible = 0;
-        document.querySelectorAll('#jobs-table tbody tr').forEach(row=>{
+        rows.forEach(row=>{
             const score   = parseInt(row.dataset.score);
             const remote  = row.dataset.remote==='true';
-            const status  = row.dataset.status; // e.g. "APPLIED", "NONE"
+            const status  = row.dataset.status;
             const rowComp = row.dataset.company;
             const rowDate = row.dataset.postdate;
 
-            // Quick filter
             let quickPass = true;
-            if(activeQuickFilter==='high')   quickPass = score>=90;
-            if(activeQuickFilter==='remote') quickPass = remote;
-            if(activeQuickFilter==='applied')    quickPass = status!=='NONE'&&status!=='';
-            if(activeQuickFilter==='not_applied')quickPass = status==='NONE'||status==='';
+            if(activeQuickFilter==='high')        quickPass = score>=90;
+            if(activeQuickFilter==='remote')      quickPass = remote;
+            if(activeQuickFilter==='applied')     quickPass = status!=='NONE'&&status!=='';
+            if(activeQuickFilter==='not_applied') quickPass = status==='NONE'||status==='';
 
-            // Score slider
-            const scorePass = score >= scoreMin;
-
-            // Company text
+            const scorePass   = score >= scoreMin;
             const companyPass = !company || rowComp.includes(company);
 
-            // Date range
             let datePass = true;
             if(dateFrom && rowDate) datePass = datePass && rowDate>=dateFrom;
             if(dateTo   && rowDate) datePass = datePass && rowDate<=dateTo;
 
-            // Status multi-select
-            const statusPass = activeStatuses.size===0 || activeStatuses.has(status);
-
-            // Hide applied toggle
+            const statusPass  = activeStatuses.size===0 || activeStatuses.has(status);
             const appliedPass = !hideApplied || (status==='NONE'||status==='');
 
             const show = quickPass && scorePass && companyPass && datePass && statusPass && appliedPass;
@@ -326,11 +410,11 @@
             if(show) visible++;
         });
 
-        // Update count label
+        // Update count — divide by 2 because each job has a desktop row + mobile card
+        const total = document.querySelectorAll('#jobs-table tbody tr').length;
         const countEl = document.querySelector('.job-count');
         if(countEl){
-            const total = document.querySelectorAll('#jobs-table tbody tr').length;
-            countEl.textContent = visible===total ? `${total} listings` : `${visible} of ${total}`;
+            countEl.textContent = visible/2===total ? `${total} listings` : `${Math.round(visible/2)} of ${total}`;
         }
     }
 
@@ -343,15 +427,13 @@
 		const target = evt.target;
 		if (!target.classList.contains('ats-buttons')) return;
 	 
-		// 1. Sync the row's data-status so filters + tinting stay correct
 		const activeBtn = target.querySelector('.ats-btn[class*="status-"]');
-		const row = target.closest('tr');
+		const row = target.closest('tr, .job-card-mobile');
 		if (activeBtn && row) {
 			const cls = [...activeBtn.classList].find(c => c.startsWith('status-'));
 			if (cls) row.dataset.status = cls.replace('status-', '').toUpperCase();
 		}
 	 
-		// 2. Pop animation on the newly active button
 		if (activeBtn) {
 			activeBtn.classList.add('just-activated');
 			activeBtn.addEventListener('animationend', () => {
@@ -359,7 +441,6 @@
 			}, { once: true });
 		}
 	 
-		// 3. Row flash
 		if (row) {
 			row.classList.add('status-just-logged');
 			row.addEventListener('animationend', () => {
@@ -367,7 +448,6 @@
 			}, { once: true });
 		}
 	 
-		// 4. Re-apply tinting (the new status may change the row's tint class)
 		if (typeof window._reapplyStatusTinting === 'function') {
 			window._reapplyStatusTinting();
 		}
@@ -390,14 +470,12 @@
     }
     document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDetailPanel(); });
 
-    // INIT — runs after DOM + all declarations are ready
+    // INIT
     document.addEventListener('DOMContentLoaded', ()=>{
-        // Wire Enter key on staging URL input
         document.getElementById('add-job-link').addEventListener('keydown',e=>{
             if(e.key==='Enter') submitStageForm();
         });
 
-        // Default date range: last 10 days
         const today = new Date();
         const tenDaysAgo = new Date();
         tenDaysAgo.setDate(today.getDate()-10);
@@ -405,21 +483,15 @@
         document.getElementById('filter-date-from').value = fmt(tenDaysAgo);
         document.getElementById('filter-date-to').value   = fmt(today);
 
-        // Open advanced panel so dates are visible
         document.getElementById('filter-panel').classList.add('open');
         document.getElementById('adv-toggle').classList.add('active');
 
-        // Default: hide applied
         document.getElementById('hide-applied-toggle').checked = true;
 
-        // Sync High Fit pill to active state
         document.querySelectorAll('.filter-pill:not(#adv-toggle)').forEach(p=>p.classList.remove('active'));
         document.querySelector('.filter-pill[onclick*="high"]').classList.add('active');
 
-        // Init status dropdown
         renderStatusDropdown();
-
-        // Run filters
         applyAllFilters();
     });
 </script>

@@ -1,479 +1,100 @@
 /* static/css/mobile.css
    ─────────────────────────────────────────────────────────────────────────
-   Life OS — Mobile-First Responsive Overrides
-   Load this AFTER all page-specific CSS via base.html.
+   Life OS — Mobile Responsive Overrides
+   Strategy: additive only. Desktop CSS is untouched. Every rule here is
+   scoped inside @media (max-width: 768px) or (max-width: 430px) so nothing
+   bleeds into desktop layouts.
 
-   Strategy:
-   - 768px  → sidebar becomes overlay (handled in base.css)
-   - 640px  → start collapsing multi-column layouts to single column
-   - 480px  → phone portrait — aggressive restructuring
-   - 360px  → smallest common Android phones — nothing should overflow
-
-   Philosophy: on mobile, density is the enemy. Every view gets a
-   purpose-built layout, not a shrunk desktop layout.
+   Pages covered:
+     - Global layout + sidebar
+     - Jobs page  (table → card list + detail bottom-sheet)
+     - Blog page  (3-col kanban → tab strip)
+     - SQL Explorer (left panel → top chip strip, results → h-scroll)
    ─────────────────────────────────────────────────────────────────────────
 */
 
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   TOPBAR — mobile tweaks
-══════════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   GLOBAL — layout, sidebar, topbar
+══════════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
-    /* Filter pills in topbar overflow gracefully */
-    .filter-bar {
-        display: none; /* hidden on mobile — accessible via filter panel below */
+
+    /* Let body scroll normally on mobile */
+    body { overflow: auto; }
+
+    /* Stack the grid vertically — sidebar is now a fixed overlay */
+    .layout {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        min-height: 100vh !important;
     }
 
-    /* Keep essential topbar actions, hide verbose ones */
-    .topbar-right .job-count { display: none; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ① JOBS PAGE
-   Problem: 7-button ATS row (min-width ~300px) inside a 5-column table.
-   Fix: Table → Card list. ATS buttons → icon pills with labels on tap.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    /* ── Filter panel ── */
-    .filter-panel {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-        padding: 12px 14px;
+    /* Sidebar becomes a fixed slide-in drawer */
+    .sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100vh !important;
+        width: min(280px, 85vw) !important;
+        transform: translateX(-100%) !important;
+        transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        z-index: 200 !important;
+        box-shadow: 4px 0 28px rgba(0,0,0,0.5) !important;
     }
 
-    .filter-panel .filter-input,
-    .filter-panel .filter-select,
-    #filter-company,
-    #filter-date-from,
-    #filter-date-to {
+    .sidebar.mobile-open {
+        transform: translateX(0) !important;
+    }
+
+    /* Topbar spans full width and sticks to top */
+    .topbar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
         width: 100% !important;
-        min-width: 0 !important;
+        flex-shrink: 0 !important;
+        padding: 0 12px !important;
     }
 
-    /* Score slider row — keep inline */
-    .filter-panel > div {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        width: 100%;
+    /* Show hamburger, hide collapse button */
+    .hamburger { display: flex !important; }
+    .collapse-btn { display: none !important; }
+
+    /* Main content fills remaining space */
+    .main-content {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 12px !important;
     }
 
-    /* Status dropdown — full width */
-    #status-dropdown { width: 100%; }
-    #status-dropdown-btn { width: 100%; }
-
-    /* ── Jobs table → card list ── */
-    .jobs-table { display: none; } /* Hide the desktop table */
-
-    /* Card list injected by JS — see mobile card markup below */
-    #jobs-mobile-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding-bottom: 16px;
+    /* Topbar text truncation */
+    .page-title {
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 180px !important;
     }
 
-    .job-card-mobile {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 12px 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        transition: border-color 0.18s ease;
+    /* Safe area for iPhone notch / home indicator */
+    .topbar {
+        padding-left: max(12px, env(safe-area-inset-left)) !important;
+        padding-right: max(12px, env(safe-area-inset-right)) !important;
     }
 
-    .job-card-mobile:active { border-color: var(--accent); }
-
-    .job-card-mobile-header {
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
+    /* Toast — full width centered at bottom */
+    #toast {
+        left: 12px !important;
+        right: 12px !important;
+        bottom: 16px !important;
+        max-width: none !important;
+        text-align: center !important;
     }
 
-    .job-card-mobile-score {
-        width: 34px;
-        height: 34px;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 700;
-        flex-shrink: 0;
-    }
-
-    .job-card-mobile-info { flex: 1; min-width: 0; }
-
-    .job-card-mobile-title {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-primary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: 2px;
-    }
-
-    .job-card-mobile-company {
-        font-size: 10px;
-        color: var(--text-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .job-card-mobile-meta {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .job-card-mobile-tag {
-        font-size: 9px;
-        padding: 2px 7px;
-        border-radius: 3px;
-        background: var(--tag-bg);
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    /* ── ATS buttons → compact scrollable row ── */
-    .ats-cell { min-width: 0 !important; }
-
-    .ats-buttons {
-        display: flex;
-        gap: 4px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 2px;
-        /* Hide scrollbar visually but keep scrollability */
-        scrollbar-width: none;
-    }
-
-    .ats-buttons::-webkit-scrollbar { display: none; }
-
-    .ats-btn {
-        flex-shrink: 0;
-        padding: 4px 8px;
-        font-size: 9px;
-        min-height: 28px;
-    }
-
-    /* ── Staging panel ── */
-    .add-job-form {
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .add-job-form .add-job-input,
-    .add-job-form #add-job-search,
-    .add-job-form .add-job-btn {
-        width: 100% !important;
-        flex: none !important;
-    }
-
-    .staging-table { font-size: 10px; }
-    .staging-table .job-title-cell { max-width: 140px; }
-
-    /* ── Job detail drawer ── */
-    .detail-drawer {
-        width: 100vw !important;
-        right: -100vw !important;
-        border-left: none;
-        border-top: 1px solid var(--border);
-        border-radius: 16px 16px 0 0;
-        top: auto;
-        bottom: -100vh;
-        height: 92vh;
-        transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        right: 0 !important;
-    }
-
-    .detail-drawer.open {
-        bottom: 0 !important;
-        right: 0 !important;
-    }
-}
-
-@media (max-width: 480px) {
-    .ats-btn { padding: 3px 7px; font-size: 8px; }
-
-    /* Score badge in mobile card */
-    .job-card-mobile-score { width: 30px; height: 30px; font-size: 10px; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ② FINANCE DASHBOARD
-   Problem: 3-col KPI row, 2-col dash grid both collapse badly.
-   Fix: Stack everything single column. Chart gets full width.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    /* KPI cards: 3-col → single row with smaller cards, or stack */
-    .kpi-row {
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 8px;
-    }
-
-    .kpi-card { padding: 10px 12px; }
-
-    .kpi-value {
-        font-size: 18px; /* was 24px — still readable, doesn't overflow */
-    }
-
-    /* Dash grid: 2-col → 1-col */
-    .dash-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
-    /* Month nav — compact */
-    .month-nav {
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 12px;
-    }
-
-    .month-nav select { font-size: 11px; padding: 4px 8px; }
-}
-
-@media (max-width: 480px) {
-    /* Stack KPI cards vertically at smallest sizes */
-    .kpi-row {
-        grid-template-columns: 1fr;
-        gap: 6px;
-    }
-
-    .kpi-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-    }
-
-    .kpi-label { margin-bottom: 0; }
-    .kpi-value { font-size: 20px; }
-
-    /* Recent transactions table → compact */
-    .txn-table th:nth-child(3),
-    .txn-table td:nth-child(3) { display: none; } /* hide account col */
-
-    .txn-table { font-size: 10px; }
-    .txn-table td { padding: 6px 6px; }
-
-    .cat-name { width: 90px; font-size: 10px; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ③ FINANCE LEDGER
-   Problem: 5-column table with min-width 640px — massively overflows.
-   Fix: Card-style rows with key info visible, rest hidden behind tap.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    /* Filter row → stacked */
-    .filter-row {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-    }
-
-    .filter-row .f-select,
-    .filter-row .f-input {
-        width: 100%;
-    }
-
-    .filter-row .f-label { display: none; } /* save space — context is obvious */
-
-    /* Ledger table: hide less critical columns */
-    .ledger-table th:nth-child(3),
-    .ledger-table td:nth-child(3) {
-        display: none; /* hide Account col — usually viewing one account */
-    }
-
-    .ledger-table { font-size: 10px; min-width: 0; }
-
-    .ledger-table th { padding: 6px 8px; }
-    .ledger-table td { padding: 6px 8px; }
-
-    /* Description cell — truncate tighter */
-    .ledger-table td:nth-child(2) {
-        max-width: 120px;
-    }
-
-    /* Summary row — wrap */
-    .summary-row {
-        flex-wrap: wrap;
-        gap: 8px;
-        font-size: 10px;
-    }
-}
-
-@media (max-width: 480px) {
-    /* Hide Date column — show as part of description context */
-    /* Actually keep date, hide category instead — amount + description + date = essential */
-    .ledger-table th:nth-child(4),
-    .ledger-table td:nth-child(4) { display: none; } /* hide Category */
-
-    /* Make description even tighter */
-    .ledger-table td:nth-child(2) { max-width: 100px; }
-
-    /* Amount right-aligned, always visible */
-    .ledger-table th:last-child,
-    .ledger-table td:last-child {
-        text-align: right;
-        white-space: nowrap;
-    }
-
-    /* Filter: month/year selects inline, others stacked */
-    .filter-row .filter-apply { width: 100%; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ④ FINANCE UPLOAD
-   Problem: 3-col column mapper, drop zone, complex form.
-   Fix: Single column throughout. Step indicators stay legible.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    .upload-card { padding: 16px; }
-
-    /* Column mapper grid: 3→1 */
-    .col-grid {
-        grid-template-columns: 1fr !important;
-        gap: 8px;
-    }
-
-    /* Account row: 4-col → 2-col */
-    .acct-row {
-        grid-template-columns: 1fr 1fr !important;
-        gap: 8px;
-    }
-
-    /* New account form — full width inputs */
-    .new-acct-form { padding: 10px; }
-
-    /* Preset bar — scrollable row */
-    .preset-bar {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 4px;
-        scrollbar-width: none;
-    }
-
-    .preset-bar::-webkit-scrollbar { display: none; }
-    .preset-btn { flex-shrink: 0; }
-
-    /* Drop zone — compact */
-    .drop-zone { padding: 20px 14px; }
-    .drop-zone .dz-icon { font-size: 22px; margin-bottom: 6px; }
-}
-
-@media (max-width: 480px) {
-    .acct-row { grid-template-columns: 1fr !important; }
-
-    .upload-card { padding: 12px; }
-    .section-title { font-size: 11px; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ⑤ FINANCE SETTINGS
-   Problem: 2-col settings grid forces both panels side-by-side.
-   Fix: Single column, panels stack.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    .settings-grid {
-        grid-template-columns: 1fr !important;
-        gap: 14px;
-        max-width: 100%;
-    }
-
-    .settings-card { padding: 14px; }
-
-    .add-row {
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-
-    .add-row .add-input { min-width: 0; flex: 1 1 120px; }
-    .add-row .add-btn { width: 100%; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ⑥ BLOG KANBAN
-   Problem: 3 columns at `repeat(3, 1fr)` — unreadable at 400px (133px/col).
-   Fix: Horizontal scroll with snap, or tabs switching columns.
-   Using horizontal scroll with snapping — more native feeling on mobile.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    .board {
-        grid-template-columns: repeat(3, 85vw) !important;
-        gap: 12px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-        padding: 12px 16px;
-        /* Extend past right edge to show next card peek */
-        padding-right: 10vw;
-    }
-
-    .board::-webkit-scrollbar { display: none; }
-
-    .kanban-col {
-        scroll-snap-align: start;
-        flex-shrink: 0;
-        height: calc(100vh - 56px - 24px); /* full height minus topbar+padding */
-        overflow-y: auto;
-    }
-
-    .col-body { max-height: none; }
-
-    /* Column tab indicators — show which column you're on */
-    .board::before {
-        content: 'Swipe to see Writing & Review and Ready to Publish →';
-        position: absolute;
-        bottom: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 9px;
-        color: var(--text-muted);
-        white-space: nowrap;
-        pointer-events: none;
-    }
-
-    /* Blog modal — full screen on mobile */
-    .modal-box {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        border-radius: 16px 16px 0 0 !important;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        max-height: 90vh;
-        overflow-y: auto;
-        margin: 0;
-    }
-
-    .modal-backdrop { align-items: flex-end !important; }
-
-    /* Detail drawer → bottom sheet */
+    /* Detail drawer — bottom sheet on mobile */
     .detail-drawer {
         width: 100vw !important;
         right: 0 !important;
@@ -488,234 +109,334 @@
 
     .detail-drawer.open {
         bottom: 0 !important;
-    }
-}
-
-@media (max-width: 480px) {
-    .board { grid-template-columns: repeat(3, 92vw) !important; }
-
-    .idea-card { padding: 10px 12px; }
-    .card-title { font-size: 11px; }
-    .card-narrative { font-size: 9px; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ⑦ SQL EXPLORER
-   Problem: Two-panel layout (280px schema + editor). CodeMirror at 120px broken.
-   Fix: Schema panel hides behind a toggle button. Editor takes full width.
-        Results pane stacks below editor (no drag resize on mobile).
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    /* Workspace: side-by-side → stacked */
-    .workspace {
-        grid-template-columns: 1fr !important;
-        grid-template-rows: auto 1fr !important;
-        overflow: hidden;
+        right: 0 !important;
     }
 
-    /* Schema panel: hidden by default, toggled via button */
-    .table-browser {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: 250;
-        background: var(--bg-card);
-        overflow-y: auto;
-    }
-
-    .table-browser.mobile-open {
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* Add close button to schema panel on mobile — via JS */
-    .schema-close-btn {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--border);
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--text-secondary);
-        background: var(--bg-hover);
-    }
-
-    /* Right panel stacks editor + results */
-    .right-panel {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    /* Editor pane — fixed height on mobile, no drag */
-    .editor-pane {
-        flex-shrink: 0;
-        height: 200px !important;
-    }
-
-    .CodeMirror {
-        height: 164px !important; /* pane height minus toolbar 36px */
-    }
-
-    /* Drag handle — hidden on mobile (no resize) */
-    .drag-handle { display: none; }
-
-    /* Results pane — takes remaining space */
-    .results-pane {
-        flex: 1;
-        min-height: 0;
-    }
-
-    /* Quick chips — horizontal scroll */
-    .quick-queries {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-    }
-
-    .quick-queries::-webkit-scrollbar { display: none; }
-    .quick-chip { flex-shrink: 0; }
-
-    /* Topbar on explorer: show schema toggle button */
-    .schema-toggle-btn {
-        display: flex !important;
-    }
-
-    /* Run btn — shorter text on mobile */
-    .run-btn .shortcut { display: none; }
-}
-
-@media (max-width: 480px) {
-    .editor-pane { height: 180px !important; }
-    .CodeMirror { height: 144px !important; font-size: 11px !important; }
-
-    /* Results table — horizontal scroll */
-    .results-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .results-table { min-width: 400px; }
-    .results-table th,
-    .results-table td { padding: 5px 8px; font-size: 10px; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   ⑧ CODE INTELLIGENCE
-   Problem: Two-panel layout (300px project list + detail). Both collapse.
-   Fix: Project list takes full width. Tapping a project slides in detail
-        as a bottom sheet. Back button returns to list.
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-    .ci-workspace {
-        grid-template-columns: 1fr !important;
-        position: relative;
-        overflow: hidden;
-    }
-
-    /* Project list: full width */
-    .project-list-panel {
-        width: 100%;
-        height: calc(100vh - 56px);
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-    }
-
-    /* Detail panel: hidden until project selected, then bottom sheet */
-    .ci-detail-panel {
-        position: fixed;
-        bottom: -100vh;
-        left: 0;
-        width: 100vw;
-        height: 88vh;
-        border-radius: 16px 16px 0 0;
-        border-left: none;
-        border-top: 1px solid var(--border);
-        z-index: 200;
-        transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        overflow-y: auto;
-    }
-
-    .ci-detail-panel.mobile-visible {
-        bottom: 0;
-    }
-
-    /* Backdrop for detail panel */
-    .ci-detail-backdrop {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.4);
-        z-index: 199;
-    }
-
-    .ci-detail-backdrop.visible { display: block; }
-
-    /* Project cards — larger tap targets */
-    .project-card { padding: 12px 16px; min-height: 52px; }
-    .project-card-name { font-size: 12px; }
-
-    /* File tree in detail — touch-friendly */
-    .tree-file { padding: 7px 10px; min-height: 36px; }
-    .tree-folder-header { padding: 7px 10px; min-height: 36px; }
-
-    /* Action bar — always visible at bottom */
-    .action-bar {
-        position: sticky;
-        bottom: 0;
-        border-radius: 0;
-    }
-
-    /* Agent cards — full width, stacked */
-    .agent-card { padding: 10px 12px; }
-
-    /* README editor — smaller on mobile */
-    .readme-editor { min-height: 120px; }
-}
-
-@media (max-width: 480px) {
-    .ci-detail-panel { height: 92vh; }
-
-    .tree-file-name { font-size: 10px; }
-    .tree-folder-name { font-size: 10px; }
-
-    /* Action bar buttons — icon only at smallest size */
-    .action-bar .btn span:not(.icon) { display: none; }
-}
-
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   UNIVERSAL MOBILE POLISH
-══════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 768px) {
-
-    /* All modals → bottom sheet */
-    .modal-backdrop {
-        align-items: flex-end;
-    }
+    /* Modals — bottom sheet */
+    .modal-backdrop { align-items: flex-end !important; }
 
     .modal-box {
-        width: 100vw;
-        max-width: 100vw;
-        border-radius: 16px 16px 0 0;
-        margin: 0;
-        max-height: 88vh;
-        overflow-y: auto;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        border-radius: 16px 16px 0 0 !important;
+        margin: 0 !important;
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+    }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   JOBS PAGE
+   Desktop: <table> with 5 columns + ATS row
+   Mobile:  hide the table, show .jobs-mobile-list card stack
+            ATS buttons stay but scroll horizontally inside each card
+══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+    /* Hide desktop table */
+    .jobs-table { display: none !important; }
+
+    /* Show mobile card list (added in jobs.html) */
+    #jobs-mobile-list { display: flex !important; }
+
+    /* Filter panel — stack vertically */
+    .filter-panel {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding: 10px 12px !important;
     }
 
-    /* Detail drawers → bottom sheet (universal) */
+    .filter-panel .filter-input,
+    .filter-panel #filter-company,
+    .filter-panel #filter-date-from,
+    .filter-panel #filter-date-to {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* Status dropdown full width */
+    #status-dropdown { width: 100% !important; }
+    #status-dropdown-btn { width: 100% !important; }
+
+    /* Keep score slider row inline */
+    .filter-panel > div {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        width: 100% !important;
+    }
+
+    /* Staging panel */
+    .add-job-form {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .add-job-form .add-job-input,
+    .add-job-form #add-job-search,
+    .add-job-form .add-job-btn {
+        width: 100% !important;
+        flex: none !important;
+    }
+
+    /* Job detail drawer as bottom-sheet (already covered by .detail-drawer above) */
+    #job-detail-panel {
+        width: 100vw !important;
+        right: 0 !important;
+        top: auto !important;
+        bottom: -100vh !important;
+        height: 92vh !important;
+        border-left: none !important;
+        border-top: 1px solid var(--border) !important;
+        border-radius: 16px 16px 0 0 !important;
+        transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    #job-detail-panel.open {
+        bottom: 0 !important;
+        right: 0 !important;
+    }
+}
+
+/* Mobile card list — hidden by default, flex on mobile */
+#jobs-mobile-list {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 80px; /* space for sticky FAB */
+}
+
+/* Individual job card */
+.job-card-mobile {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 12px;
+    transition: border-color 0.18s;
+}
+
+.job-card-mobile:active { border-color: var(--accent); }
+
+.job-card-mobile-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 7px;
+}
+
+.job-card-mobile-score {
+    width: 36px;
+    height: 36px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.job-card-mobile-info { flex: 1; min-width: 0; }
+
+.job-card-mobile-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.job-card-mobile-company {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.job-card-mobile-apply {
+    font-size: 9px;
+    padding: 3px 8px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 4px;
+    background: transparent;
+    font-family: 'DM Mono', monospace;
+    cursor: pointer;
+    flex-shrink: 0;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.job-card-mobile-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 7px;
+}
+
+/* ATS buttons — horizontal scroll inside card */
+.job-card-mobile .ats-buttons {
+    display: flex !important;
+    gap: 4px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 2px !important;
+    scrollbar-width: none !important;
+    flex-wrap: nowrap !important;
+}
+
+.job-card-mobile .ats-buttons::-webkit-scrollbar { display: none; }
+
+.job-card-mobile .ats-btn {
+    flex-shrink: 0 !important;
+    font-size: 9px !important;
+    padding: 4px 8px !important;
+    min-height: 26px !important;
+}
+
+/* Sticky "Add Job" FAB at bottom of jobs page */
+.jobs-mobile-fab {
+    display: none; /* shown only on mobile via media query below */
+    position: fixed;
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+    z-index: 90;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    box-shadow: 0 4px 16px rgba(124,111,255,0.4);
+}
+
+@media (max-width: 768px) {
+    .jobs-mobile-fab { display: block; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BLOG PAGE
+   Desktop: .board — CSS grid with 3 columns side by side
+   Mobile:  hide .board columns, show a tab strip + single-column view
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Tab strip — hidden on desktop */
+.mobile-kanban-tabs {
+    display: none;
+}
+
+@media (max-width: 768px) {
+
+    /* Show the tab strip */
+    .mobile-kanban-tabs {
+        display: flex !important;
+        border-bottom: 1px solid var(--border);
+        background: var(--topbar-bg);
+        flex-shrink: 0;
+        position: sticky;
+        top: 56px; /* height of topbar */
+        z-index: 50;
+    }
+
+    .mobile-kanban-tab {
+        flex: 1;
+        padding: 10px 4px;
+        text-align: center;
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--text-muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s, border-color 0.15s;
+        background: none;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+    }
+
+    .mobile-kanban-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+    }
+
+    .mobile-kanban-tab-count {
+        display: inline-block;
+        margin-left: 3px;
+        background: var(--bg-hover);
+        border-radius: 10px;
+        padding: 0 5px;
+        font-size: 9px;
+        color: var(--text-muted);
+    }
+
+    .mobile-kanban-tab.active .mobile-kanban-tab-count {
+        background: rgba(124,111,255,0.18);
+        color: var(--accent);
+    }
+
+    /* Board: disable the 3-col grid, become a plain block */
+    .board {
+        display: block !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        background: var(--bg-card) !important;
+    }
+
+    /* Each kanban column: hidden by default, shown when active */
+    .kanban-col {
+        display: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+    }
+
+    .kanban-col.mobile-active {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: calc(100vh - 112px);
+    }
+
+    /* Column header becomes a thin label row on mobile */
+    .kanban-col .col-header {
+        padding: 10px 14px !important;
+        background: var(--bg-hover) !important;
+        border-bottom: 1px solid var(--border) !important;
+        border-top: 0 !important;
+    }
+
+    /* Card body scrolls freely */
+    .kanban-col .col-body {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        padding: 10px 12px !important;
+    }
+
+    /* Cards inside col-body get full width */
+    .idea-card {
+        margin: 0 0 8px 0 !important;
+    }
+
+    /* Blog detail drawer — bottom sheet */
     .detail-drawer {
         width: 100vw !important;
         right: 0 !important;
         top: auto !important;
         bottom: -100vh !important;
-        height: 90vh !important;
+        height: 92vh !important;
         border-left: none !important;
         border-top: 1px solid var(--border) !important;
         border-radius: 16px 16px 0 0 !important;
@@ -723,107 +444,247 @@
     }
 
     .detail-drawer.open {
-        right: 0 !important;
         bottom: 0 !important;
+        right: 0 !important;
     }
+}
 
-    /* Bottom sheet drag handle indicator */
-    .detail-drawer::before,
-    .modal-box::before {
-        content: '';
-        display: block;
-        width: 36px;
-        height: 4px;
-        background: var(--border-accent);
-        border-radius: 2px;
-        margin: 10px auto 0;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SQL EXPLORER
+   Desktop: .workspace — grid with 280px left schema panel
+   Mobile:  left panel → horizontal chip strip above editor
+            results table → horizontal scroll
+══════════════════════════════════════════════════════════════════════════ */
+
+/* Schema chip strip — hidden on desktop */
+.mobile-schema-strip {
+    display: none;
+}
+
+@media (max-width: 768px) {
+
+    /* Show chip strip */
+    .mobile-schema-strip {
+        display: flex !important;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        background: var(--bg-hover);
+        border-bottom: 1px solid var(--border);
         flex-shrink: 0;
     }
 
-    /* Panels — no side border radius at full width */
-    .panel { border-radius: 6px; }
+    .mobile-schema-strip::-webkit-scrollbar { display: none; }
 
-    /* Badges — slightly larger for tap */
-    .badge { padding: 3px 9px; }
+    .mobile-schema-label {
+        font-size: 9px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        flex-shrink: 0;
+        font-family: 'DM Mono', monospace;
+    }
 
-    /* Section titles in drawers — sticky so you can read context while scrolling */
-    .drawer-sticky-header {
-        position: sticky;
-        top: 0;
+    .mobile-schema-chip {
+        flex-shrink: 0;
+        font-size: 10px;
+        padding: 3px 9px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
         background: var(--bg-card);
-        z-index: 10;
-        padding-top: 4px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-family: 'DM Mono', monospace;
+        white-space: nowrap;
+        transition: border-color 0.15s, color 0.15s;
     }
 
-    /* Remove horizontal overflow on main content */
-    .main-content {
-        overflow-x: hidden;
+    .mobile-schema-chip:active,
+    .mobile-schema-chip.active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(124,111,255,0.08);
     }
 
-    /* All tables get horizontal scroll wrapper */
-    table {
-        display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        max-width: 100%;
+    /* Workspace: disable side-by-side grid, stack vertically */
+    .workspace {
+        grid-template-columns: 1fr !important;
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        overflow: visible !important;
     }
 
-    /* Except card-style overrides — those tables we've already hidden */
-    .jobs-table { display: none !important; }
+    /* Hide the desktop left schema panel */
+    .table-browser {
+        display: none !important;
+    }
+
+    /* Right panel stacks naturally */
+    .right-panel {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* Editor pane — fixed height, no drag resize on mobile */
+    .editor-pane {
+        flex-shrink: 0 !important;
+        height: 180px !important;
+    }
+
+    /* CodeMirror fills editor pane minus toolbar */
+    .CodeMirror {
+        height: 144px !important;
+        font-size: 11px !important;
+    }
+
+    /* Hide the drag-to-resize handle */
+    .drag-handle { display: none !important; }
+
+    /* Results pane — natural height, no flex stretch */
+    .results-pane {
+        flex: none !important;
+        height: auto !important;
+        min-height: 240px !important;
+    }
+
+    .results-body {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-height: 320px !important;
+    }
+
+    /* Results table — allow horizontal scroll */
+    .results-table {
+        min-width: 480px !important;
+    }
+
+    /* Quick chip strip — horizontal scroll, no wrap */
+    .quick-queries {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+    }
+
+    .quick-queries::-webkit-scrollbar { display: none; }
+    .quick-chip { flex-shrink: 0 !important; }
+
+    /* Run button — shorter on mobile */
+    .run-btn .shortcut { display: none !important; }
+
+    /* Topbar actions — tighter */
+    .topbar-right { gap: 5px !important; }
 }
 
-@media (max-width: 480px) {
-    /* Slightly tighter page padding */
-    .main-content { padding: 10px 12px !important; }
 
-    /* Typography — slightly smaller on tiny screens */
-    .page-title { font-size: 13px; }
+/* ══════════════════════════════════════════════════════════════════════════
+   SMALL PHONES (≤ 430px)
+══════════════════════════════════════════════════════════════════════════ */
 
-    /* Hide verbose topbar elements to keep it clean */
-    .topbar-right > *:not(.btn):not(.hamburger) {
-        display: none;
-    }
+@media (max-width: 430px) {
 
-    /* Keep primary action button always visible */
-    .topbar-right .btn-primary { display: inline-flex !important; }
+    .main-content { padding: 10px !important; }
 
-    /* Toast — full width */
-    #toast {
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
-        max-width: none;
-        text-align: center;
-    }
-}
+    /* Reduce topbar text further */
+    .page-title { max-width: 140px !important; font-size: 12px !important; }
 
-@media (max-width: 360px) {
-    /* Minimum viable on smallest phones */
-    .main-content { padding: 8px 10px !important; }
+    /* Job cards */
+    .job-card-mobile-title { font-size: 11px !important; }
 
-    .btn { padding: 5px 10px; font-size: 9px; }
+    /* Blog cards */
+    .card-title { font-size: 11px !important; }
+    .card-narrative { font-size: 9px !important; }
 
-    .os-title { font-size: 11px; }
+    /* SQL editor even shorter */
+    .editor-pane { height: 160px !important; }
+    .CodeMirror { height: 124px !important; font-size: 10px !important; }
 }
 
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   SAFE AREA — iPhone notch / home indicator
-══════════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   FINANCE PAGES (upload, ledger, settings)
+   These pages are standalone HTML (not base.html extends) so the sidebar
+   and layout overrides above don't automatically apply. We re-declare the
+   key rules here scoped to their specific selectors.
+══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+    /* Upload page — column mapper 3→1, acct row 4→2 */
+    .col-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    .acct-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+    }
+
+    /* Preset bar — horizontal scroll */
+    .preset-bar {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        padding-bottom: 4px !important;
+    }
+    .preset-bar::-webkit-scrollbar { display: none; }
+    .preset-btn { flex-shrink: 0 !important; }
+
+    /* Settings page — 2-col grid → 1-col */
+    .settings-grid {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+        max-width: 100% !important;
+    }
+
+    /* Ledger filters — stack vertically */
+    .filter-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+    .filter-row .f-select,
+    .filter-row .f-input { width: 100% !important; }
+
+    /* Ledger table — hide Account column, allow h-scroll */
+    .ledger-table th:nth-child(3),
+    .ledger-table td:nth-child(3) { display: none !important; }
+    .ledger-table { font-size: 10px !important; min-width: 0 !important; }
+
+    /* Finance KPI row — keep 3 across but shrink values */
+    .kpi-value { font-size: 18px !important; }
+    .dash-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+}
+
+@media (max-width: 430px) {
+    .kpi-row { grid-template-columns: 1fr !important; }
+    .acct-row { grid-template-columns: 1fr !important; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SAFE AREA (iPhone notch / home bar)
+══════════════════════════════════════════════════════════════════════════ */
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
     @media (max-width: 768px) {
         .detail-drawer,
         .modal-box,
-        .ci-detail-panel,
-        .sidebar-footer,
-        .action-bar {
-            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        #job-detail-panel {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
         }
 
-        .topbar {
-            padding-left: max(14px, env(safe-area-inset-left));
-            padding-right: max(14px, env(safe-area-inset-right));
+        .jobs-mobile-fab {
+            bottom: calc(16px + env(safe-area-inset-bottom)) !important;
         }
     }
 }

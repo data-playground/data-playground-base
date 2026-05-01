@@ -3,23 +3,44 @@
    `idea`  = BlogIdea ORM object
    `toast` = optional success message
    `error` = optional error message
+
+   Changes vs original:
+     - Header row shows difficulty badge alongside project type
+     - Evidence form includes a difficulty selector so the user can
+       override or set difficulty on BYOI ideas
+     - Tutorial project type is surfaced in the type badge
 #}
 <div style="padding:0;" data-toast="{{ toast or '' }}">
 
     {# ── HEADER ── #}
     <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
         <div style="flex:1;min-width:0;padding-right:12px;">
-			<div style="display:flex;gap: 20px;">
-				<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:4px;">
-					{% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
-				</div>
-				{% if not idea.the_build %}
-				<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;
-							color:var(--yellow);margin-left:6px;">
-					⏳ Enriching…
-				</div>
-				{% endif %}
-			</div>
+
+            {# Badge row: project type + difficulty + enriching indicator #}
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                {# Project type #}
+                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
+                    {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
+                    {% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
+                    {% else %}⊕ New Build{% endif %}
+                </div>
+
+                {# Difficulty badge #}
+                {% if idea.difficulty %}
+                <span class="detail-difficulty-badge difficulty-{{ idea.difficulty }}">
+                    {% if idea.difficulty == 'starter' %}⬡ Starter
+                    {% elif idea.difficulty == 'weekend' %}◈ Weekend
+                    {% else %}◉ Ambitious{% endif %}
+                </span>
+                {% endif %}
+
+                {% if not idea.the_build %}
+                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">
+                    ⏳ Enriching…
+                </div>
+                {% endif %}
+            </div>
+
             <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text-primary);line-height:1.3;">
                 {{ idea.title_concept }}
             </div>
@@ -32,26 +53,27 @@
                 {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
             </div>
         </div>
-		<div style="display:flex;gap:6px;flex-shrink:0;">
-			<!-- Archive (move to backlog) -->
-			<button
-				hx-patch="/blog/ideas/{{ idea.id }}/archive"
-				hx-target="#detail-drawer"
-				hx-swap="innerHTML"
-				style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
-				title="Move back to backlog">
-				↩ Backlog
-			</button>
-			<!-- Delete permanently -->
-			<button
-				onclick="deleteIdea({{ idea.id }})"
-				style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
-				title="Delete permanently">
-				✕ Delete
-			</button>
-			<!-- Existing close button -->
-			<button onclick="closeDetail()" ...>✕ Close</button>
-		</div>
+
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/archive"
+                hx-target="#detail-drawer"
+                hx-swap="innerHTML"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
+                title="Move back to backlog">
+                ↩ Backlog
+            </button>
+            <button
+                onclick="deleteIdea({{ idea.id }})"
+                style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
+                title="Delete permanently">
+                ✕ Delete
+            </button>
+            <button onclick="closeDetail()"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;">
+                ✕ Close
+            </button>
+        </div>
     </div>
 
     {% if error %}
@@ -90,44 +112,73 @@
         <div>
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:10px;">
                 ① Evidence
-                <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">code snippets + author notes</span>
+                <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">code snippets + author notes + difficulty</span>
             </div>
             <form id="evidence-form-{{ idea.id }}">
-				<!-- Code Project dropdown -->
-				<div style="margin-bottom:10px;">
-					<label class="form-label">Linked Code Project (optional)</label>
-					<select name="code_project_id"
-						style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
-							   padding:8px 10px;border:1px solid var(--border);
-							   background:var(--bg-hover);color:var(--text-primary);
-							   border-radius:5px;outline:none;">
-						<option value="">— none —</option>
-						{% for p in code_projects %}
-						<option value="{{ p.id }}"
-							{% if idea.code_project_id == p.id %}selected{% endif %}>
-							{{ p.project_name }} ({{ p.github_repo }})
-						</option>
-						{% endfor %}
-					</select>
-				</div>
 
-				<!-- Code File dropdown -->
-				<div style="margin-bottom:10px;">
-					<label class="form-label">Linked Code File (optional — overrides project)</label>
-					<select name="code_file_id"
-						style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
-							   padding:8px 10px;border:1px solid var(--border);
-							   background:var(--bg-hover);color:var(--text-primary);
-							   border-radius:5px;outline:none;">
-						<option value="">— none —</option>
-						{% for f in code_files %}
-						<option value="{{ f.id }}"
-							{% if idea.code_file_id == f.id %}selected{% endif %}>
-							{{ f.file_name }} — {{ f.github_path }}
-						</option>
-						{% endfor %}
-					</select>
-				</div>
+                {# ── DIFFICULTY SELECTOR ─────────────────────────────────── #}
+                <div style="margin-bottom:10px;">
+                    <label class="form-label">Difficulty</label>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        {% for level, icon, desc in [
+                            ('starter',   '⬡', '1-2 evenings · 1-2 tools · one clear concept'),
+                            ('weekend',   '◈', 'A full weekend · 2-3 tools · small system'),
+                            ('ambitious', '◉', 'Multi-week · complex architecture'),
+                        ] %}
+                        <label style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;
+                                      border:1px solid {% if idea.difficulty == level %}var(--accent){% else %}var(--border){% endif %};
+                                      border-radius:5px;cursor:pointer;flex:1;min-width:120px;
+                                      background:{% if idea.difficulty == level %}var(--accent-dim){% else %}transparent{% endif %};
+                                      transition:all .15s;">
+                            <input type="radio" name="difficulty" value="{{ level }}"
+                                   {% if idea.difficulty == level %}checked{% endif %}
+                                   style="margin-top:2px;accent-color:var(--accent);"
+                                   onchange="highlightDifficultyOption(this)">
+                            <div>
+                                <div style="font-size:10px;font-weight:500;color:var(--text-primary);">{{ icon }} {{ level | capitalize }}</div>
+                                <div style="font-size:9px;color:var(--text-muted);margin-top:1px;">{{ desc }}</div>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# Code Project dropdown #}
+                <div style="margin-bottom:10px;">
+                    <label class="form-label">Linked Code Project (optional)</label>
+                    <select name="code_project_id"
+                        style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
+                               padding:8px 10px;border:1px solid var(--border);
+                               background:var(--bg-hover);color:var(--text-primary);
+                               border-radius:5px;outline:none;">
+                        <option value="">— none —</option>
+                        {% for p in code_projects %}
+                        <option value="{{ p.id }}"
+                            {% if idea.code_project_id == p.id %}selected{% endif %}>
+                            {{ p.project_name }} ({{ p.github_repo }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Code File dropdown #}
+                <div style="margin-bottom:10px;">
+                    <label class="form-label">Linked Code File (optional — overrides project)</label>
+                    <select name="code_file_id"
+                        style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
+                               padding:8px 10px;border:1px solid var(--border);
+                               background:var(--bg-hover);color:var(--text-primary);
+                               border-radius:5px;outline:none;">
+                        <option value="">— none —</option>
+                        {% for f in code_files %}
+                        <option value="{{ f.id }}"
+                            {% if idea.code_file_id == f.id %}selected{% endif %}>
+                            {{ f.file_name }} — {{ f.github_path }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <div style="margin-bottom:10px;">
                     <label class="form-label">Code Snippets</label>
                     <textarea name="code_content" rows="4"
@@ -184,7 +235,6 @@
             </div>
 
             {% if idea.draft_v1 %}
-            {# Tab switcher for edit / preview / split #}
             <div style="display:flex;gap:6px;margin-bottom:6px;">
                 <button onclick="setEditorTab('edit')" id="tab-edit"
                     style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:3px;cursor:pointer;">Edit</button>
@@ -224,7 +274,7 @@
 
         <div style="border-top:1px solid var(--border);"></div>
 
-        {# ── TRIGGER 2: FINALIZE (Refiner + Editor) ── #}
+        {# ── TRIGGER 2: FINALIZE ── #}
         <div>
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;">
                 ④ Finalize
@@ -246,7 +296,7 @@
             {% endif %}
         </div>
 
-        {# ── FINAL ARTICLE (if available) ── #}
+        {# ── FINAL ARTICLE ── #}
         {% if idea.final_article %}
         <div style="border-top:1px solid var(--border);padding-top:14px;">
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px;">⑤ Final Article</div>
@@ -279,7 +329,17 @@
 </div>
 
 <script>
-// Evidence save
+// Highlight the selected difficulty option card
+function highlightDifficultyOption(radio) {
+    const form = radio.closest('form');
+    form.querySelectorAll('input[name="difficulty"]').forEach(r => {
+        const label = r.closest('label');
+        label.style.borderColor = r.checked ? 'var(--accent)' : 'var(--border)';
+        label.style.background  = r.checked ? 'var(--accent-dim)' : 'transparent';
+    });
+}
+
+// Evidence save — now also persists difficulty
 async function saveEvidence(id) {
     const form = document.getElementById(`evidence-form-${id}`);
     const fd = new FormData(form);
@@ -344,7 +404,6 @@ async function deleteIdea(id) {
     const resp = await fetch(`/blog/ideas/${id}`, { method: 'DELETE' });
     if (resp.ok) {
         closeDetail();
-        // Remove the card from the kanban board
         const card = document.getElementById(`blog-card-${id}`);
         if (card) card.remove();
         showToast('Idea deleted.');

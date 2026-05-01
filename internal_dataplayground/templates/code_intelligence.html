@@ -12,149 +12,265 @@
 
 {% block extra_css %}
 <style>
-    /* ── TWO-PANEL LAYOUT ── */
+/* ── TWO-PANEL LAYOUT (desktop) ─────────────────────────────────────── */
+.ci-workspace {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ── LEFT: PROJECT LIST ─────────────────────────────────────────────── */
+.project-list-panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-card);
+}
+[data-theme="dark"] .project-list-panel,
+[data-theme="mixed"] .project-list-panel { background: #111318; }
+
+.project-list-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.project-list-header-label {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.project-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.project-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background var(--transition);
+    border-left: 2px solid transparent;
+}
+.project-card:hover { background: rgba(124,111,255,0.06); }
+.project-card.active {
+    background: rgba(124,111,255,0.10);
+    border-left-color: var(--accent);
+}
+.project-card-icon { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
+.project-card-info { flex: 1; min-width: 0; }
+.project-card-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.project-card.active .project-card-name { color: var(--accent); }
+.project-card-repo {
+    font-size: 9px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+.project-card-badges { display: flex; gap: 4px; flex-shrink: 0; }
+.project-card-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity var(--transition), color var(--transition);
+}
+.project-card:hover .project-card-delete { opacity: 1; }
+.project-card-delete:hover { color: var(--red); }
+
+/* ── RIGHT PANEL ─────────────────────────────────────────────────────── */
+.ci-detail-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-card);
+}
+
+.ci-detail-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--text-muted);
+}
+.ci-detail-empty .empty-icon { font-size: 36px; opacity: 0.3; }
+.ci-detail-empty p { font-size: 12px; text-align: center; line-height: 1.7; }
+
+/* ── MODAL ───────────────────────────────────────────────────────────── */
+.modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 400;
+    align-items: center;
+    justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+.modal-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 520px;
+    max-width: 95vw;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+}
+.modal-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.modal-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+.modal-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:2px 6px; }
+.modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.modal-foot {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   MOBILE OVERRIDES
+   Strategy:
+   - .ci-workspace goes from 2-col grid → single column
+   - .project-list-panel becomes full-width scrollable list
+   - .ci-detail-panel becomes a fixed bottom-sheet overlay
+   - A close button is shown inside the detail panel on mobile
+════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+    /* Single column layout */
     .ci-workspace {
-        display: grid;
-        grid-template-columns: 300px 1fr;
-        gap: 0;
-        height: 100%;
-        overflow: hidden;
+        grid-template-columns: 1fr !important;
+        height: auto !important;
+        overflow: visible !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
 
-    /* ── LEFT: PROJECT LIST ── */
+    /* Project list takes full width, natural height */
     .project-list-panel {
-        border-right: 1px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        background: var(--bg-card);
-    }
-    [data-theme="dark"] .project-list-panel,
-    [data-theme="mixed"] .project-list-panel { background: #111318; }
-
-    .project-list-header {
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--border);
-        flex-shrink: 0;
-    }
-    .project-list-header-label {
-        font-size: 9px;
-        font-weight: 500;
-        letter-spacing: .16em;
-        text-transform: uppercase;
-        color: var(--text-muted);
+        border-right: none !important;
+        border-bottom: 1px solid var(--border) !important;
+        height: auto !important;
+        overflow: visible !important;
     }
 
     .project-list-scroll {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px 0;
+        max-height: none !important;
+        overflow-y: visible !important;
     }
 
+    /* Project cards — larger touch targets */
     .project-card {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 14px;
-        cursor: pointer;
-        transition: background var(--transition);
-        border-left: 2px solid transparent;
+        padding: 12px 16px !important;
+        min-height: 52px !important;
     }
-    .project-card:hover { background: rgba(124,111,255,0.06); }
-    .project-card.active {
-        background: rgba(124,111,255,0.10);
-        border-left-color: var(--accent);
-    }
-    .project-card-icon { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
-    .project-card-info { flex: 1; min-width: 0; }
-    .project-card-name {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--text-primary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .project-card.active .project-card-name { color: var(--accent); }
-    .project-card-repo {
-        font-size: 9px;
-        color: var(--text-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-top: 1px;
-    }
-    .project-card-badges { display: flex; gap: 4px; flex-shrink: 0; }
-    .project-card-delete {
-        background: none;
-        border: none;
-        color: var(--text-muted);
-        cursor: pointer;
-        font-size: 10px;
-        padding: 2px 4px;
-        border-radius: 3px;
-        opacity: 0;
-        transition: opacity var(--transition), color var(--transition);
-    }
-    .project-card:hover .project-card-delete { opacity: 1; }
-    .project-card-delete:hover { color: var(--red); }
+    .project-card-name { font-size: 12px !important; }
+    .project-card-delete { opacity: 1 !important; } /* always visible on mobile */
 
-    /* ── RIGHT PANEL ── */
+    /* Detail panel — fixed bottom sheet */
     .ci-detail-panel {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        background: var(--bg-card);
+        position: fixed !important;
+        bottom: -100vh !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 88vh !important;
+        border-radius: 16px 16px 0 0 !important;
+        border-top: 1px solid var(--border) !important;
+        z-index: 300 !important;
+        overflow-y: auto !important;
+        transition: bottom 0.3s cubic-bezier(0.4,0,0.2,1) !important;
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.3) !important;
     }
 
-    .ci-detail-empty {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        gap: 12px;
-        color: var(--text-muted);
+    .ci-detail-panel.mobile-open {
+        bottom: 0 !important;
     }
-    .ci-detail-empty .empty-icon { font-size: 36px; opacity: 0.3; }
-    .ci-detail-empty p { font-size: 12px; text-align: center; line-height: 1.7; }
 
-    /* ── MODAL ── */
-    .modal-backdrop {
+    /* Drag handle indicator at top of sheet */
+    .ci-detail-panel::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        margin: 10px auto 0;
+        flex-shrink: 0;
+    }
+
+    /* Backdrop for the detail sheet */
+    .ci-detail-backdrop {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.5);
-        z-index: 400;
+        background: rgba(0,0,0,0.4);
+        z-index: 299;
+    }
+    .ci-detail-backdrop.visible { display: block; }
+
+    /* Close button inside detail panel — shown only on mobile */
+    .ci-mobile-close-btn {
+        display: flex !important;
         align-items: center;
-        justify-content: center;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal-box {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        width: 520px;
-        max-width: 95vw;
-        box-shadow: 0 8px 40px rgba(0,0,0,0.3);
-    }
-    .modal-head {
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .modal-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
-    .modal-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:2px 6px; }
-    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-    .modal-foot {
-        padding: 12px 20px;
-        border-top: 1px solid var(--border);
-        display: flex;
         justify-content: flex-end;
-        gap: 8px;
+        padding: 8px 16px 0;
+        flex-shrink: 0;
     }
+
+    /* Modal — bottom sheet */
+    .modal-backdrop { align-items: flex-end !important; }
+    .modal-box {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        border-radius: 16px 16px 0 0 !important;
+        margin: 0 !important;
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+    }
+}
+
+/* Close button hidden on desktop */
+.ci-mobile-close-btn {
+    display: none;
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    @media (max-width: 768px) {
+        .ci-detail-panel {
+            padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        }
+    }
+}
 </style>
 {% endblock %}
 
@@ -171,8 +287,21 @@
         </div>
     </div>
 
-    {# ── RIGHT: DETAIL PANEL ── #}
+    {# ── RIGHT: DETAIL PANEL
+         Desktop: sits beside the project list in the grid.
+         Mobile:  fixed bottom sheet, opened by openProject().
+    ── #}
     <div class="ci-detail-panel" id="ci-detail-panel">
+        {# Mobile close button — hidden on desktop via CSS #}
+        <div class="ci-mobile-close-btn">
+            <button onclick="closeMobileDetail()"
+                style="background:transparent;border:1px solid var(--border);
+                       color:var(--text-muted);border-radius:5px;
+                       padding:5px 12px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;">
+                ✕ Close
+            </button>
+        </div>
         <div class="ci-detail-empty">
             <div class="empty-icon">◈</div>
             <p>Select a project to explore its files<br>or create a new one to get started.</p>
@@ -180,6 +309,9 @@
     </div>
 
 </div>
+
+{# Backdrop for mobile detail sheet #}
+<div class="ci-detail-backdrop" id="ci-detail-backdrop" onclick="closeMobileDetail()"></div>
 
 {# ── NEW PROJECT MODAL ── #}
 <div class="modal-backdrop" id="new-project-modal">
@@ -284,12 +416,44 @@ function openProject(projectId) {
         swap: 'innerHTML',
     });
 
-    // FIX 3: Update URL with query param so a page refresh returns to same project.
-    // This also allows bookmarking/linking to a specific project.
+    // On mobile, open the bottom sheet
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        openMobileDetail();
+    }
+
     const url = new URL(window.location);
     url.searchParams.set('project_id', projectId);
     window.history.replaceState({}, '', url);
 }
+
+// ── MOBILE DETAIL SHEET ────────────────────────────────────────────────────────
+function openMobileDetail() {
+    const panel = document.getElementById('ci-detail-panel');
+    const backdrop = document.getElementById('ci-detail-backdrop');
+    panel.classList.add('mobile-open');
+    backdrop.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileDetail() {
+    const panel = document.getElementById('ci-detail-panel');
+    const backdrop = document.getElementById('ci-detail-backdrop');
+    panel.classList.remove('mobile-open');
+    backdrop.classList.remove('visible');
+    document.body.style.overflow = '';
+    // Deselect the active project card
+    document.querySelectorAll('.project-card').forEach(c => c.classList.remove('active'));
+    // Clear URL param
+    const url = new URL(window.location);
+    url.searchParams.delete('project_id');
+    window.history.replaceState({}, '', url);
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMobileDetail();
+});
 
 // ── DELETE PROJECT ─────────────────────────────────────────────────────────────
 async function deleteProject(id, name) {
@@ -297,12 +461,22 @@ async function deleteProject(id, name) {
     const resp = await fetch(`/code-intel/projects/${id}`, { method: 'DELETE' });
     if (resp.ok) {
         document.getElementById('project-list-panel').innerHTML = await resp.text();
+        // Reset detail panel
         document.getElementById('ci-detail-panel').innerHTML = `
+            <div class="ci-mobile-close-btn">
+                <button onclick="closeMobileDetail()"
+                    style="background:transparent;border:1px solid var(--border);
+                           color:var(--text-muted);border-radius:5px;
+                           padding:5px 12px;font-family:'DM Mono',monospace;
+                           font-size:10px;cursor:pointer;">
+                    ✕ Close
+                </button>
+            </div>
             <div class="ci-detail-empty">
                 <div class="empty-icon">◈</div>
                 <p>Select a project to view its files.</p>
             </div>`;
-        // Clear the query param since project is gone
+        closeMobileDetail();
         const url = new URL(window.location);
         url.searchParams.delete('project_id');
         window.history.replaceState({}, '', url);
@@ -310,16 +484,11 @@ async function deleteProject(id, name) {
     }
 }
 
-// ── FIX 3: AUTO-LOAD PROJECT FROM QUERY PARAM ON PAGE LOAD ────────────────────
-// If ?project_id=N is in the URL, auto-select and load that project's detail.
+// ── AUTO-LOAD PROJECT FROM QUERY PARAM ────────────────────────────────────────
 (function () {
-    // The server passes preload_project_id from the router when ?project_id= is set.
-    // We use it here rather than parsing the URL ourselves for reliability.
     const preloadId = {{ preload_project_id | tojson }};
     if (preloadId) {
-        // Wait for HTMX to be ready (it's loaded async in base.html)
         document.addEventListener('DOMContentLoaded', () => {
-            // Small delay to ensure HTMX is initialized
             setTimeout(() => openProject(preloadId), 150);
         });
     }

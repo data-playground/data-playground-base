@@ -7,10 +7,24 @@
 {% block extra_css %}<link rel="stylesheet" href="/static/css/explorer.css">{% endblock %}
 {% block content %}
 
-    <!-- WORKSPACE -->
+    <!-- ═══════════════════════════════════════════════════════════
+         MOBILE SCHEMA STRIP  (hidden on desktop via mobile.css)
+         On desktop the left .table-browser panel serves this role.
+         On mobile that panel is hidden and this chip strip replaces it.
+    ═══════════════════════════════════════════════════════════ -->
+    <div class="mobile-schema-strip" id="mobile-schema-strip">
+        <span class="mobile-schema-label">Tables</span>
+        <!-- Chips are populated by JS once schemaData is loaded -->
+    </div>
+
+    <!-- WORKSPACE
+         Desktop: grid with left .table-browser + right .right-panel (unchanged).
+         Mobile:  .table-browser hidden, .right-panel full width,
+                  mobile-schema-strip replaces it above.
+    -->
     <div class="workspace">
 
-        <!-- TABLE BROWSER -->
+        <!-- TABLE BROWSER (desktop only — hidden on mobile via mobile.css) -->
         <div class="table-browser">
             <div class="browser-header">
                 <div class="browser-title">Schema · jobs</div>
@@ -44,7 +58,7 @@ ORDER BY fit_score DESC
 LIMIT 25;</textarea>
             </div>
 
-            <!-- Drag handle -->
+            <!-- Drag handle (hidden on mobile via mobile.css) -->
             <div class="drag-handle" id="drag-handle"></div>
 
             <!-- Results pane -->
@@ -94,7 +108,7 @@ const editor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
     }
 });
 
-// ── DRAG-TO-RESIZE editor/results ─────────────────────────────────────────────
+// ── DRAG-TO-RESIZE editor/results (desktop only) ──────────────────────────────
 const dragHandle = document.getElementById('drag-handle');
 const editorPane = document.getElementById('editor-pane');
 let isDragging = false;
@@ -112,7 +126,7 @@ document.addEventListener('mousemove', e => {
     const delta = e.clientY - startY;
     const newH = Math.max(80, Math.min(startH + delta, window.innerHeight - 200));
     editorPane.style.height = newH + 'px';
-    editor.setSize(null, (newH - 36) + 'px'); // subtract toolbar height
+    editor.setSize(null, (newH - 36) + 'px');
 });
 document.addEventListener('mouseup', () => {
     isDragging = false;
@@ -121,7 +135,7 @@ document.addEventListener('mouseup', () => {
 });
 
 // ── SCHEMA / TABLE BROWSER ─────────────────────────────────────────────────────
-let schemaData = {};       // { tableName: { columns: [...], row_count: N } }
+let schemaData = {};
 let expandedTable = null;
 let activeTable = null;
 
@@ -131,6 +145,7 @@ async function loadSchema() {
         schemaData = await resp.json();
         renderTableList('');
         buildQuickChips();
+        buildMobileSchemaStrip(); // populate mobile chip strip
     } catch (e) {
         document.getElementById('table-list').innerHTML =
             `<div class="state-box" style="height:100px;"><div class="state-text" style="color:var(--red);">Failed to load schema</div></div>`;
@@ -182,11 +197,14 @@ function selectTable(tableName) {
     } else {
         expandedTable = tableName;
         activeTable = tableName;
-        // Auto-populate a SELECT query
         const cols = schemaData[tableName]?.columns?.map(c => c.name).slice(0, 8).join(', ') || '*';
         editor.setValue(`SELECT ${cols}\nFROM ${tableName}\nLIMIT 100;`);
     }
     renderTableList(document.getElementById('table-search').value);
+    // Also highlight the mobile chip
+    document.querySelectorAll('.mobile-schema-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.table === tableName);
+    });
 }
 
 function filterTables(val) {
@@ -198,6 +216,27 @@ function insertColumnName(colName) {
     const cursor = doc.getCursor();
     doc.replaceRange(colName, cursor);
     editor.focus();
+}
+
+// ── MOBILE SCHEMA STRIP ────────────────────────────────────────────────────────
+// Builds the horizontal chip strip shown only on mobile (≤768px).
+// Clicking a chip loads the same SELECT as clicking a table in the left panel.
+function buildMobileSchemaStrip() {
+    const strip = document.getElementById('mobile-schema-strip');
+    if (!strip) return;
+    const label = strip.querySelector('.mobile-schema-label');
+
+    Object.keys(schemaData).forEach(tableName => {
+        const chip = document.createElement('button');
+        chip.className = 'mobile-schema-chip';
+        chip.dataset.table = tableName;
+        chip.textContent = tableName;
+        chip.onclick = () => {
+            selectTable(tableName);
+            editor.focus();
+        };
+        strip.appendChild(chip);
+    });
 }
 
 // ── QUICK CHIPS ────────────────────────────────────────────────────────────────
@@ -238,7 +277,6 @@ async function runQuery() {
     const sql = editor.getValue().trim();
     if (!sql) return;
 
-    // Block write operations client-side (server also enforces this)
     if (BLOCKED.test(sql)) {
         setStatus('blocked', '');
         document.getElementById('results-body').innerHTML = `
@@ -323,7 +361,6 @@ function renderResults(rows, columns) {
     document.getElementById('results-body').innerHTML =
         `<table class="results-table">${thead}${tbody}</table>`;
 
-    // Store for sort
     window._currentRows = rows;
     window._currentCols = columns;
 }
@@ -358,15 +395,12 @@ function setStatus(state, msg) {
 function clearEditor() { editor.setValue(''); editor.focus(); }
 function copyQuery() {
     navigator.clipboard.writeText(editor.getValue()).then(() => {
-        const btn = document.querySelector('.editor-btn');
-        // Find the copy button specifically
         document.querySelectorAll('.editor-btn').forEach(b => {
             if (b.textContent === 'Copy') { b.textContent = '✓ Copied'; setTimeout(() => b.textContent = 'Copy', 1500); }
         });
     });
 }
 function formatQuery() {
-    // Basic formatting — uppercase keywords, trim whitespace
     const keywords = ['select','from','where','join','left join','right join','inner join',
                       'group by','order by','having','limit','offset','on','and','or',
                       'as','distinct','count','sum','avg','max','min','case','when','then','else','end'];

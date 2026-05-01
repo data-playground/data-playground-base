@@ -177,6 +177,8 @@ async def idea_detail(
 
 # ── HITL 1 — Save evidence (code snippets + author notes) ─────────────────────
 
+from models import DIFFICULTY_LEVELS  # add this import at the top of blog.py
+
 @router.patch("/ideas/{idea_id}/evidence", response_class=HTMLResponse)
 async def save_evidence(
     idea_id: int,
@@ -190,23 +192,42 @@ async def save_evidence(
 
     idea.code_content  = str(form.get("code_content", "")).strip() or None
     idea.author_notes  = str(form.get("author_notes", "")).strip() or None
-    
-    # Save the code file / project link
-    code_file_id = form.get("code_file_id")
+
+    # Difficulty — validate against allowed values
+    difficulty_raw = str(form.get("difficulty", "")).strip()
+    if difficulty_raw in DIFFICULTY_LEVELS:
+        idea.difficulty = difficulty_raw
+    # If not provided or invalid, leave existing value unchanged
+
+    # Code file / project links
+    code_file_id    = form.get("code_file_id")
     code_project_id = form.get("code_project_id")
-    idea.code_file_id    = int(code_file_id) if code_file_id else None
+    idea.code_file_id    = int(code_file_id)    if code_file_id    else None
     idea.code_project_id = int(code_project_id) if code_project_id else None
-    
+
     idea.status     = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
     idea.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(idea)
 
+    # Re-fetch code files and projects for the detail template
+    files_result = await db.execute(select(CodeFile).order_by(CodeFile.file_name))
+    code_files = files_result.scalars().all()
+
+    projects_result = await db.execute(select(CodeProject).order_by(CodeProject.project_name))
+    code_projects = projects_result.scalars().all()
+
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {"request": request, "idea": idea,
-         "toast": "Evidence saved. Ready to trigger the Ghostwriter."},
+        {
+            "request": request,
+            "idea": idea,
+            "code_files": code_files,
+            "code_projects": code_projects,
+            "toast": "Evidence saved. Ready to trigger the Ghostwriter.",
+        },
     )
+
 
 # ── Trigger 1 — Ghostwriter DAG ───────────────────────────────────────────────
 

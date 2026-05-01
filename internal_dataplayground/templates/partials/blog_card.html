@@ -3,21 +3,38 @@
    `idea` = BlogIdea ORM object
 #}
 <div class="idea-card" id="blog-card-{{ idea.id }}" onclick="openDetail({{ idea.id }})">
-	<div style="display:flex;gap: 20px;">
-		<div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% else %}badge-new{% endif %}">
-			{% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset{% else %}⊕ New Build{% endif %}
-		</div>
-		{% if not idea.the_build %}
-		<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;
-					color:var(--yellow);margin-left:6px;">
-			⏳ Enriching…
-		</div>
-		{% endif %}
-	</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
+
+        {# Project type badge #}
+        <div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% elif idea.project_type.value == 'tutorial' %}badge-tutorial{% else %}badge-new{% endif %}">
+            {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
+            {% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
+            {% else %}⊕ New Build{% endif %}
+        </div>
+
+        {# Difficulty badge — only shown when set #}
+        {% if idea.difficulty %}
+        <div class="card-difficulty-badge difficulty-{{ idea.difficulty }}">
+            {% if idea.difficulty == 'starter' %}⬡ Starter
+            {% elif idea.difficulty == 'weekend' %}◈ Weekend
+            {% else %}◉ Ambitious{% endif %}
+        </div>
+        {% endif %}
+
+        {% if not idea.the_build %}
+        <div style="font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+                    color:var(--yellow);">
+            ⏳ Enriching…
+        </div>
+        {% endif %}
+    </div>
+
     <div class="card-title">{{ idea.title_concept }}</div>
+
     {% if idea.the_narrative %}
     <div class="card-narrative">{{ idea.the_narrative }}</div>
     {% endif %}
+
     <div class="card-footer">
         <span class="card-status">
             <span class="status-pip

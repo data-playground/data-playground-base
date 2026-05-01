@@ -330,12 +330,16 @@ class BlogIdeaStatus(enum.Enum):
 
     @property
     def kanban_column(self) -> str:
-        """Maps status → kanban column name."""
         if self.value in ("idea_generated", "waiting_for_writing_trigger"):
             return "backlog"
         if self.value in ("writing_in_progress", "waiting_for_review", "review_completed"):
             return "in_progress"
         return "done"
+
+
+# Allowed difficulty values — enforced at the application layer.
+# Stored as VARCHAR(20) in the DB (not ENUM) for forward flexibility.
+DIFFICULTY_LEVELS = ("starter", "weekend", "ambitious")
 
 
 class BlogIdea(Base):
@@ -348,6 +352,10 @@ class BlogIdea(Base):
         nullable=False,
         default=BlogProjectType.NEW_BUILD,
     )
+
+    # NEW: difficulty level — 'starter' | 'weekend' | 'ambitious'
+    # Nullable so legacy rows don't break. Application always sets it on insert.
+    difficulty: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Blueprint fields
     the_build:         Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -363,6 +371,7 @@ class BlogIdea(Base):
 
     # AI artifacts
     draft_v1:          Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    draft_v2:          Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     user_review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     final_article:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -378,9 +387,6 @@ class BlogIdea(Base):
         default=BlogIdeaStatus.IDEA_GENERATED,
     )
     airflow_run_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    
-    # v2 draft
-    draft_v2: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Code Intelligence links
     code_file_id: Mapped[Optional[int]] = mapped_column(
@@ -406,18 +412,38 @@ class BlogIdea(Base):
         onupdate=datetime.datetime.utcnow, nullable=False
     )
 
+    @property
+    def difficulty_label(self) -> str:
+        """Human-readable difficulty label for templates."""
+        return {
+            "starter":   "⬡ Starter",
+            "weekend":   "◈ Weekend",
+            "ambitious": "◉ Ambitious",
+        }.get(self.difficulty or "", "—")
+
+    @property
+    def difficulty_color_class(self) -> str:
+        """CSS variable name for the difficulty colour in templates."""
+        return {
+            "starter":   "var(--green)",
+            "weekend":   "var(--yellow)",
+            "ambitious": "var(--red)",
+        }.get(self.difficulty or "", "var(--text-muted)")
+
 
 # ── Pydantic schemas ──
 
 class BlogIdeaCreate(BaseModel):
     raw_idea_input: str
     title_concept: Optional[str] = None
+    difficulty: Optional[str] = None
 
 
 class BlogIdeaResponse(BaseModel):
     id: int
     title_concept: str
     project_type: BlogProjectType
+    difficulty: Optional[str]
     status: BlogIdeaStatus
     the_narrative: Optional[str]
     created_at: datetime.datetime
