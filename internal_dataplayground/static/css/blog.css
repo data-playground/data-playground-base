@@ -34,7 +34,7 @@
 /* ── IDEA CARD ── */
 .idea-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px; cursor:pointer; transition:all var(--transition); }
 .idea-card:hover { border-color:var(--accent); box-shadow:var(--shadow); transform:translateY(-1px); }
-.card-type-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:3px; font-size:9px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px; }
+.card-type-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:3px; font-size:9px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; }
 .badge-existing { background:rgba(0,201,128,0.12); color:var(--green); }
 .badge-new      { background:rgba(124,111,255,0.12); color:var(--accent); }
 .card-title { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; color:var(--text-primary); margin-bottom:6px; line-height:1.4; }
