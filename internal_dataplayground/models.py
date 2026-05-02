@@ -305,6 +305,7 @@ BLOG MODULE — append these classes to the bottom of models.py
 class BlogProjectType(enum.Enum):
     EXISTING_ASSET = "existing_asset"
     NEW_BUILD      = "new_build"
+    TUTORIAL       = "tutorial"
 
 
 class BlogIdeaStatus(enum.Enum):
