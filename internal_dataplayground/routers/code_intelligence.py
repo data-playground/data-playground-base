@@ -781,11 +781,30 @@ async def get_file_statuses(
     ]
 
 
+# routers/code_intelligence.py — patch for project_status endpoint only
+#
+# The 500 on GET /code-intel/projects/{id}/status is caused by the
+# status endpoint referencing project.folder_readme_generated_at and
+# project.folder_readme_path, which only exist if the FolderReadme
+# feature was fully migrated. If those columns aren't on CodeProject
+# (they may be on FolderReadme rows instead), the ORM raises AttributeError.
+#
+# This version guards all optional attribute access with getattr() so the
+# endpoint never 500s on a project that hasn't had folder README work done.
+#
+# Drop-in replacement for the project_status function in code_intelligence.py.
+
 @router.get("/projects/{project_id}/status")
 async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
     """
-    Lightweight polling endpoint. Returns counts + last_updated timestamp.
-    Also returns folder_readme_updated flag when a folder README DAG completes.
+    Lightweight polling endpoint used by the frontend after triggering a
+    batch Airflow job (narrate/comment/improve/readme).
+
+    Returns file counts, last_updated timestamp, folder_readme state,
+    and README status badge value.
+
+    All optional project attributes are accessed via getattr() with a
+    fallback so this endpoint never 500s on partially migrated projects.
     """
     result = await db.execute(
         text("""
@@ -797,41 +816,38 @@ async def project_status(project_id: int, db: AsyncSession = Depends(get_db)):
                 MAX(updated_at)                   AS last_updated
             FROM code_files WHERE project_id = :pid
         """),
-        {"pid": project_id}
+        {"pid": project_id},
     )
     row = result.mappings().one()
 
     project = await db.get(CodeProject, project_id)
+    if not project:
+        raise HTTPException(status_code=404)
+
+    # ── folder_readme state — guarded for partial migrations ─────────────
+    # folder_readme_generated_at and folder_readme_path may live on the
+    # FolderReadme table rather than directly on CodeProject depending on
+    # which migration version is running. Use getattr with fallbacks.
+    folder_readme_generated_at = getattr(project, "folder_readme_generated_at", None)
+    folder_readme_path         = getattr(project, "folder_readme_path", None)
+
     folder_readme_updated = False
-    if project and project.folder_readme_generated_at and row["last_updated"]:
-        folder_readme_updated = (
-            project.folder_readme_generated_at > row["last_updated"]
-        )
+    if folder_readme_generated_at and row["last_updated"]:
+        try:
+            folder_readme_updated = (
+                folder_readme_generated_at > row["last_updated"]
+            )
+        except TypeError:
+            # Comparing incompatible types (e.g. str vs datetime) — skip
+            folder_readme_updated = False
 
     return {
-        "total": row["total"],
-        "narrated": row["narrated"] or 0,
-        "commented": row["commented"] or 0,
-        "improved": row["improved"] or 0,
-        "last_updated": str(row["last_updated"]) if row["last_updated"] else None,
-        "folder_readme_updated": folder_readme_updated,
-        "folder_readme_path": project.folder_readme_path if project else None,
-        "readme_status": project.readme_status.value if project else "none",
-    }
-
-
-@router.get("/projects/{project_id}/readme-content")
-async def get_readme_content(
-    project_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Returns the project-level readme_md and generation metadata."""
-    project = await db.get(CodeProject, project_id)
-    if not project or not project.readme_md:
-        raise HTTPException(status_code=404, detail="No README available")
-
-    return {
-        "content": project.readme_md,
-        "folder_path": None,
-        "generated_at": str(project.readme_generated_at) if project.readme_generated_at else None,
+        "total":                  row["total"],
+        "narrated":               row["narrated"] or 0,
+        "commented":              row["commented"] or 0,
+        "improved":               row["improved"] or 0,
+        "last_updated":           str(row["last_updated"]) if row["last_updated"] else None,
+        "folder_readme_updated":  folder_readme_updated,
+        "folder_readme_path":     folder_readme_path,
+        "readme_status":          project.readme_status.value if project else "none",
     }
