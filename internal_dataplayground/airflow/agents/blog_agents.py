@@ -209,6 +209,8 @@ def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
 _CEREBRAS_BACKOFF = [75, 150, 300, 600]
 
 def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
+    log.info("_cerebras() v2 — retry loop active, backoff=[75,150,300,600]")  # ← add this
+
     from cerebras.cloud.sdk import Cerebras
     import time, random
 
