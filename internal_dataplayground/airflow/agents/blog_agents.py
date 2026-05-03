@@ -215,8 +215,8 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
     client = Cerebras(api_key=_cerebras_key()).with_raw_response
 
     for attempt, wait in enumerate(_CEREBRAS_BACKOFF):
-        try:
-            response = client.chat.completions.create(
+        try: 
+            resp = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": system},
@@ -225,20 +225,71 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-            return response.choices[0].message.content
 
-        except Exception as exc:
-            is_last = attempt == len(_CEREBRAS_BACKOFF) - 1
-            if is_last:
-                raise
-            jitter = random.uniform(0, 10)
-            actual_wait = wait + jitter
+            # ── Log quota headers on every response for Airflow visibility ──
+            remaining_day   = resp.headers.get("x-ratelimit-remaining-tokens-day",   "?")
+            remaining_min   = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
+            reset_min       = resp.headers.get("x-ratelimit-reset-tokens-minute",     "?")
+
+            if resp.status_code == 200:
+                log.debug(
+                    "Cerebras %s OK — tokens remaining: %s/day, %s/min (reset in %ss)",
+                    model, remaining_day, remaining_min, reset_min,
+                )
+                return resp.json()["choices"][0]["message"]["content"]
+
+            # ── Rate limit: check Retry-After header ──────────────────────
+            if resp.status_code == 429:
+                retry_after = resp.headers.get("Retry-After")
+                wait = float(retry_after) if retry_after else backoff
+                log.warning(
+                    "Cerebras 429 rate limit on attempt %d/%d. "
+                    "Waiting %.1fs. Tokens remaining: %s/day, %s/min.",
+                    attempt + 1, len(_CEREBRAS_BACKOFF),
+                    wait, remaining_day, remaining_min,
+                )                
+                log.debug(
+                    "Cerebras rate state — req/min: %d remaining (limit %d) | "
+                    "req/day: %d remaining | tok/min: %d remaining",
+                    resp.headers["x-ratelimit-remaining-requests-minute"],
+                    resp.headers["x-ratelimit-limit-requests-minute"],
+                    resp.headers["x-ratelimit-remaining-requests-day"],
+                    resp.headers["x-ratelimit-remaining-tokens-minute"],
+                )
+                time.sleep(wait)
+                continue
+
+            # ── Service unavailable: use standard backoff ─────────────────
+            if resp.status_code == 503:
+                log.warning(
+                    "Cerebras 503 on attempt %d/%d. Waiting %ds.",
+                    attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
+                )
+                time.sleep(backoff)
+                continue
+
+            # ── Any other error: raise immediately ────────────────────────
+            resp.raise_for_status()
+
+        except requests.exceptions.Timeout:
             log.warning(
-                "Cerebras attempt %d/%d failed: %s. Waiting %.0fs before retry.",
-                attempt + 1, len(_CEREBRAS_BACKOFF), exc, actual_wait,
+                "Cerebras request timed out on attempt %d/%d. Waiting %ds.",
+                attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
             )
-            time.sleep(actual_wait)
-            
+            last_exc = RuntimeError("Cerebras request timed out")
+            time.sleep(backoff)
+            continue
+
+        except requests.exceptions.RequestException as exc:
+            # Non-retriable network error
+            log.error("Cerebras network error: %s", exc)
+            raise
+
+    raise RuntimeError(
+        f"Cerebras {model} unavailable after {len(_CEREBRAS_BACKOFF)} retries. "
+        f"Last error: {last_exc}"
+    )
+
 # def _cerebras(
     # model: str,
     # system: str,
