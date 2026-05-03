@@ -203,144 +203,209 @@ def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
-# Default backoff schedule for 429 responses (seconds).
-# Cerebras resets its RPM window every 60 seconds, so the max wait
-# is capped there. If Retry-After header is present it overrides this.
-_CEREBRAS_BACKOFF = [75, 150, 300, 600]
-
-def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
+# ── CEREBRAS RATE LIMIT CONSTANTS ────────────────────────────────────────────
+# These are derived from the actual response headers Cerebras returns.
+# The binding free-tier constraint is x-ratelimit-limit-requests-minute = 1,
+# meaning only 1 request per 60-second window regardless of token usage.
+# We read the remaining counts after each response and wait precisely as long
+# as needed rather than sleeping a fixed guess.
+ 
+# Fallback wait (seconds) used only when headers are missing or unparseable.
+_CEREBRAS_FALLBACK_WAIT = 62
+ 
+# Maximum retries on 429 before giving up on a single file.
+_CEREBRAS_MAX_RETRIES = 3
+ 
+ 
+def _parse_cerebras_rate_headers(headers: dict) -> dict:
+    """
+    Parses the rate limit headers returned by Cerebras after every response.
+ 
+    Cerebras returns remaining counts but not a reset timestamp, so we
+    infer wait time from whether the per-minute request bucket is exhausted.
+ 
+    Args:
+        headers: The response headers dict (from SDK response.headers or
+                 a raw requests.Response.headers mapping).
+ 
+    Returns:
+        Dict with keys:
+          remaining_req_minute  (int) — requests left in current minute window
+          remaining_req_hour    (int) — requests left in current hour window
+          remaining_req_day     (int) — requests left in current day window
+          remaining_tok_minute  (int) — tokens left in current minute window
+          remaining_tok_hour    (int) — tokens left in current hour window
+          remaining_tok_day     (int) — tokens left in current day window
+          limit_req_minute      (int) — total requests allowed per minute
+        All values default to -1 if the header is absent or unparseable.
+    """
+    def _get(key: str) -> int:
+        try:
+            return int(headers.get(key, -1))
+        except (ValueError, TypeError):
+            return -1
+ 
+    return {
+        "remaining_req_minute": _get("x-ratelimit-remaining-requests-minute"),
+        "remaining_req_hour":   _get("x-ratelimit-remaining-requests-hour"),
+        "remaining_req_day":    _get("x-ratelimit-remaining-requests-day"),
+        "remaining_tok_minute": _get("x-ratelimit-remaining-tokens-minute"),
+        "remaining_tok_hour":   _get("x-ratelimit-remaining-tokens-hour"),
+        "remaining_tok_day":    _get("x-ratelimit-remaining-tokens-day"),
+        "limit_req_minute":     _get("x-ratelimit-limit-requests-minute"),
+    }
+ 
+ 
+def _wait_if_needed(limits: dict, file_name: str) -> None:
+    """
+    Inspects the parsed rate limit state and sleeps if the next request
+    would be rejected.
+ 
+    Strategy:
+      - If remaining_req_minute == 0: sleep 62 seconds (full minute window
+        reset with 2s buffer). This is the binding constraint on the free tier.
+      - If remaining_tok_minute is low (< 5000 tokens): also sleep to let
+        the token bucket partially refill before sending a large file.
+      - If remaining_req_day == 0: log a clear error — no recovery possible
+        until tomorrow. This should never happen in normal usage.
+      - Otherwise: no wait needed, proceed immediately.
+ 
+    Args:
+        limits:    Output of _parse_cerebras_rate_headers().
+        file_name: Used only for log context.
+    """
+    rem_req_min = limits["remaining_req_minute"]
+    rem_tok_min = limits["remaining_tok_minute"]
+    rem_req_day = limits["remaining_req_day"]
+ 
+    if rem_req_day == 0:
+        log.error(
+            "Cerebras daily request limit exhausted. No further calls possible "
+            "today. File '%s' and any remaining files will be skipped.",
+            file_name,
+        )
+        raise RuntimeError("Cerebras daily request limit exhausted")
+ 
+    if rem_req_min == 0:
+        # Per-minute bucket is empty — wait for the full window to reset.
+        # Cerebras resets on a rolling 60-second window, so 62s is safe.
+        log.info(
+            "Cerebras per-minute request limit reached (limit=%d). "
+            "Waiting 62s for window reset before processing '%s'.",
+            limits["limit_req_minute"], file_name,
+        )
+        time.sleep(62)
+        return
+ 
+    if rem_tok_min != -1 and rem_tok_min < 5_000:
+        # Token bucket is nearly empty — a large file would likely fail mid-stream.
+        # Sleep 30s to let it partially refill before proceeding.
+        log.info(
+            "Cerebras per-minute token bucket low (%d remaining). "
+            "Waiting 30s before processing '%s'.",
+            rem_tok_min, file_name,
+        )
+        time.sleep(30)
+ 
+ 
+def _cerebras(model: str, system: str, prompt: str, temperature: float = 0.3) -> tuple[str, dict]:
+    """
+    Calls the Cerebras Inference Cloud via the official Python SDK.
+ 
+    Returns both the response text AND the parsed rate limit state from the
+    response headers, so the caller (batch loop) can decide whether to wait
+    before the next request.
+ 
+    Rate limit headers read:
+      x-ratelimit-remaining-requests-minute  — binding constraint on free tier
+      x-ratelimit-remaining-requests-hour
+      x-ratelimit-remaining-requests-day
+      x-ratelimit-remaining-tokens-minute
+      x-ratelimit-remaining-tokens-hour
+      x-ratelimit-remaining-tokens-day
+ 
+    Args:
+        model:       Cerebras model ID (use _CEREBRAS_QWEN3 or _CEREBRAS_LLAMA33).
+        system:      System instruction string.
+        prompt:      User prompt string.
+        temperature: Sampling temperature. Code tasks: 0.2-0.3. Prose: 0.5-0.7.
+ 
+    Returns:
+        Tuple of (response_text: str, rate_limits: dict).
+        rate_limits is the output of _parse_cerebras_rate_headers() — pass it
+        to _wait_if_needed() before the next call.
+ 
+    Raises:
+        RuntimeError: After _CEREBRAS_MAX_RETRIES consecutive 429 responses.
+        Exception:    Any non-429 SDK error (auth failure, invalid model, etc.).
+    """
     from cerebras.cloud.sdk import Cerebras
-    
-    client = Cerebras(api_key=_cerebras_key())
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user",   "content": prompt},
-        ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    return response.choices[0].message.content
-
-# def _cerebras(
-    # model: str,
-    # system: str,
-    # prompt: str,
-    # temperature: float = 0.3,
-    # max_tokens: int = 4096,
-# ) -> str:
-    # """
-    # OpenAI-compatible call to Cerebras Inference Cloud with automatic
-    # retry and exponential backoff on rate limit (429) and service
-    # unavailable (503) responses.
-
-    # Rate limit behaviour:
-      # - On 429, checks for a Retry-After header. If present, waits exactly
-        # that many seconds. If absent, uses exponential backoff starting at 15s.
-      # - Retries up to len(_CEREBRAS_BACKOFF) times before raising.
-      # - On 503, uses the same backoff schedule (Cerebras queues during peak).
-
-    # Quota monitoring:
-      # - Logs remaining daily tokens after each successful response so you
-        # can see in Airflow logs how much headroom you have.
-
-    # Args:
-        # model:        Cerebras model ID (use _CEREBRAS_QWEN3 or _CEREBRAS_LLAMA33).
-        # system:       System instruction string.
-        # prompt:       User prompt string.
-        # temperature:  Sampling temperature. Code tasks: 0.2-0.3. Prose: 0.5-0.7.
-        # max_tokens:   Max completion tokens. Set conservatively — Cerebras
-                      # estimates total tokens (input + max_tokens) against your
-                      # TPM quota before processing begins. Oversetting this
-                      # causes unnecessary rate limit hits even when the actual
-                      # output would be short.
-
-    # Returns:
-        # Model response content string.
-
-    # Raises:
-        # requests.HTTPError: After all retries are exhausted.
-        # RuntimeError:       If Cerebras is unreachable after all retries.
-    # """
-    # from gcp_secrets import get_key
-    # cerebras_key = get_key("Cerebras-API")
-
-    # url = "https://api.cerebras.ai/v1/chat/completions"
-    # headers = {
-        # "Authorization": f"Bearer {cerebras_key}",
-        # "Content-Type":  "application/json",
-    # }
-    # payload = {
-        # "model":       model,
-        # "messages": [
-            # {"role": "system", "content": system},
-            # {"role": "user",   "content": prompt},
-        # ],
-        # "temperature": temperature,
-        # "max_tokens":  max_tokens,
-    # }
-
-    # last_exc = None
-    # for attempt, backoff in enumerate(_CEREBRAS_BACKOFF):
-        # try:
-            # resp = requests.post(url, headers=headers, json=payload, timeout=120)
-
-            # # ── Log quota headers on every response for Airflow visibility ──
-            # remaining_day   = resp.headers.get("x-ratelimit-remaining-tokens-day",   "?")
-            # remaining_min   = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
-            # reset_min       = resp.headers.get("x-ratelimit-reset-tokens-minute",     "?")
-
-            # if resp.status_code == 200:
-                # log.debug(
-                    # "Cerebras %s OK — tokens remaining: %s/day, %s/min (reset in %ss)",
-                    # model, remaining_day, remaining_min, reset_min,
-                # )
-                # return resp.json()["choices"][0]["message"]["content"]
-
-            # # ── Rate limit: check Retry-After header ──────────────────────
-            # if resp.status_code == 429:
-                # retry_after = resp.headers.get("Retry-After")
-                # wait = float(retry_after) if retry_after else backoff
-                # log.warning(
-                    # "Cerebras 429 rate limit on attempt %d/%d. "
-                    # "Waiting %.1fs. Tokens remaining: %s/day, %s/min.",
-                    # attempt + 1, len(_CEREBRAS_BACKOFF),
-                    # wait, remaining_day, remaining_min,
-                # )
-                # time.sleep(wait)
-                # continue
-
-            # # ── Service unavailable: use standard backoff ─────────────────
-            # if resp.status_code == 503:
-                # log.warning(
-                    # "Cerebras 503 on attempt %d/%d. Waiting %ds.",
-                    # attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
-                # )
-                # time.sleep(backoff)
-                # continue
-
-            # # ── Any other error: raise immediately ────────────────────────
-            # resp.raise_for_status()
-
-        # except requests.exceptions.Timeout:
-            # log.warning(
-                # "Cerebras request timed out on attempt %d/%d. Waiting %ds.",
-                # attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
-            # )
-            # last_exc = RuntimeError("Cerebras request timed out")
-            # time.sleep(backoff)
-            # continue
-
-        # except requests.exceptions.RequestException as exc:
-            # # Non-retriable network error
-            # log.error("Cerebras network error: %s", exc)
-            # raise
-
-    # raise RuntimeError(
-        # f"Cerebras {model} unavailable after {len(_CEREBRAS_BACKOFF)} retries. "
-        # f"Last error: {last_exc}"
-    # )
+ 
+    client = Cerebras(api_key=_cerebras_key()).with_raw_response
+ 
+    for attempt in range(_CEREBRAS_MAX_RETRIES):
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ],
+            temperature=temperature,
+            max_tokens=4096,
+        )
+ 
+        # The Cerebras SDK exposes response headers on the raw HTTP response.
+        # Access pattern differs slightly from raw requests — use the
+        # _raw_response attribute if available, otherwise fall back to
+        # parsing whatever headers attribute exists.
+        raw_headers = {}
+        if hasattr(response, "_raw_response") and hasattr(response._raw_response, "headers"):
+            raw_headers = dict(response._raw_response.headers)
+        elif hasattr(response, "headers"):
+            raw_headers = dict(response.headers)
+ 
+        rate_limits = _parse_cerebras_rate_headers(raw_headers)
+ 
+        # Log rate limit state after every successful call so operators
+        # can monitor in Airflow logs without digging into headers manually.
+        log.debug(
+            "Cerebras rate state — req/min: %d remaining (limit %d) | "
+            "req/day: %d remaining | tok/min: %d remaining",
+            rate_limits["remaining_req_minute"],
+            rate_limits["limit_req_minute"],
+            rate_limits["remaining_req_day"],
+            rate_limits["remaining_tok_minute"],
+        )
+ 
+        return response.choices[0].message.content, rate_limits
+ 
+    # Should not be reached — SDK raises on 429 before we get here,
+    # but kept as a safety net.
+    raise RuntimeError(f"Cerebras {model} failed after {_CEREBRAS_MAX_RETRIES} attempts")
+ 
+ 
+# ── CONVENIENCE WRAPPER ───────────────────────────────────────────────────────
+# The individual agent functions (agent_code_narrator, agent_code_commenter,
+# agent_code_improver, agent_refiner) call _cerebras() for single invocations
+# where no inter-call waiting is needed. This wrapper discards the rate limit
+# dict so those functions don't need to change their return type handling.
+ 
+def _cerebras_single(model: str, system: str, prompt: str, temperature: float = 0.3) -> str:
+    """
+    Convenience wrapper around _cerebras() for single (non-batched) calls.
+    Discards the rate limit state since there's no subsequent call to gate.
+ 
+    Use this in agent functions that are called once per article or once
+    per manual trigger. Use _cerebras() directly in batch loops.
+ 
+    Args:
+        model, system, prompt, temperature: Passed through to _cerebras().
+ 
+    Returns:
+        Response text string only.
+    """
+    text, _ = _cerebras(model, system, prompt, temperature)
+    return text
 
 
 

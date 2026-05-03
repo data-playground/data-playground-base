@@ -27,12 +27,6 @@ from airflow.operators.python import PythonOperator
 
 log = logging.getLogger(__name__)
 
-# ── RATE LIMIT CONFIGURATION ──────────────────────────────────────────────────
-# Cerebras free tier: 30 RPM = 1 request every 2 seconds.
-# We use 3 seconds as a conservative margin. Adjust downward if you upgrade
-# to a paid Cerebras tier (which removes the RPM cap).
-INTER_REQUEST_DELAY_SEC = 3
-
 default_args = {
     "owner":             "life_os",
     "retries":           2,           # was 0 — allows recovery from transient 429 windows
@@ -43,91 +37,124 @@ default_args = {
 
 def task_improve_files(**context):
     from dag_db import fetch_one, execute
-    from agents.blog_agents import agent_code_improver
+    from agents.blog_agents import (
+        _cerebras, _wait_if_needed, _CEREBRAS_QWEN3,
+        LARGE_FILE_THRESHOLD_TOKENS, _estimate_tokens,
+    )
 
     file_ids = (context["dag_run"].conf or {}).get("file_ids", [])
     if not file_ids:
         raise ValueError("file_ids required in DAG conf")
 
-    log.info(
-        "Code Improver starting. %d file(s) to process. "
-        "Inter-request delay: %ds (Cerebras 30 RPM free tier).",
-        len(file_ids), INTER_REQUEST_DELAY_SEC,
-    )
+    log.info("Code Improver: %d file(s), header-driven rate limiting", len(file_ids))
 
-    failed_files = []
-
-    for idx, file_id in enumerate(file_ids):
-        # ── Throttle between requests ─────────────────────────────────────
-        # Skip the delay before the very first request.
-        if idx > 0:
-            log.debug(
-                "Waiting %ds before next request (%d/%d)...",
-                INTER_REQUEST_DELAY_SEC, idx + 1, len(file_ids),
+    # Pre-flight: warn on large files so the operator knows in advance
+    for file_id in file_ids:
+        f = fetch_one(
+            "SELECT file_name, LENGTH(raw_code) AS char_len "
+            "FROM code_files WHERE id = %s", (file_id,)
+        )
+        if f and f.get("char_len") and (f["char_len"] // 4) > LARGE_FILE_THRESHOLD_TOKENS:
+            log.warning(
+                "Large file: %s (~%d tokens) — File Structure Recommendation "
+                "will be included in the report.",
+                f["file_name"], f["char_len"] // 4,
             )
-            time.sleep(INTER_REQUEST_DELAY_SEC)
-
+ 
+    succeeded       = 0
+    failed          = 0
+    last_rate_limits = {}
+ 
+    for i, file_id in enumerate(file_ids):
         file = fetch_one("SELECT * FROM code_files WHERE id = %s", (file_id,))
-        if not file:
-            log.warning("File %d not found, skipping", file_id)
+        if not file or not file.get("raw_code"):
+            log.warning("File %d not found or no raw_code — skipping", file_id)
+            failed += 1
             continue
-        if not file.get("raw_code"):
-            log.warning("File %d (%s) has no raw_code — pull it first, skipping",
-                        file_id, file.get("file_name"))
-            continue
-
-        log.info("Improving %s (%d/%d)", file["file_name"], idx + 1, len(file_ids))
+ 
+        # Gate on headers from the previous call — skip for first iteration
+        if i > 0 and last_rate_limits:
+            _wait_if_needed(last_rate_limits, file["file_name"])
+ 
+        log.info("Improving %s (%d/%d)", file["file_name"], i + 1, len(file_ids))
+ 
         try:
-            notes = agent_code_improver(
-                code_content=file["raw_code"],
-                file_name=file["file_name"],
-                narration=file.get("narration") or "",
+            token_estimate = _estimate_tokens(file["raw_code"])
+            is_large       = token_estimate > LARGE_FILE_THRESHOLD_TOKENS
+            narration      = file.get("narration") or ""
+ 
+            large_file_instruction = ""
+            if is_large:
+                large_file_instruction = f"""
+⚠ LARGE FILE (~{token_estimate:,} tokens). You MUST include a final section:
+ 
+## File Structure Recommendation
+**Category:** Maintainability  **Severity:** Medium
+Frame as a genuine software quality concern. Name each proposed new module,
+its single responsibility, and which functions/classes move there.
+"""
+ 
+            system = f"""
+You are a Principal Engineer doing a thorough code review.
+Produce an improvement report — do NOT rewrite the code.
+ 
+FORMAT per suggestion:
+## [Short specific title]
+**Lines:** [range or function]  **Category:** Performance|Readability|Correctness|Security|Maintainability|Testing  **Severity:** Low|Medium|High
+ 
+*What's happening:* [1-2 sentences — formal, precise, scannable]
+ 
+*Why it matters here:* [1-3 sentences — conversational PR-comment tone,
+reference the specific codebase context and what breaks in production]
+ 
+*Suggestion:*
+```[language]
+# Smallest change that fixes the issue
+```
+ 
+ALWAYS CHECK FOR:
+  SQLAlchemy: N+1 risks, missing await, wrong lazy strategy, commit-before-refresh
+  FastAPI: endpoints doing too much, missing HTTPException, response model mismatches
+  Airflow: DB logic in DAG files, missing retries on external calls, non-idempotent tasks
+  General: hardcoded strings, single-responsibility violations, silent exception swallowing
+  Testing: flag untested high-risk functions with the specific failure mode a test would catch
+ 
+ORDER: High severity first. MAX: 10 suggestions (plus File Structure if applicable).
+{large_file_instruction}"""
+ 
+            context_block = f"Context:\n{narration[:600]}\n\n" if narration else ""
+            prompt = f"File: {file['file_name']}\n{context_block}Code:\n{file['raw_code']}"
+ 
+            notes, last_rate_limits = _cerebras(
+                _CEREBRAS_QWEN3, system, prompt, temperature=0.2
             )
+ 
             now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             execute(
                 """UPDATE code_files
-                   SET improvement_notes = %s,
-                       improvement_generated_at = %s,
-                       improvement_status = %s,
-                       updated_at = %s
+                   SET improvement_notes = %s, improvement_generated_at = %s,
+                       improvement_status = %s, updated_at = %s
                    WHERE id = %s""",
                 (notes, now, "generated", now, file_id),
             )
             log.info("✓ Improved %s", file["file_name"])
-
+            succeeded += 1
+ 
+        except RuntimeError as exc:
+            if "daily request limit" in str(exc):
+                log.error("Daily limit exhausted — aborting")
+                break
+            log.error("Failed %d (%s): %s", file_id, file["file_name"], exc)
+            failed += 1
         except Exception as exc:
-            # _cerebras() already retried with backoff. If we still get here,
-            # the error is persistent — record it and continue with other files
-            # rather than failing the whole task.
-            log.error(
-                "✗ Failed to improve file %d (%s) after retries: %s",
-                file_id, file.get("file_name", "?"), exc,
-            )
-            failed_files.append((file_id, file.get("file_name", "?"), str(exc)))
-
-    # ── Final summary ─────────────────────────────────────────────────────
-    succeeded = len(file_ids) - len(failed_files) - (len(file_ids) - len([
-        f for f in file_ids
-        if fetch_one("SELECT id FROM code_files WHERE id = %s", (f,))
-    ]))
-    log.info(
-        "Code Improver complete. %d/%d files processed successfully.",
-        len(file_ids) - len(failed_files), len(file_ids),
-    )
-
-    if failed_files:
-        log.warning(
-            "The following files failed and can be re-triggered individually:\n%s",
-            "\n".join(f"  - id={fid} ({name}): {err}" for fid, name, err in failed_files),
-        )
-        # Raise so Airflow marks the task as failed and retries the whole
-        # batch after retry_delay. The _cerebras retry handles per-request
-        # 429s; this handles the case where the whole window was exhausted.
-        raise RuntimeError(
-            f"{len(failed_files)} file(s) failed. Check logs above for details."
-        )
-
-
+            log.error("Failed %d (%s): %s", file_id, file["file_name"], exc)
+            failed += 1
+ 
+    log.info("Complete: %d succeeded, %d failed of %d", succeeded, failed, len(file_ids))
+    if failed:
+        raise RuntimeError(f"{failed} file(s) failed — see logs above")
+ 
+ 
 with DAG(
     dag_id="life_os_code_improve",
     default_args=default_args,
@@ -136,7 +163,5 @@ with DAG(
     catchup=False,
     tags=["life_os", "code_intel"],
 ) as dag:
-    PythonOperator(
-        task_id="improve_files",
-        python_callable=task_improve_files,
-    )
+    PythonOperator(task_id="improve_files", python_callable=task_improve_files)
+ 
