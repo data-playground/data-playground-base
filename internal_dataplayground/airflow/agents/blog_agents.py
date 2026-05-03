@@ -206,127 +206,141 @@ def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
 # Default backoff schedule for 429 responses (seconds).
 # Cerebras resets its RPM window every 60 seconds, so the max wait
 # is capped there. If Retry-After header is present it overrides this.
-_CEREBRAS_BACKOFF = [15, 30, 60, 120]
+_CEREBRAS_BACKOFF = [75, 150, 300, 600]
 
-
-def _cerebras(
-    model: str,
-    system: str,
-    prompt: str,
-    temperature: float = 0.3,
-    max_tokens: int = 4096,
-) -> str:
-    """
-    OpenAI-compatible call to Cerebras Inference Cloud with automatic
-    retry and exponential backoff on rate limit (429) and service
-    unavailable (503) responses.
-
-    Rate limit behaviour:
-      - On 429, checks for a Retry-After header. If present, waits exactly
-        that many seconds. If absent, uses exponential backoff starting at 15s.
-      - Retries up to len(_CEREBRAS_BACKOFF) times before raising.
-      - On 503, uses the same backoff schedule (Cerebras queues during peak).
-
-    Quota monitoring:
-      - Logs remaining daily tokens after each successful response so you
-        can see in Airflow logs how much headroom you have.
-
-    Args:
-        model:        Cerebras model ID (use _CEREBRAS_QWEN3 or _CEREBRAS_LLAMA33).
-        system:       System instruction string.
-        prompt:       User prompt string.
-        temperature:  Sampling temperature. Code tasks: 0.2-0.3. Prose: 0.5-0.7.
-        max_tokens:   Max completion tokens. Set conservatively — Cerebras
-                      estimates total tokens (input + max_tokens) against your
-                      TPM quota before processing begins. Oversetting this
-                      causes unnecessary rate limit hits even when the actual
-                      output would be short.
-
-    Returns:
-        Model response content string.
-
-    Raises:
-        requests.HTTPError: After all retries are exhausted.
-        RuntimeError:       If Cerebras is unreachable after all retries.
-    """
-    from gcp_secrets import get_key
-    cerebras_key = get_key("Cerebras-API")
-
-    url = "https://api.cerebras.ai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {cerebras_key}",
-        "Content-Type":  "application/json",
-    }
-    payload = {
-        "model":       model,
-        "messages": [
+def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
+    from cerebras.cloud.sdk import Cerebras
+    
+    client = Cerebras(api_key=_cerebras_key())
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
             {"role": "system", "content": system},
             {"role": "user",   "content": prompt},
         ],
-        "temperature": temperature,
-        "max_tokens":  max_tokens,
-    }
-
-    last_exc = None
-    for attempt, backoff in enumerate(_CEREBRAS_BACKOFF):
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=120)
-
-            # ── Log quota headers on every response for Airflow visibility ──
-            remaining_day   = resp.headers.get("x-ratelimit-remaining-tokens-day",   "?")
-            remaining_min   = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
-            reset_min       = resp.headers.get("x-ratelimit-reset-tokens-minute",     "?")
-
-            if resp.status_code == 200:
-                log.debug(
-                    "Cerebras %s OK — tokens remaining: %s/day, %s/min (reset in %ss)",
-                    model, remaining_day, remaining_min, reset_min,
-                )
-                return resp.json()["choices"][0]["message"]["content"]
-
-            # ── Rate limit: check Retry-After header ──────────────────────
-            if resp.status_code == 429:
-                retry_after = resp.headers.get("Retry-After")
-                wait = float(retry_after) if retry_after else backoff
-                log.warning(
-                    "Cerebras 429 rate limit on attempt %d/%d. "
-                    "Waiting %.1fs. Tokens remaining: %s/day, %s/min.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF),
-                    wait, remaining_day, remaining_min,
-                )
-                time.sleep(wait)
-                continue
-
-            # ── Service unavailable: use standard backoff ─────────────────
-            if resp.status_code == 503:
-                log.warning(
-                    "Cerebras 503 on attempt %d/%d. Waiting %ds.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
-                )
-                time.sleep(backoff)
-                continue
-
-            # ── Any other error: raise immediately ────────────────────────
-            resp.raise_for_status()
-
-        except requests.exceptions.Timeout:
-            log.warning(
-                "Cerebras request timed out on attempt %d/%d. Waiting %ds.",
-                attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
-            )
-            last_exc = RuntimeError("Cerebras request timed out")
-            time.sleep(backoff)
-            continue
-
-        except requests.exceptions.RequestException as exc:
-            # Non-retriable network error
-            log.error("Cerebras network error: %s", exc)
-            raise
-
-    raise RuntimeError(
-        f"Cerebras {model} unavailable after {len(_CEREBRAS_BACKOFF)} retries. "
-        f"Last error: {last_exc}"
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
+    return response.choices[0].message.content
+
+# def _cerebras(
+    # model: str,
+    # system: str,
+    # prompt: str,
+    # temperature: float = 0.3,
+    # max_tokens: int = 4096,
+# ) -> str:
+    # """
+    # OpenAI-compatible call to Cerebras Inference Cloud with automatic
+    # retry and exponential backoff on rate limit (429) and service
+    # unavailable (503) responses.
+
+    # Rate limit behaviour:
+      # - On 429, checks for a Retry-After header. If present, waits exactly
+        # that many seconds. If absent, uses exponential backoff starting at 15s.
+      # - Retries up to len(_CEREBRAS_BACKOFF) times before raising.
+      # - On 503, uses the same backoff schedule (Cerebras queues during peak).
+
+    # Quota monitoring:
+      # - Logs remaining daily tokens after each successful response so you
+        # can see in Airflow logs how much headroom you have.
+
+    # Args:
+        # model:        Cerebras model ID (use _CEREBRAS_QWEN3 or _CEREBRAS_LLAMA33).
+        # system:       System instruction string.
+        # prompt:       User prompt string.
+        # temperature:  Sampling temperature. Code tasks: 0.2-0.3. Prose: 0.5-0.7.
+        # max_tokens:   Max completion tokens. Set conservatively — Cerebras
+                      # estimates total tokens (input + max_tokens) against your
+                      # TPM quota before processing begins. Oversetting this
+                      # causes unnecessary rate limit hits even when the actual
+                      # output would be short.
+
+    # Returns:
+        # Model response content string.
+
+    # Raises:
+        # requests.HTTPError: After all retries are exhausted.
+        # RuntimeError:       If Cerebras is unreachable after all retries.
+    # """
+    # from gcp_secrets import get_key
+    # cerebras_key = get_key("Cerebras-API")
+
+    # url = "https://api.cerebras.ai/v1/chat/completions"
+    # headers = {
+        # "Authorization": f"Bearer {cerebras_key}",
+        # "Content-Type":  "application/json",
+    # }
+    # payload = {
+        # "model":       model,
+        # "messages": [
+            # {"role": "system", "content": system},
+            # {"role": "user",   "content": prompt},
+        # ],
+        # "temperature": temperature,
+        # "max_tokens":  max_tokens,
+    # }
+
+    # last_exc = None
+    # for attempt, backoff in enumerate(_CEREBRAS_BACKOFF):
+        # try:
+            # resp = requests.post(url, headers=headers, json=payload, timeout=120)
+
+            # # ── Log quota headers on every response for Airflow visibility ──
+            # remaining_day   = resp.headers.get("x-ratelimit-remaining-tokens-day",   "?")
+            # remaining_min   = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
+            # reset_min       = resp.headers.get("x-ratelimit-reset-tokens-minute",     "?")
+
+            # if resp.status_code == 200:
+                # log.debug(
+                    # "Cerebras %s OK — tokens remaining: %s/day, %s/min (reset in %ss)",
+                    # model, remaining_day, remaining_min, reset_min,
+                # )
+                # return resp.json()["choices"][0]["message"]["content"]
+
+            # # ── Rate limit: check Retry-After header ──────────────────────
+            # if resp.status_code == 429:
+                # retry_after = resp.headers.get("Retry-After")
+                # wait = float(retry_after) if retry_after else backoff
+                # log.warning(
+                    # "Cerebras 429 rate limit on attempt %d/%d. "
+                    # "Waiting %.1fs. Tokens remaining: %s/day, %s/min.",
+                    # attempt + 1, len(_CEREBRAS_BACKOFF),
+                    # wait, remaining_day, remaining_min,
+                # )
+                # time.sleep(wait)
+                # continue
+
+            # # ── Service unavailable: use standard backoff ─────────────────
+            # if resp.status_code == 503:
+                # log.warning(
+                    # "Cerebras 503 on attempt %d/%d. Waiting %ds.",
+                    # attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
+                # )
+                # time.sleep(backoff)
+                # continue
+
+            # # ── Any other error: raise immediately ────────────────────────
+            # resp.raise_for_status()
+
+        # except requests.exceptions.Timeout:
+            # log.warning(
+                # "Cerebras request timed out on attempt %d/%d. Waiting %ds.",
+                # attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
+            # )
+            # last_exc = RuntimeError("Cerebras request timed out")
+            # time.sleep(backoff)
+            # continue
+
+        # except requests.exceptions.RequestException as exc:
+            # # Non-retriable network error
+            # log.error("Cerebras network error: %s", exc)
+            # raise
+
+    # raise RuntimeError(
+        # f"Cerebras {model} unavailable after {len(_CEREBRAS_BACKOFF)} retries. "
+        # f"Last error: {last_exc}"
+    # )
 
 
 
