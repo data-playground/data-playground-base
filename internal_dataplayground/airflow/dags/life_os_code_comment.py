@@ -6,9 +6,9 @@ Conf required: {"file_ids": [1, 2, 3]}
 Changes vs original: same throttling and retry improvements as
 life_os_code_improve.py — see that file for the full rationale.
 """
-
 import sys
 import logging
+import time
 from datetime import datetime, timedelta
 
 sys.path.insert(0, '/opt/airflow/project')
@@ -18,6 +18,8 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 log = logging.getLogger(__name__)
+
+INTER_REQUEST_DELAY_SEC = 3
 
 default_args = {
     "owner":            "life_os",
@@ -29,99 +31,73 @@ default_args = {
 
 def task_comment_files(**context):
     from dag_db import fetch_one, execute
-    from agents.blog_agents import (
-        _cerebras, _wait_if_needed, _CEREBRAS_QWEN3,
-        _detect_file_type, _COMMENTER_CONVENTIONS,
-    )
+    from agents.blog_agents import agent_code_commenter
 
     file_ids = (context["dag_run"].conf or {}).get("file_ids", [])
     if not file_ids:
         raise ValueError("file_ids required in DAG conf")
 
-    log.info("Code Commenter: %d file(s), header-driven rate limiting", len(file_ids))
+    log.info(
+        "Code Commenter starting. %d file(s) to process. "
+        "Inter-request delay: %ds.",
+        len(file_ids), INTER_REQUEST_DELAY_SEC,
+    )
 
-    succeeded        = 0
-    failed           = 0
-    last_rate_limits = {}
+    failed_files = []
 
-    for i, file_id in enumerate(file_ids):
+    for idx, file_id in enumerate(file_ids):
+        if idx > 0:
+            log.debug("Waiting %ds before next request (%d/%d)...",
+                      INTER_REQUEST_DELAY_SEC, idx + 1, len(file_ids))
+            time.sleep(INTER_REQUEST_DELAY_SEC)
+
         file = fetch_one("SELECT * FROM code_files WHERE id = %s", (file_id,))
-        if not file or not file.get("raw_code"):
-            log.warning("File %d not found or no raw_code — skipping", file_id)
-            failed += 1
+        if not file:
+            log.warning("File %d not found, skipping", file_id)
+            continue
+        if not file.get("raw_code"):
+            log.warning("File %d (%s) has no raw_code — pull it first, skipping",
+                        file_id, file.get("file_name"))
             continue
 
-        if i > 0 and last_rate_limits:
-            _wait_if_needed(last_rate_limits, file["file_name"])
-
-        log.info("Commenting %s (%d/%d)", file["file_name"], i + 1, len(file_ids))
-
+        log.info("Commenting %s (%d/%d)", file["file_name"], idx + 1, len(file_ids))
         try:
-            file_type   = _detect_file_type(file["file_name"])
-            conventions = _COMMENTER_CONVENTIONS.get(
-                file_type, _COMMENTER_CONVENTIONS["other"]
+            commented = agent_code_commenter(
+                code_content=file["raw_code"],
+                file_name=file["file_name"],
             )
-
-            system = f"""
-You are a Senior Engineer performing a documentation pass on a codebase.
-Your ONLY job is to add comments and docstrings. You MUST NOT change any
-logic, rename anything, reorder code, or refactor anything whatsoever.
-
-FILE-TYPE CONVENTIONS:
-{conventions}
-
-COMMENTING PHILOSOPHY:
-
-  GROUP OVER LINE:
-    A single section divider above related lines is better than
-    individual inline comments on each line. Ask: do these lines share
-    a single purpose? If yes, one comment above the group is enough.
-
-  CALIBRATE "OBVIOUS" CORRECTLY:
-    Obvious means obvious to a senior developer who knows this language
-    AND the tools in this file (FastAPI, SQLAlchemy async, Airflow, HTMX).
-    Do not comment session.commit(), standard ORM columns, standard HTML,
-    or CSS properties whose purpose is clear from the name.
-
-  WHAT ALWAYS GETS COMMENTED:
-    - Non-obvious "why" decisions (why this loading strategy, why this status code)
-    - Workarounds and their reason
-    - Logic that could silently break if changed
-    - Group boundaries where the next block does something meaningfully different
-
-OUTPUT: The COMPLETE file with comments added.
-No preamble. No explanation. Just the file content, starting from line 1.
-"""
-            prompt = f"Add comments to {file['file_name']}:\n\n{file['raw_code']}"
-
-            commented, last_rate_limits = _cerebras(
-                _CEREBRAS_QWEN3, system, prompt, temperature=0.2
-            )
-
             now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             execute(
                 """UPDATE code_files
-                   SET commented_code = %s, commented_generated_at = %s,
-                       commented_status = %s, updated_at = %s
+                   SET commented_code = %s,
+                       commented_generated_at = %s,
+                       commented_status = %s,
+                       updated_at = %s
                    WHERE id = %s""",
                 (commented, now, "generated", now, file_id),
             )
             log.info("✓ Commented %s", file["file_name"])
-            succeeded += 1
 
-        except RuntimeError as exc:
-            if "daily request limit" in str(exc):
-                log.error("Daily limit exhausted — aborting")
-                break
-            log.error("Failed %d (%s): %s", file_id, file["file_name"], exc)
-            failed += 1
         except Exception as exc:
-            log.error("Failed %d (%s): %s", file_id, file["file_name"], exc)
-            failed += 1
+            log.error(
+                "✗ Failed to comment file %d (%s) after retries: %s",
+                file_id, file.get("file_name", "?"), exc,
+            )
+            failed_files.append((file_id, file.get("file_name", "?"), str(exc)))
 
-    log.info("Complete: %d succeeded, %d failed of %d", succeeded, failed, len(file_ids))
-    if failed:
-        raise RuntimeError(f"{failed} file(s) failed — see logs above")
+    log.info(
+        "Code Commenter complete. %d/%d files processed successfully.",
+        len(file_ids) - len(failed_files), len(file_ids),
+    )
+
+    if failed_files:
+        log.warning(
+            "Failed files (can be re-triggered individually):\n%s",
+            "\n".join(f"  - id={fid} ({name}): {err}" for fid, name, err in failed_files),
+        )
+        raise RuntimeError(
+            f"{len(failed_files)} file(s) failed. Check logs above for details."
+        )
 
 
 with DAG(
@@ -132,4 +108,7 @@ with DAG(
     catchup=False,
     tags=["life_os", "code_intel"],
 ) as dag:
-    PythonOperator(task_id="comment_files", python_callable=task_comment_files)
+    PythonOperator(
+        task_id="comment_files",
+        python_callable=task_comment_files,
+    )
