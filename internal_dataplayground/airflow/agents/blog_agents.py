@@ -209,15 +209,17 @@ def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
 _CEREBRAS_BACKOFF = [75, 150, 300, 600]
 
 def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
-    log.info("_cerebras() v2 — retry loop active, backoff=[75,150,300,600]")  # ← add this
+    log.info("_cerebras() v2 — retry loop active, backoff=%s", _CEREBRAS_BACKOFF)
 
-    from cerebras.cloud.sdk import Cerebras
-    import time, random
+    from cerebras.cloud.sdk import Cerebras, RateLimitError, APIStatusError
+    import time
 
-    client = Cerebras(api_key=_cerebras_key()).with_raw_response
+    client = Cerebras(api_key=_cerebras_key(), max_retries=0).with_raw_response
+
+    last_exc = None
 
     for attempt, wait in enumerate(_CEREBRAS_BACKOFF):
-        try: 
+        try:
             resp = client.chat.completions.create(
                 model=model,
                 messages=[
@@ -228,10 +230,9 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
                 max_tokens=max_tokens,
             )
 
-            # ── Log quota headers on every response for Airflow visibility ──
-            remaining_day   = resp.headers.get("x-ratelimit-remaining-tokens-day",   "?")
-            remaining_min   = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
-            reset_min       = resp.headers.get("x-ratelimit-reset-tokens-minute",     "?")
+            remaining_day = resp.headers.get("x-ratelimit-remaining-tokens-day",    "?")
+            remaining_min = resp.headers.get("x-ratelimit-remaining-tokens-minute",  "?")
+            reset_min     = resp.headers.get("x-ratelimit-reset-tokens-minute",      "?")
 
             if resp.status_code == 200:
                 log.debug(
@@ -240,51 +241,94 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
                 )
                 return resp.json()["choices"][0]["message"]["content"]
 
-            # ── Rate limit: check Retry-After header ──────────────────────
             if resp.status_code == 429:
                 retry_after = resp.headers.get("Retry-After")
-                wait = float(retry_after) if retry_after else backoff
+                actual_wait = float(retry_after) if retry_after else wait
                 log.warning(
-                    "Cerebras 429 rate limit on attempt %d/%d. "
-                    "Waiting %.1fs. Tokens remaining: %s/day, %s/min.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF),
-                    wait, remaining_day, remaining_min,
-                )                
-                log.debug(
-                    "Cerebras rate state — req/min: %d remaining (limit %d) | "
-                    "req/day: %d remaining | tok/min: %d remaining",
-                    resp.headers["x-ratelimit-remaining-requests-minute"],
-                    resp.headers["x-ratelimit-limit-requests-minute"],
-                    resp.headers["x-ratelimit-remaining-requests-day"],
-                    resp.headers["x-ratelimit-remaining-tokens-minute"],
+                    "Cerebras 429 (response object) on attempt %d/%d. Waiting %.1fs.",
+                    attempt + 1, len(_CEREBRAS_BACKOFF), actual_wait,
                 )
-                time.sleep(wait)
+                last_exc = RuntimeError(f"Cerebras 429 on attempt {attempt + 1}")
+                time.sleep(actual_wait)
                 continue
 
-            # ── Service unavailable: use standard backoff ─────────────────
             if resp.status_code == 503:
                 log.warning(
                     "Cerebras 503 on attempt %d/%d. Waiting %ds.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
+                    attempt + 1, len(_CEREBRAS_BACKOFF), wait,
                 )
-                time.sleep(backoff)
+                last_exc = RuntimeError(f"Cerebras 503 on attempt {attempt + 1}")
+                time.sleep(wait)
                 continue
 
-            # ── Any other error: raise immediately ────────────────────────
             resp.raise_for_status()
 
-        except requests.exceptions.Timeout:
-            log.warning(
-                "Cerebras request timed out on attempt %d/%d. Waiting %ds.",
-                attempt + 1, len(_CEREBRAS_BACKOFF), backoff,
-            )
-            last_exc = RuntimeError("Cerebras request timed out")
-            time.sleep(backoff)
-            continue
+        except RateLimitError as exc:
+            # Extract rate limit headers from the exception's response object
+            response = getattr(exc, "response", None)
+            
+            if response is not None:
+                headers = response.headers
+                retry_after          = headers.get("Retry-After")
+                remaining_req_min    = headers.get("x-ratelimit-remaining-requests-minute",  "?")
+                remaining_req_day    = headers.get("x-ratelimit-remaining-requests-day",     "?")
+                remaining_tok_min    = headers.get("x-ratelimit-remaining-tokens-minute",    "?")
+                remaining_tok_day    = headers.get("x-ratelimit-remaining-tokens-day",       "?")
+                limit_req_min        = headers.get("x-ratelimit-limit-requests-minute",      "?")
+                limit_tok_min        = headers.get("x-ratelimit-limit-tokens-minute",        "?")
+                reset_req_min        = headers.get("x-ratelimit-reset-requests-minute",      "?")
+                reset_tok_min        = headers.get("x-ratelimit-reset-tokens-minute",        "?")
+            else:
+                # SDK raised RateLimitError without attaching a response (shouldn't happen
+                # but defensive fallback in case the SDK version behaves differently)
+                retry_after = remaining_req_min = remaining_req_day = "?"
+                remaining_tok_min = remaining_tok_day = limit_req_min = "?"
+                limit_tok_min = reset_req_min = reset_tok_min = "?"
 
-        except requests.exceptions.RequestException as exc:
-            # Non-retriable network error
-            log.error("Cerebras network error: %s", exc)
+            actual_wait = float(retry_after) if retry_after else wait
+
+            log.warning(
+                "Cerebras 429 RateLimitError on attempt %d/%d — quota state:\n"
+                "  Requests : %s/%s remaining this minute (resets in %ss) | %s remaining today\n"
+                "  Tokens   : %s/%s remaining this minute (resets in %ss) | %s remaining today\n"
+                "  Waiting  : %.1fs before retry",
+                attempt + 1, len(_CEREBRAS_BACKOFF),
+                remaining_req_min, limit_req_min, reset_req_min, remaining_req_day,
+                remaining_tok_min, limit_tok_min, reset_tok_min, remaining_tok_day,
+                actual_wait,
+            )
+
+            # If remaining_tok_day is 0, no point retrying — the daily quota is gone
+            if remaining_tok_day not in ("?", None) and int(remaining_tok_day) == 0:
+                log.error(
+                    "Cerebras daily token quota exhausted (%s tokens remaining). "
+                    "Cannot continue — re-trigger tomorrow.",
+                    remaining_tok_day,
+                )
+                raise RuntimeError(
+                    "Cerebras daily token quota exhausted. Re-trigger tomorrow."
+                ) from exc
+
+            last_exc = exc
+            time.sleep(actual_wait)
+            continue
+        except APIStatusError as exc:
+            # Catches other 4xx/5xx raised as exceptions by the SDK
+            if exc.status_code == 503:
+                log.warning(
+                    "Cerebras APIStatusError 503 on attempt %d/%d. Waiting %ds.",
+                    attempt + 1, len(_CEREBRAS_BACKOFF), wait,
+                )
+                last_exc = exc
+                time.sleep(wait)
+                continue
+            # Non-retriable status error
+            log.error("Cerebras non-retriable APIStatusError: %s", exc)
+            raise
+
+        except Exception as exc:
+            # Catch-all for unexpected SDK errors — log and re-raise immediately
+            log.error("Cerebras unexpected error: %s", exc)
             raise
 
     raise RuntimeError(
