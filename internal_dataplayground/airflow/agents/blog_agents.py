@@ -263,18 +263,18 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
 
             resp.raise_for_status()
 
-            except RateLimitError as exc:
-              response = getattr(exc, "response", None)
-              keys_to_print = ['is_success', 'is_client_error', 'is_closed', 'is_error', 'is_informational', 'is_redirect', 'is_server_error', 'is_stream_consumed', 'headers']
-              headers = {}
-              if response is not None:
-                  for attr in dir(response):
-                      if attr == 'headers':
-                          headers['retry-after'] = int(getattr(response, attr).get('retry-after', '60'))
-                          retry_after = headers['retry-after']
-                      elif attr in keys_to_print:
-                          headers[attr] = getattr(response, attr)
-                  print(headers)
+        except RateLimitError as exc:
+            response = getattr(exc, "response", None)
+            keys_to_print = ['is_success', 'is_client_error', 'is_closed', 'is_error', 'is_informational', 'is_redirect', 'is_server_error', 'is_stream_consumed', 'headers']
+            headers = {}
+            if response is not None:
+                for attr in dir(response):
+                    if attr == 'headers':
+                        headers['retry-after'] = int(getattr(response, attr).get('retry-after', '60'))
+                        retry_after = headers['retry-after']
+                    elif attr in keys_to_print:
+                        headers[attr] = getattr(response, attr)
+                print(headers)
 
             actual_wait = float(retry_after) if retry_after else wait
 
