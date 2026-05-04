@@ -203,10 +203,8 @@ def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
-# Default backoff schedule for 429 responses (seconds).
-# Cerebras resets its RPM window every 60 seconds, so the max wait
-# is capped there. If Retry-After header is present it overrides this.
-_CEREBRAS_BACKOFF = [75, 150, 300, 600]
+# Add this constant near the top with the other model IDs
+_CEREBRAS_INTER_REQUEST_SLEEP = 65  # seconds — slightly over 1 full minute window
 
 def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
     log.info("_cerebras() v2 — retry loop active, backoff=%s", _CEREBRAS_BACKOFF)
@@ -215,7 +213,6 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
     import time
 
     client = Cerebras(api_key=_cerebras_key(), max_retries=0).with_raw_response
-
     last_exc = None
 
     for attempt, wait in enumerate(_CEREBRAS_BACKOFF):
@@ -230,22 +227,30 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
                 max_tokens=max_tokens,
             )
 
-            remaining_day = resp.headers.get("x-ratelimit-remaining-tokens-day",    "?")
-            remaining_min = resp.headers.get("x-ratelimit-remaining-tokens-minute",  "?")
-            reset_min     = resp.headers.get("x-ratelimit-reset-tokens-minute",      "?")
+            remaining_day = resp.headers.get("x-ratelimit-remaining-tokens-day", "?")
+            remaining_min = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
+            reset_min     = resp.headers.get("x-ratelimit-reset-tokens-minute", "?")
 
             if resp.status_code == 200:
-                log.debug(
+                log.info(
                     "Cerebras %s OK — tokens remaining: %s/day, %s/min (reset in %ss)",
                     model, remaining_day, remaining_min, reset_min,
                 )
-                return resp.json()["choices"][0]["message"]["content"]
+                content = resp.json()["choices"][0]["message"]["content"]
+                
+                # Return content AND remaining tokens so the DAG can decide how long to sleep
+                # We pack it as a tuple; callers that don't need it just take [0]
+                try:
+                    remaining_min_int = int(remaining_min)
+                except (ValueError, TypeError):
+                    remaining_min_int = 0
+                return content, remaining_min_int
 
             if resp.status_code == 429:
                 retry_after = resp.headers.get("Retry-After")
                 actual_wait = float(retry_after) if retry_after else wait
                 log.warning(
-                    "Cerebras 429 (response object) on attempt %d/%d. Waiting %.1fs.",
+                    "Cerebras 429 on attempt %d/%d. Waiting %.1fs.",
                     attempt + 1, len(_CEREBRAS_BACKOFF), actual_wait,
                 )
                 last_exc = RuntimeError(f"Cerebras 429 on attempt {attempt + 1}")
@@ -253,10 +258,8 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
                 continue
 
             if resp.status_code == 503:
-                log.warning(
-                    "Cerebras 503 on attempt %d/%d. Waiting %ds.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF), wait,
-                )
+                log.warning("Cerebras 503 on attempt %d/%d. Waiting %ds.",
+                            attempt + 1, len(_CEREBRAS_BACKOFF), wait)
                 last_exc = RuntimeError(f"Cerebras 503 on attempt {attempt + 1}")
                 time.sleep(wait)
                 continue
@@ -265,45 +268,31 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
 
         except RateLimitError as exc:
             response = getattr(exc, "response", None)
-            keys_to_print = ['is_success', 'is_client_error', 'is_closed', 'is_error', 'is_informational', 'is_redirect', 'is_server_error', 'is_stream_consumed', 'headers']
-            headers = {}
+            retry_after = 60  # safe default
             if response is not None:
-                for attr in dir(response):
-                    if attr == 'headers':
-                        headers['retry-after'] = int(getattr(response, attr).get('retry-after', '60'))
-                        retry_after = headers['retry-after']
-                    elif attr in keys_to_print:
-                        headers[attr] = getattr(response, attr)
-                print(headers)
-
-            actual_wait = float(retry_after) if retry_after else wait
-
+                try:
+                    retry_after = int(getattr(response, "headers", {}).get("retry-after", 60))
+                except (ValueError, TypeError):
+                    pass
             log.warning(
-                "Cerebras 429 RateLimitError on attempt %d/%d — quota state:\n"
-                "  Headers : %s\n"
-                "  Waiting  : %.1fs before retry",
-                attempt + 1, len(_CEREBRAS_BACKOFF), headers, actual_wait,
+                "Cerebras 429 RateLimitError on attempt %d/%d. Waiting %ds.",
+                attempt + 1, len(_CEREBRAS_BACKOFF), retry_after,
             )
-
             last_exc = exc
-            time.sleep(actual_wait)
+            time.sleep(retry_after)
             continue
+
         except APIStatusError as exc:
-            # Catches other 4xx/5xx raised as exceptions by the SDK
             if exc.status_code == 503:
-                log.warning(
-                    "Cerebras APIStatusError 503 on attempt %d/%d. Waiting %ds.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF), wait,
-                )
+                log.warning("Cerebras APIStatusError 503 on attempt %d/%d. Waiting %ds.",
+                            attempt + 1, len(_CEREBRAS_BACKOFF), wait)
                 last_exc = exc
                 time.sleep(wait)
                 continue
-            # Non-retriable status error
             log.error("Cerebras non-retriable APIStatusError: %s", exc)
             raise
 
         except Exception as exc:
-            # Catch-all for unexpected SDK errors — log and re-raise immediately
             log.error("Cerebras unexpected error: %s", exc)
             raise
 
@@ -1136,7 +1125,8 @@ FORMAT:
         f"Code:\n{code_content}"
     )
 
-    return _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.25)
+    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.25)
+    return content
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1279,7 +1269,8 @@ Rules:
         f"Author feedback:\n{user_feedback}"
     )
 
-    return _cerebras(_CEREBRAS_LLAMA33, system, prompt, temperature=0.3)
+    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.3)
+    return content
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1624,7 +1615,8 @@ Just the file, starting from the first line.
 
     prompt = f"Add comments to {file_name} following the conventions above:\n\n{code_content}"
 
-    return _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    return content
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1773,4 +1765,5 @@ FOCUS: Real issues only. Skip style nitpicks unless they cause actual friction.
         f"Code:\n{code_content}"
     )
 
-    return _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    return content

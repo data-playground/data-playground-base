@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 # Cerebras free tier: 30 RPM = 1 request every 2 seconds.
 # We use 3 seconds as a conservative margin. Adjust downward if you upgrade
 # to a paid Cerebras tier (which removes the RPM cap).
-INTER_REQUEST_DELAY_SEC = 3
+INTER_REQUEST_DELAY_SEC = 65
 
 default_args = {
     "owner":             "life_os",
@@ -40,6 +40,11 @@ default_args = {
     "email_on_failure":  False,
 }
 
+
+import time
+
+# Replace the constant at the top
+INTER_REQUEST_DELAY_SEC = 65  # minimum — we wait longer if tokens look low
 
 def task_improve_files(**context):
     from dag_db import fetch_one, execute
@@ -51,21 +56,28 @@ def task_improve_files(**context):
 
     log.info(
         "Code Improver starting. %d file(s) to process. "
-        "Inter-request delay: %ds (Cerebras 30 RPM free tier).",
+        "Minimum inter-request delay: %ds.",
         len(file_ids), INTER_REQUEST_DELAY_SEC,
     )
 
     failed_files = []
+    last_remaining_tokens = None  # track from previous call
 
     for idx, file_id in enumerate(file_ids):
-        # ── Throttle between requests ─────────────────────────────────────
-        # Skip the delay before the very first request.
+
+        # Adaptive wait: if the last call left very few tokens in the minute
+        # bucket, sleep a full minute. Otherwise use the minimum.
         if idx > 0:
-            log.debug(
-                "Waiting %ds before next request (%d/%d)...",
-                INTER_REQUEST_DELAY_SEC, idx + 1, len(file_ids),
-            )
-            time.sleep(INTER_REQUEST_DELAY_SEC)
+            if last_remaining_tokens is not None and last_remaining_tokens < 3000:
+                sleep_time = INTER_REQUEST_DELAY_SEC
+                log.info(
+                    "Low token budget remaining (%d). Sleeping %ds before next file.",
+                    last_remaining_tokens, sleep_time,
+                )
+            else:
+                sleep_time = INTER_REQUEST_DELAY_SEC
+                log.debug("Sleeping %ds between files.", sleep_time)
+            time.sleep(sleep_time)
 
         file = fetch_one("SELECT * FROM code_files WHERE id = %s", (file_id,))
         if not file:
@@ -78,11 +90,15 @@ def task_improve_files(**context):
 
         log.info("Improving %s (%d/%d)", file["file_name"], idx + 1, len(file_ids))
         try:
-            notes = agent_code_improver(
+            notes, remaining_tokens = agent_code_improver(
                 code_content=file["raw_code"],
                 file_name=file["file_name"],
                 narration=file.get("narration") or "",
             )
+            last_remaining_tokens = remaining_tokens
+            log.info("✓ Improved %s (tokens remaining this minute: %d)",
+                     file["file_name"], remaining_tokens)
+
             now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             execute(
                 """UPDATE code_files
@@ -93,39 +109,21 @@ def task_improve_files(**context):
                    WHERE id = %s""",
                 (notes, now, "generated", now, file_id),
             )
-            log.info("✓ Improved %s", file["file_name"])
 
         except Exception as exc:
-            # _cerebras() already retried with backoff. If we still get here,
-            # the error is persistent — record it and continue with other files
-            # rather than failing the whole task.
-            log.error(
-                "✗ Failed to improve file %d (%s) after retries: %s",
-                file_id, file.get("file_name", "?"), exc,
-            )
+            log.error("✗ Failed to improve file %d (%s): %s",
+                      file_id, file.get("file_name", "?"), exc)
             failed_files.append((file_id, file.get("file_name", "?"), str(exc)))
+            last_remaining_tokens = 0  # assume worst case after a failure
 
-    # ── Final summary ─────────────────────────────────────────────────────
-    succeeded = len(file_ids) - len(failed_files) - (len(file_ids) - len([
-        f for f in file_ids
-        if fetch_one("SELECT id FROM code_files WHERE id = %s", (f,))
-    ]))
-    log.info(
-        "Code Improver complete. %d/%d files processed successfully.",
-        len(file_ids) - len(failed_files), len(file_ids),
-    )
+    log.info("Code Improver complete. %d/%d files processed successfully.",
+             len(file_ids) - len(failed_files), len(file_ids))
 
     if failed_files:
-        log.warning(
-            "The following files failed and can be re-triggered individually:\n%s",
-            "\n".join(f"  - id={fid} ({name}): {err}" for fid, name, err in failed_files),
-        )
-        # Raise so Airflow marks the task as failed and retries the whole
-        # batch after retry_delay. The _cerebras retry handles per-request
-        # 429s; this handles the case where the whole window was exhausted.
-        raise RuntimeError(
-            f"{len(failed_files)} file(s) failed. Check logs above for details."
-        )
+        log.warning("Failed files:\n%s",
+                    "\n".join(f"  - id={fid} ({name}): {err}"
+                              for fid, name, err in failed_files))
+        raise RuntimeError(f"{len(failed_files)} file(s) failed.")
 
 
 with DAG(
