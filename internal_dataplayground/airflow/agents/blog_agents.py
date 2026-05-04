@@ -1769,5 +1769,5 @@ FOCUS: Real issues only. Skip style nitpicks unless they cause actual friction.
         f"Code:\n{code_content}"
     )
 
-    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
-    return content
+    content, remaining_tokens = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    return content, remaining_tokens
