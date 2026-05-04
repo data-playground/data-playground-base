@@ -202,6 +202,10 @@ def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
+# Default backoff schedule for 429 responses (seconds).
+# Cerebras resets its RPM window every 60 seconds, so the max wait
+# is capped there. If Retry-After header is present it overrides this.
+_CEREBRAS_BACKOFF = [75, 150, 300, 600]
 
 # Add this constant near the top with the other model IDs
 _CEREBRAS_INTER_REQUEST_SLEEP = 65  # seconds — slightly over 1 full minute window
