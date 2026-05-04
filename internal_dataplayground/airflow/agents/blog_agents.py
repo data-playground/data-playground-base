@@ -263,51 +263,27 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
 
             resp.raise_for_status()
 
-        except RateLimitError as exc:
-            # Extract rate limit headers from the exception's response object
-            response = getattr(exc, "response", None)
-            
-            if response is not None:
-                headers = response.headers
-                retry_after          = headers.get("Retry-After")
-                remaining_req_min    = headers.get("x-ratelimit-remaining-requests-minute",  "?")
-                remaining_req_day    = headers.get("x-ratelimit-remaining-requests-day",     "?")
-                remaining_tok_min    = headers.get("x-ratelimit-remaining-tokens-minute",    "?")
-                remaining_tok_day    = headers.get("x-ratelimit-remaining-tokens-day",       "?")
-                limit_req_min        = headers.get("x-ratelimit-limit-requests-minute",      "?")
-                limit_tok_min        = headers.get("x-ratelimit-limit-tokens-minute",        "?")
-                reset_req_min        = headers.get("x-ratelimit-reset-requests-minute",      "?")
-                reset_tok_min        = headers.get("x-ratelimit-reset-tokens-minute",        "?")
-            else:
-                # SDK raised RateLimitError without attaching a response (shouldn't happen
-                # but defensive fallback in case the SDK version behaves differently)
-                retry_after = remaining_req_min = remaining_req_day = "?"
-                remaining_tok_min = remaining_tok_day = limit_req_min = "?"
-                limit_tok_min = reset_req_min = reset_tok_min = "?"
+            except RateLimitError as exc:
+              response = getattr(exc, "response", None)
+              keys_to_print = ['is_success', 'is_client_error', 'is_closed', 'is_error', 'is_informational', 'is_redirect', 'is_server_error', 'is_stream_consumed', 'headers']
+              headers = {}
+              if response is not None:
+                  for attr in dir(response):
+                      if attr == 'headers':
+                          headers['retry-after'] = int(getattr(response, attr).get('retry-after', '60'))
+                          retry_after = headers['retry-after']
+                      elif attr in keys_to_print:
+                          headers[attr] = getattr(response, attr)
+                  print(headers)
 
             actual_wait = float(retry_after) if retry_after else wait
 
             log.warning(
                 "Cerebras 429 RateLimitError on attempt %d/%d — quota state:\n"
-                "  Requests : %s/%s remaining this minute (resets in %ss) | %s remaining today\n"
-                "  Tokens   : %s/%s remaining this minute (resets in %ss) | %s remaining today\n"
+                "  Headers : %s\n"
                 "  Waiting  : %.1fs before retry",
-                attempt + 1, len(_CEREBRAS_BACKOFF),
-                remaining_req_min, limit_req_min, reset_req_min, remaining_req_day,
-                remaining_tok_min, limit_tok_min, reset_tok_min, remaining_tok_day,
-                actual_wait,
+                attempt + 1, len(_CEREBRAS_BACKOFF), headers, actual_wait,
             )
-
-            # If remaining_tok_day is 0, no point retrying — the daily quota is gone
-            if remaining_tok_day not in ("?", None) and int(remaining_tok_day) == 0:
-                log.error(
-                    "Cerebras daily token quota exhausted (%s tokens remaining). "
-                    "Cannot continue — re-trigger tomorrow.",
-                    remaining_tok_day,
-                )
-                raise RuntimeError(
-                    "Cerebras daily token quota exhausted. Re-trigger tomorrow."
-                ) from exc
 
             last_exc = exc
             time.sleep(actual_wait)
