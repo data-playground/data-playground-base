@@ -1,104 +1,219 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="mixed">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ idea.seo_title or idea.title_concept }} — Life OS</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-    <style>
-        :root { --transition:0.25s ease; }
-        [data-theme="dark"]  { --bg:#0d0d0f; --bg-card:#16161a; --border:#2a2a35; --text-primary:#e8e8f0; --text-secondary:#8888a8; --text-muted:#50505f; --accent:#6c63ff; }
-        [data-theme="light"] { --bg:#f5f4f8; --bg-card:#ffffff; --border:#e2e0ec; --text-primary:#1a1a2e; --text-secondary:#5a5880; --text-muted:#9896b0; --accent:#5548e8; }
-        [data-theme="mixed"] { --bg:#111318; --bg-card:#f8f7fc; --border:#e0ddf0; --text-primary:#1c1b2e; --text-secondary:#58567a; --text-muted:#9896b0; --accent:#7c6fff; }
+{% extends "base.html" %}
+{#
+  Reader view — extends base.html with the sidebar hidden via CSS grid override.
+  The sidebar stays in the DOM so the mobile hamburger and theme switcher still
+  work, but it is collapsed to zero width for the reading experience.
+  Lora (serif body font) is loaded here in extra_css for reading comfort.
+#}
+{% block title %}{{ idea.seo_title or idea.title_concept }}{% endblock %}
+{% block page_title %}{{ idea.seo_title or idea.title_concept }}{% endblock %}
 
-        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-        body { font-family:'DM Mono',monospace; background:var(--bg); color:var(--text-primary); min-height:100vh; }
+{% block topbar_actions %}
+    <a class="btn" href="/blog">← Blog Ideas</a>
+    <button class="reader-copy-btn" onclick="copyMarkdown()">⊕ Copy Markdown</button>
+{% endblock %}
 
-        .article-wrap { max-width:740px; margin:0 auto; padding:48px 24px 80px; }
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+/* ── READER LAYOUT ────────────────────────────────────────────────────────
+   Collapse the sidebar to zero width so the content spans the full page.
+   The sidebar element stays in the DOM — mobile hamburger and theme
+   switcher inside it continue to function normally.
+   ──────────────────────────────────────────────────────────────────────── */
+#layout,
+#layout.sidebar-collapsed {
+    grid-template-columns: 0 1fr !important;
+}
+#sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    border-right: none !important;
+}
 
-        .back-link { display:inline-flex; align-items:center; gap:6px; font-size:10px; color:var(--text-muted); text-decoration:none; margin-bottom:32px; transition:color var(--transition); }
-        .back-link:hover { color:var(--accent); }
+/* ── ARTICLE CONTAINER ──────────────────────────────────────────────────── */
+.article-reader {
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+}
 
-        .article-meta { margin-bottom:32px; }
-        .article-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
-        .tag-pill { padding:3px 10px; font-size:9px; border-radius:3px; background:rgba(124,111,255,0.1); color:var(--accent); letter-spacing:.06em; text-transform:uppercase; }
-        .article-title { font-family:'Syne',sans-serif; font-weight:800; font-size:28px; line-height:1.25; color:var(--text-primary); margin-bottom:12px; }
-        .article-desc { font-size:13px; color:var(--text-secondary); line-height:1.7; margin-bottom:16px; }
-        .article-byline { font-size:10px; color:var(--text-muted); }
+/* Tags */
+.article-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+.tag-pill {
+    padding: 3px 10px;
+    font-size: 9px;
+    border-radius: 3px;
+    background: rgba(124,111,255,0.1);
+    color: var(--accent);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
 
-        .article-divider { border:none; border-top:1px solid var(--border); margin:24px 0; }
+/* Headline block */
+.article-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 28px;
+    line-height: 1.25;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+.article-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 16px;
+}
+.article-byline {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+}
+.article-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0 0 28px;
+}
 
-        /* Rendered markdown styles */
-        .article-body { font-family:'Lora', Georgia, serif; font-size:16px; line-height:1.85; color:var(--text-secondary); }
-        .article-body h1,.article-body h2,.article-body h3 { font-family:'Syne',sans-serif; font-weight:700; color:var(--text-primary); margin:2em 0 .75em; }
-        .article-body h1 { font-size:22px; }
-        .article-body h2 { font-size:18px; border-bottom:1px solid var(--border); padding-bottom:6px; }
-        .article-body h3 { font-size:15px; }
-        .article-body p { margin-bottom:1.4em; }
-        .article-body code { font-family:'DM Mono',monospace; font-size:12px; background:rgba(124,111,255,0.08); padding:2px 6px; border-radius:3px; color:var(--accent); }
-        .article-body pre { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:1.4em 0; }
-        .article-body pre code { background:none; padding:0; color:var(--text-primary); font-size:11px; line-height:1.7; }
-        .article-body ul,ol { padding-left:1.5em; margin-bottom:1.4em; }
-        .article-body li { margin-bottom:.5em; }
-        .article-body blockquote { border-left:3px solid var(--accent); padding-left:16px; margin:1.4em 0; color:var(--text-muted); font-style:italic; }
-        .article-body a { color:var(--accent); }
-        .article-body strong { color:var(--text-primary); font-weight:600; }
+/* ── MARKDOWN BODY (Lora for reading comfort) ───────────────────────────── */
+.article-body {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 16px;
+    line-height: 1.85;
+    color: var(--text-secondary);
+}
+.article-body h1,
+.article-body h2,
+.article-body h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 2em 0 .75em;
+}
+.article-body h1 { font-size: 22px; }
+.article-body h2 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.article-body h3 { font-size: 15px; }
+.article-body p { margin-bottom: 1.4em; }
+.article-body code {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: rgba(124,111,255,0.08);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--accent);
+}
+.article-body pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    margin: 1.4em 0;
+}
+.article-body pre code {
+    background: none;
+    padding: 0;
+    color: var(--text-primary);
+    font-size: 11px;
+    line-height: 1.7;
+}
+.article-body ul,
+.article-body ol { padding-left: 1.5em; margin-bottom: 1.4em; }
+.article-body li { margin-bottom: .5em; }
+.article-body blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+    margin: 1.4em 0;
+    color: var(--text-muted);
+    font-style: italic;
+}
+.article-body a { color: var(--accent); }
+.article-body strong { color: var(--text-primary); font-weight: 600; }
 
-        .copy-btn { display:inline-flex; align-items:center; gap:6px; margin-top:24px; padding:8px 18px; font-family:'DM Mono',monospace; font-size:10px; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; transition:opacity .2s; }
-        .copy-btn:hover { opacity:.85; }
-    </style>
-</head>
-<body data-theme="mixed">
-<div class="article-wrap">
+/* Copy button in topbar */
+.reader-copy-btn {
+    padding: 5px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity .2s;
+}
+.reader-copy-btn:hover { opacity: .85; }
 
-    <a class="back-link" href="/blog">← Back to Blog Ideas</a>
+/* Mobile */
+@media (max-width: 768px) {
+    /* On mobile the sidebar becomes a slide-in overlay, so the grid
+       override doesn't apply — the hamburger brings it back as expected. */
+    #layout,
+    #layout.sidebar-collapsed {
+        grid-template-columns: unset !important;
+    }
+    #sidebar {
+        width: min(280px, 85vw) !important;
+        overflow: visible !important;
+    }
+    .article-reader { padding: 20px 14px 60px; }
+    .article-title { font-size: 22px; }
+    .article-body { font-size: 15px; }
+}
+</style>
+{% endblock %}
 
-    <div class="article-meta">
-        {% if idea.seo_tags %}
-        <div class="article-tags">
-            {% for tag in idea.seo_tags.split(',') %}
-            {% if tag.strip() %}
-            <span class="tag-pill">{{ tag.strip() }}</span>
-            {% endif %}
-            {% endfor %}
-        </div>
+{% block content %}
+<div class="article-reader">
+
+    {% if idea.seo_tags %}
+    <div class="article-tags-row">
+        {% for tag in idea.seo_tags.split(',') %}
+        {% if tag.strip() %}
+        <span class="tag-pill">{{ tag.strip() }}</span>
         {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
 
-        <h1 class="article-title">{{ idea.seo_title or idea.title_concept }}</h1>
+    <h1 class="article-title">{{ idea.seo_title or idea.title_concept }}</h1>
 
-        {% if idea.seo_description %}
-        <p class="article-desc">{{ idea.seo_description }}</p>
-        {% endif %}
+    {% if idea.seo_description %}
+    <p class="article-desc">{{ idea.seo_description }}</p>
+    {% endif %}
 
-        <div class="article-byline">
-            Published {{ idea.updated_at.strftime('%B %d, %Y') }}
-        </div>
+    <div class="article-byline">
+        Published {{ idea.updated_at.strftime('%B %d, %Y') }}
     </div>
 
     <hr class="article-divider">
 
     <div class="article-body" id="article-body"></div>
 
-    <button class="copy-btn" onclick="copyMarkdown()">⊕ Copy Markdown</button>
-
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
 const raw = {{ (idea.final_article or idea.draft_v1 or '')|tojson }};
 document.getElementById('article-body').innerHTML = marked.parse(raw);
 
-function copyMarkdown(){
-    navigator.clipboard.writeText(raw).then(()=>{
-        const btn = document.querySelector('.copy-btn');
+function copyMarkdown() {
+    navigator.clipboard.writeText(raw).then(() => {
+        const btn = document.querySelector('.reader-copy-btn');
+        const orig = btn.textContent;
         btn.textContent = '✓ Copied!';
-        setTimeout(()=>btn.innerHTML='⊕ Copy Markdown', 2000);
+        setTimeout(() => btn.textContent = orig, 2000);
     });
 }
-
-// Apply saved theme
-(function(){const s=localStorage.getItem('life-os-theme')||'mixed';document.body.setAttribute('data-theme',s);})();
 </script>
-</body>
-</html>
+{% endblock %}

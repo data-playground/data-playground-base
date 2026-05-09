@@ -1,153 +1,203 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="mixed">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life OS — Finance Settings</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root{--transition:0.25s ease;--sidebar-width:220px;}
-        [data-theme="dark"]{--bg:#0d0d0f;--bg-card:#16161a;--bg-hover:#1e1e24;--border:#2a2a35;--text-primary:#e8e8f0;--text-secondary:#8888a8;--text-muted:#50505f;--accent:#6c63ff;--green:#00e5a0;--red:#ff5050;--shadow:0 2px 12px rgba(0,0,0,0.4);--sidebar-bg:#16161a;--topbar-bg:#16161a;}
-        [data-theme="light"]{--bg:#f5f4f8;--bg-card:#ffffff;--bg-hover:#faf9fd;--border:#e2e0ec;--text-primary:#1a1a2e;--text-secondary:#5a5880;--text-muted:#9896b0;--accent:#5548e8;--green:#00a870;--red:#d63030;--shadow:0 2px 8px rgba(0,0,0,0.06);--sidebar-bg:#ffffff;--topbar-bg:#ffffff;}
-        [data-theme="mixed"]{--bg:#111318;--bg-card:#f8f7fc;--bg-hover:#f2f0fa;--border:#e0ddf0;--text-primary:#1c1b2e;--text-secondary:#58567a;--text-muted:#9896b0;--accent:#7c6fff;--green:#00c980;--red:#f04040;--shadow:0 2px 10px rgba(0,0,0,0.08);--sidebar-bg:#111318;--topbar-bg:#f8f7fc;}
+{% extends "base.html" %}
+{% block title %}Finance Settings{% endblock %}
+{% block page_title %}Finance Settings{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/finance">← Finance</a>
+{% endblock %}
 
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;}
-        body{font-family:'DM Mono',monospace;background:var(--bg);color:var(--text-primary);overflow:hidden;transition:background var(--transition),color var(--transition);}
+{% block extra_css %}
+<style>
+/* ── FINANCE SETTINGS PAGE ───────────────────────────────────────────────── */
+.settings-wrap { padding: 24px; }
 
-        .layout{display:grid;grid-template-columns:var(--sidebar-width) 1fr;grid-template-rows:56px 1fr;height:100vh;}
-        .layout.sidebar-collapsed{grid-template-columns:48px 1fr;}
-        .sidebar{grid-column:1;grid-row:1/-1;background:var(--sidebar-bg);border-right:1px solid #2a2a35;display:flex;flex-direction:column;height:100vh;overflow:hidden;z-index:100;}
-        .layout.sidebar-collapsed .sidebar-text,.layout.sidebar-collapsed .os-subtitle,.layout.sidebar-collapsed .nav-label,.layout.sidebar-collapsed .theme-switcher,.layout.sidebar-collapsed .theme-label{display:none;}
-        .layout.sidebar-collapsed .os-title{font-size:10px;padding:16px 0;text-align:center;}
-        .layout.sidebar-collapsed .nav-item{justify-content:center;padding:10px 0;}
-        .layout.sidebar-collapsed .nav-item .icon{width:100%;text-align:center;}
-        .layout.sidebar-collapsed .sidebar-footer{padding:12px 0;align-items:center;}
-        .os-title{font-family:'Syne',sans-serif;font-weight:800;font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);padding:20px 20px 16px;border-bottom:1px solid #2a2a35;margin-bottom:8px;flex-shrink:0;}
-        .os-subtitle{display:block;font-size:10px;font-weight:400;color:#50505f;letter-spacing:.08em;margin-top:2px;}
-        .sidebar-nav{flex:1;overflow-y:auto;padding-bottom:8px;}
-        .nav-label{font-size:9px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:#50505f;padding:0 20px;margin:16px 0 6px;}
-        .nav-item{display:flex;align-items:center;gap:10px;padding:8px 20px;font-size:12px;color:#9896b8;cursor:pointer;transition:all var(--transition);text-decoration:none;border-left:2px solid transparent;white-space:nowrap;}
-        .nav-item:hover{background:rgba(255,255,255,0.06);color:#e8e6f8;}
-        .nav-item.active{background:rgba(124,111,255,0.12);color:var(--accent);border-left-color:var(--accent);font-weight:500;}
-        .nav-item .icon{font-size:14px;width:16px;text-align:center;flex-shrink:0;}
-        .sidebar-footer{flex-shrink:0;padding:14px 20px;border-top:1px solid #2a2a35;display:flex;flex-direction:column;gap:8px;}
-        .theme-label{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#50505f;}
-        .theme-switcher{display:flex;gap:5px;}
-        .theme-btn{flex:1;padding:5px 4px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid #2a2a35;background:transparent;color:#50505f;border-radius:4px;cursor:pointer;transition:all var(--transition);}
-        .theme-btn:hover{border-color:var(--accent);color:var(--accent);}
-        .theme-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-        .collapse-btn{background:transparent;border:1px solid #2a2a35;color:#50505f;border-radius:4px;padding:5px 8px;font-size:11px;cursor:pointer;transition:all var(--transition);align-self:flex-start;}
-        .collapse-btn:hover{border-color:var(--accent);color:var(--accent);}
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 960px;
+}
+.settings-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
+[data-theme="dark"] .settings-card { background: var(--bg-hover); }
 
-        .topbar{grid-column:2;grid-row:1;background:var(--topbar-bg);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;}
-        .page-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;}
-        .btn{padding:5px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;border-radius:4px;cursor:pointer;transition:all var(--transition);text-decoration:none;border:1px solid var(--border);color:var(--text-secondary);background:transparent;}
-        .btn:hover{border-color:var(--accent);color:var(--accent);}
+.card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
 
-        .main-content{grid-column:2;grid-row:2;padding:24px;overflow-y:auto;background:var(--bg-card);}
-        [data-theme="dark"] .main-content{background:var(--bg);}
+/* Inline add form */
+.add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.add-input {
+    flex: 1;
+    min-width: 120px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-radius: 5px;
+    outline: none;
+    transition: border-color var(--transition);
+}
+.add-input:focus { border-color: var(--accent); }
+.add-input::placeholder { color: var(--text-muted); }
+.add-select {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-radius: 5px;
+    outline: none;
+}
+.add-btn {
+    padding: 6px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity var(--transition);
+}
+.add-btn:hover { opacity: .85; }
 
-        /* Settings grid */
-        .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:960px;}
-        .settings-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px;box-shadow:var(--shadow);}
-        [data-theme="dark"] .settings-card{background:var(--bg-hover);}
-        .card-title{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+/* Item list */
+.item-list { display: flex; flex-direction: column; gap: 6px; }
+.item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 11px;
+}
+.item-row.inactive { opacity: .45; }
+.item-name { font-weight: 500; color: var(--text-primary); }
+.item-sub { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+.item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.action-btn {
+    padding: 3px 9px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all var(--transition);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+}
+.action-btn:hover { border-color: var(--accent); color: var(--accent); }
+.action-btn.danger:hover { border-color: var(--red); color: var(--red); }
+.action-btn.active-indicator { border-color: var(--green); color: var(--green); }
 
-        /* Inline add form */
-        .add-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-        .add-input{flex:1;min-width:120px;font-family:'DM Mono',monospace;font-size:11px;padding:6px 10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);border-radius:5px;outline:none;transition:border-color var(--transition);}
-        .add-input:focus{border-color:var(--accent);}
-        .add-input::placeholder{color:var(--text-muted);}
-        .add-select{font-family:'DM Mono',monospace;font-size:11px;padding:6px 10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);border-radius:5px;outline:none;}
-        .add-btn{padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:5px;cursor:pointer;white-space:nowrap;transition:opacity var(--transition);}
-        .add-btn:hover{opacity:.85;}
+.feedback { font-size: 10px; color: var(--red); margin-top: 6px; min-height: 16px; }
+.feedback.ok { color: var(--green); }
 
-        /* Item list */
-        .item-list{display:flex;flex-direction:column;gap:6px;}
-        .item-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;font-size:11px;}
-        .item-row.inactive{opacity:.45;}
-        .item-name{font-weight:500;color:var(--text-primary);}
-        .item-sub{font-size:9px;color:var(--text-muted);margin-top:2px;}
-        .item-actions{display:flex;gap:6px;flex-shrink:0;}
-        .action-btn{padding:3px 9px;font-family:'DM Mono',monospace;font-size:9px;border-radius:3px;cursor:pointer;transition:all var(--transition);border:1px solid var(--border);background:transparent;color:var(--text-muted);}
-        .action-btn:hover{border-color:var(--accent);color:var(--accent);}
-        .action-btn.danger:hover{border-color:var(--red);color:var(--red);}
-        .action-btn.active-indicator{border-color:var(--green);color:var(--green);}
+.badge-active {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 500;
+    background: rgba(0,201,128,0.12);
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+.badge-inactive {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 500;
+    background: rgba(136,136,168,0.12);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
 
-        .feedback{font-size:10px;color:var(--red);margin-top:6px;min-height:16px;}
-        .feedback.ok{color:var(--green);}
+@media (max-width: 768px) {
+    .settings-wrap { padding: 14px; }
+    .settings-grid { grid-template-columns: 1fr; gap: 14px; max-width: 100%; }
+}
+</style>
+{% endblock %}
 
-        .badge-active{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:500;background:rgba(0,201,128,0.12);color:var(--green);text-transform:uppercase;letter-spacing:.06em;}
-        .badge-inactive{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:500;background:rgba(136,136,168,0.12);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;}
-    </style>
-</head>
-<body>
-<div class="layout" id="layout">
-    {% include "partials/sidebar.html" %}
+{% block content %}
+<div class="settings-wrap">
+    <div class="settings-grid">
 
-    <header class="topbar">
-        <span class="page-title">Finance Settings</span>
-        <a class="btn" href="/finance">← Finance</a>
-    </header>
-
-    <main class="main-content">
-        <div class="settings-grid">
-
-            <!-- ACCOUNTS -->
-            <div class="settings-card">
-                <div class="card-title">
-                    <span>Accounts</span>
-                </div>
-
-                <!-- Add account form -->
-                <div class="add-row">
-                    <input class="add-input" type="text" id="acct-name" placeholder="Chase Checking">
-                    <select class="add-select" id="acct-type">
-                        <option>Checking</option>
-                        <option>Credit Card</option>
-                        <option>Savings</option>
-                    </select>
-                    <input class="add-input" type="text" id="acct-last4" placeholder="Last 4" maxlength="4" style="max-width:70px;">
-                    <button class="add-btn" onclick="addAccount()">+ Add</button>
-                </div>
-                <div class="feedback" id="acct-feedback"></div>
-
-                <!-- Account list — HTMX target -->
-                <div id="account-list-container">
-                    {% include "partials/account_list.html" %}
-                </div>
+        <!-- ACCOUNTS -->
+        <div class="settings-card">
+            <div class="card-title">
+                <span>Accounts</span>
             </div>
 
-            <!-- CATEGORIES -->
-            <div class="settings-card">
-                <div class="card-title">
-                    <span>Categories</span>
-                    <span style="font-size:9px;color:var(--text-muted);font-weight:400;">Active ones are sent to AI</span>
-                </div>
-
-                <!-- Add category form -->
-                <div class="add-row">
-                    <input class="add-input" type="text" id="cat-name" placeholder="Category name">
-                    <input class="add-input" type="text" id="cat-desc" placeholder="Description (helps AI)" style="flex:2;">
-                    <button class="add-btn" onclick="addCategory()">+ Add</button>
-                </div>
-                <div class="feedback" id="cat-feedback"></div>
-
-                <!-- Category list — HTMX target -->
-                <div id="category-list-container">
-                    {% include "partials/category_list.html" %}
-                </div>
+            <!-- Add account form -->
+            <div class="add-row">
+                <input class="add-input" type="text" id="acct-name" placeholder="Chase Checking">
+                <select class="add-select" id="acct-type">
+                    <option>Checking</option>
+                    <option>Credit Card</option>
+                    <option>Savings</option>
+                </select>
+                <input class="add-input" type="text" id="acct-last4" placeholder="Last 4" maxlength="4" style="max-width:70px;">
+                <button class="add-btn" onclick="addAccount()">+ Add</button>
             </div>
+            <div class="feedback" id="acct-feedback"></div>
 
+            <!-- Account list — HTMX target -->
+            <div id="account-list-container">
+                {% include "partials/account_list.html" %}
+            </div>
         </div>
-    </main>
+
+        <!-- CATEGORIES -->
+        <div class="settings-card">
+            <div class="card-title">
+                <span>Categories</span>
+                <span style="font-size:9px;color:var(--text-muted);font-weight:400;">Active ones are sent to AI</span>
+            </div>
+
+            <!-- Add category form -->
+            <div class="add-row">
+                <input class="add-input" type="text" id="cat-name" placeholder="Category name">
+                <input class="add-input" type="text" id="cat-desc" placeholder="Description (helps AI)" style="flex:2;">
+                <button class="add-btn" onclick="addCategory()">+ Add</button>
+            </div>
+            <div class="feedback" id="cat-feedback"></div>
+
+            <!-- Category list — HTMX target -->
+            <div id="category-list-container">
+                {% include "partials/category_list.html" %}
+            </div>
+        </div>
+
+    </div>
 </div>
+{% endblock %}
 
-{% include "partials/sidebar_js.html" %}
-
+{% block extra_js %}
 <script>
 async function addAccount() {
     const name = document.getElementById('acct-name').value.trim();
@@ -207,5 +257,4 @@ async function toggleCategory(id) {
     }
 }
 </script>
-</body>
-</html>
+{% endblock %}
