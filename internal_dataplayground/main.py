@@ -1,25 +1,18 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from routers import jobs, ats, staging, dashboard
-from routers import blog
-from routers import explorer
+from routers import jobs, ats, staging, dashboard, blog, explorer
+from routers import finance_summary, finance_ledger, finance_upload, finance_settings
+from routers import ci_projects, ci_files, ci_readme
 
-# Finance — split into four focused routers (Phase 1B)
-from routers import finance_summary
-from routers import finance_ledger
-from routers import finance_upload
-from routers import finance_settings
-
-# Code Intelligence — split into three focused routers (Phase 1B)
-from routers import ci_projects
-from routers import ci_files
-from routers import ci_readme
+templates = Jinja2Templates(directory="templates")
 
 
 @asynccontextmanager
@@ -29,39 +22,45 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ── Jobs ───────────────────────────────────────────────────────────────────────
-app.include_router(jobs.router)
-app.include_router(ats.router)
-app.include_router(staging.router)
-
-# ── Finance ────────────────────────────────────────────────────────────────────
-# Order matters: more-specific prefixes (/finance/ledger, /finance/upload,
-# /finance/settings, /finance/accounts, /finance/categories,
-# /finance/transactions) must be registered before the catch-all
-# /finance summary router whose GET "" matches GET /finance.
+# ── Finance (specific prefixes before catch-all /finance summary) ──────────────
 app.include_router(finance_ledger.router)
 app.include_router(finance_upload.router)
 app.include_router(finance_settings.router)
 app.include_router(finance_summary.router)
 
-# ── Blog ───────────────────────────────────────────────────────────────────────
+# ── Other modules ──────────────────────────────────────────────────────────────
+app.include_router(jobs.router)
+app.include_router(ats.router)
+app.include_router(staging.router)
 app.include_router(blog.router)
-
-# ── SQL Explorer ───────────────────────────────────────────────────────────────
 app.include_router(explorer.router)
 
-# ── Code Intelligence ──────────────────────────────────────────────────────────
-# ci_files and ci_readme both use /code-intel sub-paths;
-# ci_projects handles the top-level /code-intel page and project CRUD.
+# ── Code Intelligence (files + readme before projects for path specificity) ────
 app.include_router(ci_files.router)
 app.include_router(ci_readme.router)
 app.include_router(ci_projects.router)
 
-# ── Dashboard ──────────────────────────────────────────────────────────────────
 app.include_router(dashboard.router)
+
+
+# ── Global 500 handler ─────────────────────────────────────────────────────────
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc: Exception):
+    """
+    Returns a styled HTML error page for unhandled 500s instead of
+    FastAPI's raw JSON response. Logs the exception for debugging.
+    """
+    import logging
+    logging.getLogger(__name__).exception("Unhandled 500 error: %s", exc)
+    return templates.TemplateResponse(
+        "500.html",
+        {"request": request, "detail": str(exc)},
+        status_code=500,
+    )
+
 
 # ── Root redirect ──────────────────────────────────────────────────────────────
 from fastapi.responses import RedirectResponse

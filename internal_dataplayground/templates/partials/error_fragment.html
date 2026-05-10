@@ -1,0 +1,42 @@
+{# templates/partials/error_fragment.html
+   Returned by html_error() from routers/_helpers.py.
+   `message`   = error string (required)
+   `retry_url` = optional URL for a retry button
+#}
+<div class="error-fragment">
+    <span class="error-fragment-icon">⚠</span>
+    <span class="error-fragment-message">{{ message }}</span>
+    {% if retry_url %}
+    <a class="error-fragment-retry" href="{{ retry_url }}">Try again →</a>
+    {% endif %}
+</div>
+
+<style>
+.error-fragment {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(240,64,64,0.07);
+    border: 1px solid rgba(240,64,64,0.25);
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--red);
+    font-family: 'DM Mono', monospace;
+}
+.error-fragment-icon { flex-shrink: 0; font-size: 13px; }
+.error-fragment-message { flex: 1; }
+.error-fragment-retry {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--accent);
+    padding: 2px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    transition: opacity .15s;
+}
+.error-fragment-retry:hover { opacity: .75; }
+</style>
