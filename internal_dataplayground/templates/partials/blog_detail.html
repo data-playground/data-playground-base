@@ -9,25 +9,9 @@
 <div style="padding:0;" data-toast="{{ toast or '' }}">
 
     {# ── HEADER ── #}
-    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
-        <div style="flex:1;min-width:0;padding-right:12px;">
-
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text-primary);line-height:1.3;">
-                {{ idea.title_concept }}
-            </div>
-            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;display:flex;align-items:center;gap:6px;">
-                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:
-                    {% if idea.status.value == 'in_development' %}var(--accent)
-                    {% elif idea.status.value == 'writing_in_progress' %}var(--blue)
-                    {% elif idea.status.value in ('waiting_for_review','review_completed') %}var(--yellow)
-                    {% elif idea.status.value in ('ready_to_publish','published') %}var(--green)
-                    {% else %}var(--text-muted){% endif %};"></span>
-                {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
-            </div>
-        </div>
-
+    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;flex-direction:column;">
         {# ── ACTION BUTTONS ── #}
-		<div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+		<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px">
             {# Badge row #}
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                 <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
@@ -107,6 +91,23 @@
 				</button>
 			</div>
 		</div>
+		
+		{# ── HEADER ── #}
+        <div style="flex:1;min-width:0;padding-right:12px;">
+
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text-primary);line-height:1.3;">
+                {{ idea.title_concept }}
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;display:flex;align-items:center;gap:6px;">
+                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:
+                    {% if idea.status.value == 'in_development' %}var(--accent)
+                    {% elif idea.status.value == 'writing_in_progress' %}var(--blue)
+                    {% elif idea.status.value in ('waiting_for_review','review_completed') %}var(--yellow)
+                    {% elif idea.status.value in ('ready_to_publish','published') %}var(--green)
+                    {% else %}var(--text-muted){% endif %};"></span>
+                {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
+            </div>
+        </div>
     </div>
 
     {% if error %}
