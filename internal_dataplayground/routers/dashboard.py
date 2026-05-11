@@ -2,13 +2,7 @@
 """
 Life OS — Hub Dashboard
 
-Aggregates data from every module into a single at-a-glance view:
-  - ATS pipeline snapshot
-  - Top unapplied high-fit jobs
-  - Fit score distribution histogram
-  - Finance summary (current month)
-  - Blog pipeline counts
-  - Staging queue status
+Aggregates data from every module into a single at-a-glance view.
 """
 
 import datetime
@@ -36,8 +30,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
     today = datetime.date.today()
 
-    # ── 1. Top unapplied jobs ─────────────────────────────────────────────────
-    # Jobs that have NO application log entry (never touched)
+    # ── Top unapplied jobs ────────────────────────────────────────────────────
     applied_job_ids_subq = select(ApplicationLog.job_id).distinct().scalar_subquery()
 
     top_jobs_result = await db.execute(
@@ -49,8 +42,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     top_jobs = top_jobs_result.scalars().all()
 
-    # ── 2. Fit score histogram ────────────────────────────────────────────────
-    # Count jobs per score bucket
+    # ── Fit score histogram ───────────────────────────────────────────────────
     hist_result = await db.execute(
         select(
             case(
@@ -69,14 +61,11 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         .group_by("bucket")
     )
     hist_raw = {row.bucket: row.count for row in hist_result.all()}
-
-    # Ordered buckets for rendering
     bucket_order = ["95-100", "90-94", "85-89", "80-84", "75-79", "70-74", "60-69", "50-59", "<50"]
     histogram = [(b, hist_raw.get(b, 0)) for b in bucket_order]
     hist_max = max((c for _, c in histogram), default=1)
 
-    # ── 3. ATS pipeline snapshot ──────────────────────────────────────────────
-    # Most recent status per job using a subquery
+    # ── ATS pipeline snapshot ─────────────────────────────────────────────────
     latest_log_subq = (
         select(
             ApplicationLog.job_id,
@@ -85,7 +74,6 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         .group_by(ApplicationLog.job_id)
         .subquery()
     )
-
     pipeline_result = await db.execute(
         select(ApplicationLog.status, func.count(ApplicationLog.id).label("count"))
         .join(
@@ -97,15 +85,14 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     pipeline_raw = {row.status: row.count for row in pipeline_result.all()}
 
-    # Ordered pipeline stages for the funnel display
     pipeline_stages = [
-        (ApplicationStatus.APPLIED,              "Applied",     "var(--accent)"),
-        (ApplicationStatus.PHONE_SCREEN,         "Phone",       "var(--blue)"),
-        (ApplicationStatus.INTERVIEWING,         "Interview",   "var(--yellow)"),
-        (ApplicationStatus.TECHNICAL_ASSESSMENT, "Technical",   "var(--yellow)"),
-        (ApplicationStatus.OFFER,                "Offer",       "var(--green)"),
-        (ApplicationStatus.REJECTED,             "Rejected",    "var(--red)"),
-        (ApplicationStatus.CLOSED,               "Closed",      "var(--text-muted)"),
+        (ApplicationStatus.APPLIED,              "Applied",   "var(--accent)"),
+        (ApplicationStatus.PHONE_SCREEN,         "Phone",     "var(--blue)"),
+        (ApplicationStatus.INTERVIEWING,         "Interview", "var(--yellow)"),
+        (ApplicationStatus.TECHNICAL_ASSESSMENT, "Technical", "var(--yellow)"),
+        (ApplicationStatus.OFFER,                "Offer",     "var(--green)"),
+        (ApplicationStatus.REJECTED,             "Rejected",  "var(--red)"),
+        (ApplicationStatus.CLOSED,               "Closed",    "var(--text-muted)"),
     ]
     pipeline = [
         {"label": label, "count": pipeline_raw.get(status, 0), "color": color}
@@ -113,7 +100,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     ]
     total_in_pipeline = sum(p["count"] for p in pipeline)
 
-    # ── 4. Finance summary (current month) ───────────────────────────────────
+    # ── Finance summary ───────────────────────────────────────────────────────
     fin_result = await db.execute(
         select(
             func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)).label("income"),
@@ -128,7 +115,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     fin_net      = fin_income + fin_expenses
     has_finance  = (fin_income != 0 or fin_expenses != 0)
 
-    # ── 5. Blog pipeline counts ───────────────────────────────────────────────
+    # ── Blog pipeline counts ──────────────────────────────────────────────────
     blog_result = await db.execute(
         select(BlogIdea.status, func.count(BlogIdea.id).label("count"))
         .group_by(BlogIdea.status)
@@ -141,8 +128,10 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER,
         ]
     )
+    # in_development is active work — counts alongside writing/review
     blog_active = sum(
         blog_raw.get(s, 0) for s in [
+            BlogIdeaStatus.IN_DEVELOPMENT,
             BlogIdeaStatus.WRITING_IN_PROGRESS,
             BlogIdeaStatus.WAITING_FOR_REVIEW,
             BlogIdeaStatus.REVIEW_COMPLETED,
@@ -151,7 +140,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     blog_ready = blog_raw.get(BlogIdeaStatus.READY_TO_PUBLISH, 0)
     blog_total = sum(blog_raw.values())
 
-    # ── 6. Staging queue ──────────────────────────────────────────────────────
+    # ── Staging queue ─────────────────────────────────────────────────────────
     staging_result = await db.execute(
         select(StagingJob.status, func.count(StagingJob.id).label("count"))
         .group_by(StagingJob.status)
@@ -161,7 +150,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     staging_processing = staging_raw.get(StagingJobStatus.PROCESSING, 0)
     staging_done       = staging_raw.get(StagingJobStatus.DONE, 0)
 
-    # ── 7. Total job counts ───────────────────────────────────────────────────
+    # ── Job counts ────────────────────────────────────────────────────────────
     total_jobs_result = await db.execute(select(func.count(Job.ID)))
     total_jobs = total_jobs_result.scalar() or 0
 
@@ -173,28 +162,22 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "active_module": "dashboard",
-        # Jobs
         "top_jobs": top_jobs,
         "total_jobs": total_jobs,
         "high_fit_count": high_fit_count,
-        # Histogram
         "histogram": histogram,
         "hist_max": hist_max,
-        # Pipeline
         "pipeline": pipeline,
         "total_in_pipeline": total_in_pipeline,
-        # Finance
         "fin_income": fin_income,
         "fin_expenses": fin_expenses,
         "fin_net": fin_net,
         "has_finance": has_finance,
         "today": today,
-        # Blog
         "blog_backlog": blog_backlog,
         "blog_active": blog_active,
         "blog_ready": blog_ready,
         "blog_total": blog_total,
-        # Staging
         "staging_pending": staging_pending,
         "staging_processing": staging_processing,
         "staging_done": staging_done,

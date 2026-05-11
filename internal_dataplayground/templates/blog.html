@@ -1,24 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Life OS — Blog Ideas{% endblock %}
 {% block page_title %}Life OS — Blog Ideas{% endblock %}
-{% block topbar_actions %}            
-	<div id="scout-result"></div>
-	<button class="btn"
-		hx-post="/blog/scout"
-		hx-target="#scout-result"
-		hx-swap="innerHTML"
-		hx-indicator="#scout-spinner">
-		⟳ Run Scout
-	</button>
-	<span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
-	<button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
+{% block topbar_actions %}
+    <div id="scout-result"></div>
+    <button class="btn"
+        hx-post="/blog/scout"
+        hx-target="#scout-result"
+        hx-swap="innerHTML"
+        hx-indicator="#scout-spinner">
+        ⟳ Run Scout
+    </button>
+    <span id="scout-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);">Running…</span>
+    <button class="btn btn-primary" onclick="openByoi()">⊕ New Idea</button>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="/static/css/blog.css">{% endblock %}
 {% block content %}
 
     <!-- ═══════════════════════════════════════════════════════════
-         MOBILE TAB STRIP  (hidden on desktop via mobile.css)
-         Shows only on ≤768px. Switches which .kanban-col is visible.
+         MOBILE TAB STRIP — 4 tabs (hidden on desktop via mobile.css)
     ═══════════════════════════════════════════════════════════ -->
     <div class="mobile-kanban-tabs" id="mobile-kanban-tabs">
         <button class="mobile-kanban-tab active" onclick="switchMobileKanban(0, this)">
@@ -26,23 +25,23 @@
             <span class="mobile-kanban-tab-count">{{ backlog|length }}</span>
         </button>
         <button class="mobile-kanban-tab" onclick="switchMobileKanban(1, this)">
+            Building
+            <span class="mobile-kanban-tab-count">{{ in_development|length }}</span>
+        </button>
+        <button class="mobile-kanban-tab" onclick="switchMobileKanban(2, this)">
             Writing
             <span class="mobile-kanban-tab-count">{{ in_progress|length }}</span>
         </button>
-        <button class="mobile-kanban-tab" onclick="switchMobileKanban(2, this)">
+        <button class="mobile-kanban-tab" onclick="switchMobileKanban(3, this)">
             Publish
             <span class="mobile-kanban-tab-count">{{ done|length }}</span>
         </button>
     </div>
 
-    <!-- KANBAN BOARD
-         Desktop: CSS grid with 3 side-by-side columns (unchanged).
-         Mobile:  columns stack, only the active one is shown via
-                  .mobile-active class toggled by switchMobileKanban().
-    -->
+    <!-- KANBAN BOARD — 4 columns -->
     <div class="board">
 
-        <!-- Column 1: Backlog -->
+        <!-- Column 0: Ideation Pipeline (backlog) -->
         <div class="kanban-col mobile-active" id="kanban-col-0">
             <div class="col-header">
                 <div class="col-title">
@@ -63,8 +62,29 @@
             </div>
         </div>
 
-        <!-- Column 2: In Progress -->
+        <!-- Column 1: In Development (NEW — Phase 1E) -->
         <div class="kanban-col" id="kanban-col-1">
+            <div class="col-header">
+                <div class="col-title">
+                    <span class="col-dot" style="background:var(--accent);"></span>
+                    In Development
+                </div>
+                <span class="col-count">{{ in_development|length }}</span>
+            </div>
+            <div class="col-body" id="col-in-development">
+                {% for idea in in_development %}
+                    {% include "partials/blog_card.html" %}
+                {% else %}
+                <div class="empty-col">
+                    <div class="empty-icon">⚙</div>
+                    <p>No ideas in development.<br>Move a backlog idea here when you start building.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Column 2: Writing & Review -->
+        <div class="kanban-col" id="kanban-col-2">
             <div class="col-header">
                 <div class="col-title">
                     <span class="col-dot dot-blue"></span>
@@ -84,8 +104,8 @@
             </div>
         </div>
 
-        <!-- Column 3: Done -->
-        <div class="kanban-col" id="kanban-col-2">
+        <!-- Column 3: Ready to Publish -->
+        <div class="kanban-col" id="kanban-col-3">
             <div class="col-header">
                 <div class="col-title">
                     <span class="col-dot dot-green"></span>
@@ -117,7 +137,7 @@
         <div class="modal-body">
             <label class="form-label">Brain Dump / Starter Code / Raw Notes</label>
             <textarea class="form-textarea" id="byoi-input" rows="10"
-                placeholder="Paste your markdown, code snippets, or raw thoughts...&#10;&#10;e.g. 'Built a FastAPI app that uses Gemini to score job postings. Uses async SQLAlchemy, Docker, and GCP Secret Manager. The hard part was...'"></textarea>
+                placeholder="Paste your markdown, code snippets, or raw thoughts...&#10;&#10;e.g. 'Built a FastAPI app that uses Gemini to score job postings...'"></textarea>
             <p class="form-hint">Gemini will structure this into a full article blueprint automatically.</p>
             <div id="byoi-error" style="margin-top:8px;font-size:11px;color:var(--red);"></div>
         </div>
@@ -133,98 +153,93 @@
 <div class="detail-drawer" id="detail-drawer"></div>
 
 <div id="toast"></div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-// ── MOBILE KANBAN TABS ──────────────────────────────────────────────────────
-// Only has visual effect on mobile (columns are all visible on desktop).
-// The mobile-active class is what mobile.css uses to show/hide columns.
+// ── MOBILE KANBAN TABS (now 4 columns) ────────────────────────────────────────
 function switchMobileKanban(idx, btn) {
-    // Update tab highlight
     document.querySelectorAll('.mobile-kanban-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
-
-    // Toggle column visibility for mobile
-    [0, 1, 2].forEach(i => {
+    [0, 1, 2, 3].forEach(i => {
         const col = document.getElementById('kanban-col-' + i);
         if (!col) return;
-        if (i === idx) {
-            col.classList.add('mobile-active');
-        } else {
-            col.classList.remove('mobile-active');
-        }
+        col.classList.toggle('mobile-active', i === idx);
     });
 }
 
-// ── BYOI Modal ──────────────────────────────────────────────────────────────
-function openByoi(){document.getElementById('byoi-modal').classList.add('open');setTimeout(()=>document.getElementById('byoi-input').focus(),100);}
-function closeByoi(){document.getElementById('byoi-modal').classList.remove('open');}
-document.getElementById('byoi-modal').addEventListener('click', e=>{if(e.target===e.currentTarget)closeByoi();});
+// ── BYOI Modal ────────────────────────────────────────────────────────────────
+function openByoi() {
+    document.getElementById('byoi-modal').classList.add('open');
+    setTimeout(() => document.getElementById('byoi-input').focus(), 100);
+}
+function closeByoi() { document.getElementById('byoi-modal').classList.remove('open'); }
+document.getElementById('byoi-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeByoi();
+});
 
-async function submitByoi(){
+async function submitByoi() {
     const input = document.getElementById('byoi-input').value.trim();
     const errEl = document.getElementById('byoi-error');
-    if(!input){errEl.textContent='Please enter some notes or code.';return;}
+    if (!input) { errEl.textContent = 'Please enter some notes or code.'; return; }
     const btn = document.getElementById('byoi-submit');
-    btn.disabled=true; btn.textContent='Expanding…';
-    errEl.textContent='';
+    btn.disabled = true; btn.textContent = 'Expanding…';
+    errEl.textContent = '';
     const fd = new FormData();
     fd.append('raw_idea_input', input);
     try {
-        const resp = await fetch('/blog/ideas', {method:'POST', body:fd});
+        const resp = await fetch('/blog/ideas', { method: 'POST', body: fd });
         const html = await resp.text();
-        if(resp.ok){
-            // Prepend card to backlog column
+        if (resp.ok) {
             const col = document.getElementById('col-backlog');
             const empty = col.querySelector('.empty-col');
-            if(empty) empty.remove();
+            if (empty) empty.remove();
             col.insertAdjacentHTML('afterbegin', html);
             closeByoi();
-            document.getElementById('byoi-input').value='';
+            document.getElementById('byoi-input').value = '';
             showToast('Idea structured and added to Backlog.');
             // Update mobile tab count
             const tabCount = document.querySelector('#mobile-kanban-tabs .mobile-kanban-tab:first-child .mobile-kanban-tab-count');
-            if (tabCount) {
-                const current = parseInt(tabCount.textContent) || 0;
-                tabCount.textContent = current + 1;
-            }
+            if (tabCount) tabCount.textContent = parseInt(tabCount.textContent || '0') + 1;
         } else {
-            errEl.textContent='⚠ Failed to expand idea. Try again.';
+            errEl.textContent = '⚠ Failed to expand idea. Try again.';
         }
-    } catch(e){
-        errEl.textContent='⚠ Network error.';
+    } catch(e) {
+        errEl.textContent = '⚠ Network error.';
     } finally {
-        btn.disabled=false; btn.textContent='Structure Content →';
+        btn.disabled = false; btn.textContent = 'Structure Content →';
     }
 }
 
-// ── Detail drawer ────────────────────────────────────────────────────────────
-function openDetail(ideaId){
-    const drawer = document.getElementById('detail-drawer');
-    htmx.ajax('GET', `/blog/ideas/${ideaId}`, {target:'#detail-drawer', swap:'innerHTML'});
-    drawer.classList.add('open');
+// ── Detail drawer ─────────────────────────────────────────────────────────────
+function openDetail(ideaId) {
+    htmx.ajax('GET', `/blog/ideas/${ideaId}`, { target: '#detail-drawer', swap: 'innerHTML' });
+    document.getElementById('detail-drawer').classList.add('open');
     document.getElementById('detail-overlay').classList.add('visible');
 }
-function closeDetail(){
+function closeDetail() {
     document.getElementById('detail-drawer').classList.remove('open');
     document.getElementById('detail-overlay').classList.remove('visible');
 }
-document.addEventListener('keydown', e=>{if(e.key==='Escape')closeDetail();});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
 
-// ── Toast ────────────────────────────────────────────────────────────────────
+// ── Toast ──────────────────────────────────────────────────────────────────────
 let toastTimer;
-function showToast(msg, isError=false){
-    const t=document.getElementById('toast');
-    t.textContent=msg;
+function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
     t.classList.toggle('error', isError);
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-// Listen for toast events from HTMX partials
-document.body.addEventListener('htmx:afterSwap', e=>{
-    const toast = document.getElementById('detail-drawer').dataset.toast;
-    if(toast){showToast(toast);delete document.getElementById('detail-drawer').dataset.toast;}
+document.body.addEventListener('htmx:afterSwap', e => {
+    const drawer = document.getElementById('detail-drawer');
+    if (drawer && drawer.dataset.toast) {
+        showToast(drawer.dataset.toast);
+        delete drawer.dataset.toast;
+    }
 });
 </script>
 {% endblock %}

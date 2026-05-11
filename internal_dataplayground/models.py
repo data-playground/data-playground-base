@@ -308,35 +308,39 @@ class BlogProjectType(enum.Enum):
     TUTORIAL       = "tutorial"
 
 
+
 class BlogIdeaStatus(enum.Enum):
     IDEA_GENERATED              = "idea_generated"
     WAITING_FOR_WRITING_TRIGGER = "waiting_for_writing_trigger"
+    IN_DEVELOPMENT              = "in_development"              # new — Phase 1E
     WRITING_IN_PROGRESS         = "writing_in_progress"
     WAITING_FOR_REVIEW          = "waiting_for_review"
     REVIEW_COMPLETED            = "review_completed"
     READY_TO_PUBLISH            = "ready_to_publish"
     PUBLISHED                   = "published"
-
+ 
     @property
     def label(self) -> str:
         return {
             "idea_generated":              "Idea Generated",
             "waiting_for_writing_trigger": "Ready to Write",
+            "in_development":              "In Development",   # new
             "writing_in_progress":         "Writing…",
             "waiting_for_review":          "Awaiting Review",
             "review_completed":            "Review Done",
             "ready_to_publish":            "Ready to Publish",
             "published":                   "Published",
         }[self.value]
-
+ 
     @property
     def kanban_column(self) -> str:
         if self.value in ("idea_generated", "waiting_for_writing_trigger"):
             return "backlog"
+        if self.value == "in_development":
+            return "in_development"                            # new column
         if self.value in ("writing_in_progress", "waiting_for_review", "review_completed"):
             return "in_progress"
         return "done"
-
 
 # Allowed difficulty values — enforced at the application layer.
 # Stored as VARCHAR(20) in the DB (not ENUM) for forward flexibility.

@@ -3,7 +3,7 @@
 Blog Ideation Module — Full Pipeline Router
 
 Endpoints:
-  GET   /blog                           → Kanban board (backlog / writing / done)
+  GET   /blog                           → Kanban board
   POST  /blog/ideas                     → BYOI: save raw idea, trigger expander DAG
   GET   /blog/ideas/{id}                → Detail drawer partial (HTMX)
   PATCH /blog/ideas/{id}/evidence       → Save code + author notes + difficulty (HITL 1)
@@ -19,7 +19,6 @@ Endpoints:
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
@@ -28,7 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from database import get_db
-from models import BlogIdea, BlogIdeaStatus, BlogProjectType, CodeFile, CodeProject, DIFFICULTY_LEVELS
+from models import (
+    BlogIdea, BlogIdeaStatus, BlogProjectType,
+    CodeFile, CodeProject, DIFFICULTY_LEVELS,
+)
 from services.airflow_service import trigger_airflow
 
 log = logging.getLogger(__name__)
@@ -36,7 +38,6 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/blog", tags=["Blog"])
 templates = Jinja2Templates(directory="templates")
 
-# ── DAG identifiers ────────────────────────────────────────────────────────────
 SCOUT_DAG     = "life_os_blog_scout"
 CREATOR_DAG   = "life_os_blog_creator"
 FINALIZER_DAG = "life_os_blog_finalizer"
@@ -52,20 +53,22 @@ async def blog_kanban(request: Request, db: AsyncSession = Depends(get_db)):
     )
     all_ideas = result.scalars().all()
 
-    backlog     = [i for i in all_ideas if i.status.kanban_column == "backlog"]
-    in_progress = [i for i in all_ideas if i.status.kanban_column == "in_progress"]
-    done        = [i for i in all_ideas if i.status.kanban_column == "done"]
+    backlog        = [i for i in all_ideas if i.status.kanban_column == "backlog"]
+    in_development = [i for i in all_ideas if i.status.kanban_column == "in_development"]
+    in_progress    = [i for i in all_ideas if i.status.kanban_column == "in_progress"]
+    done           = [i for i in all_ideas if i.status.kanban_column == "done"]
 
     return templates.TemplateResponse("blog.html", {
         "request": request,
         "backlog": backlog,
+        "in_development": in_development,
         "in_progress": in_progress,
         "done": done,
         "active_module": "blog",
     })
 
 
-# ── BYOI — create new idea from raw input ──────────────────────────────────────
+# ── BYOI ───────────────────────────────────────────────────────────────────────
 
 @router.post("/ideas", response_class=HTMLResponse)
 async def create_idea(
@@ -73,11 +76,6 @@ async def create_idea(
     raw_idea_input: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Receives raw user notes from the BYOI modal.
-    Saves immediately, then triggers the Idea Expander DAG in the background.
-    Returns a card partial for HTMX to prepend into the backlog column.
-    """
     idea = BlogIdea(
         title_concept=raw_idea_input[:80].strip() or "Untitled",
         project_type=BlogProjectType.NEW_BUILD,
@@ -88,7 +86,6 @@ async def create_idea(
     await db.commit()
     await db.refresh(idea)
 
-    # Fire-and-forget — non-fatal if Airflow is temporarily unavailable
     try:
         await trigger_airflow(EXPANDER_DAG, conf={"idea_id": idea.id})
     except Exception as exc:
@@ -96,11 +93,8 @@ async def create_idea(
 
     return templates.TemplateResponse(
         "partials/blog_card.html",
-        {
-            "request": request,
-            "idea": idea,
-            "toast": "Idea saved. Gemini is enriching it in the background.",
-        },
+        {"request": request, "idea": idea,
+         "toast": "Idea saved. Gemini is enriching it in the background."},
     )
 
 
@@ -124,12 +118,8 @@ async def idea_detail(
 
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {
-            "request": request,
-            "idea": idea,
-            "code_files": code_files,
-            "code_projects": code_projects,
-        },
+        {"request": request, "idea": idea,
+         "code_files": code_files, "code_projects": code_projects},
     )
 
 
@@ -164,20 +154,14 @@ async def save_evidence(
     await db.refresh(idea)
 
     files_result = await db.execute(select(CodeFile).order_by(CodeFile.file_name))
-    code_files = files_result.scalars().all()
-
     projects_result = await db.execute(select(CodeProject).order_by(CodeProject.project_name))
-    code_projects = projects_result.scalars().all()
 
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {
-            "request": request,
-            "idea": idea,
-            "code_files": code_files,
-            "code_projects": code_projects,
-            "toast": "Evidence saved. Ready to trigger the Ghostwriter.",
-        },
+        {"request": request, "idea": idea,
+         "code_files": files_result.scalars().all(),
+         "code_projects": projects_result.scalars().all(),
+         "toast": "Evidence saved. Ready to trigger the Ghostwriter."},
     )
 
 
@@ -193,17 +177,16 @@ async def trigger_creator(
     if not idea:
         raise HTTPException(status_code=404)
 
+    # IN_DEVELOPMENT is allowed — triggering auto-advances status
     if idea.status not in (
         BlogIdeaStatus.IDEA_GENERATED,
         BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER,
+        BlogIdeaStatus.IN_DEVELOPMENT,
     ):
         return templates.TemplateResponse(
             "partials/blog_detail.html",
-            {
-                "request": request,
-                "idea": idea,
-                "error": f"Cannot trigger from status: {idea.status.label}",
-            },
+            {"request": request, "idea": idea,
+             "error": f"Cannot trigger from status: {idea.status.label}"},
         )
 
     try:
@@ -214,11 +197,8 @@ async def trigger_creator(
         log.warning("Airflow trigger failed: %s", exc)
         return templates.TemplateResponse(
             "partials/blog_detail.html",
-            {
-                "request": request,
-                "idea": idea,
-                "error": f"Airflow unreachable: {exc}. Is the airflow-webserver container running?",
-            },
+            {"request": request, "idea": idea,
+             "error": f"Airflow unreachable: {exc}"},
         )
 
     idea.updated_at = datetime.utcnow()
@@ -227,11 +207,8 @@ async def trigger_creator(
 
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {
-            "request": request,
-            "idea": idea,
-            "toast": f"Ghostwriter DAG triggered (run: {run_id}). Check Airflow for progress.",
-        },
+        {"request": request, "idea": idea,
+         "toast": f"Ghostwriter DAG triggered (run: {run_id}). Check Airflow for progress."},
     )
 
 
@@ -256,11 +233,8 @@ async def save_review(
 
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {
-            "request": request,
-            "idea": idea,
-            "toast": "Review notes saved. Click Finalize when ready to run Refiner + Editor.",
-        },
+        {"request": request, "idea": idea,
+         "toast": "Review notes saved. Click Finalize when ready."},
     )
 
 
@@ -279,11 +253,8 @@ async def trigger_finalizer(
     if not idea.draft_v1:
         return templates.TemplateResponse(
             "partials/blog_detail.html",
-            {
-                "request": request,
-                "idea": idea,
-                "error": "No draft found. Run the Ghostwriter first.",
-            },
+            {"request": request, "idea": idea,
+             "error": "No draft found. Run the Ghostwriter first."},
         )
 
     try:
@@ -294,11 +265,8 @@ async def trigger_finalizer(
         log.warning("Finalizer DAG trigger failed: %s", exc)
         return templates.TemplateResponse(
             "partials/blog_detail.html",
-            {
-                "request": request,
-                "idea": idea,
-                "error": f"Airflow unreachable: {exc}",
-            },
+            {"request": request, "idea": idea,
+             "error": f"Airflow unreachable: {exc}"},
         )
 
     idea.updated_at = datetime.utcnow()
@@ -307,11 +275,8 @@ async def trigger_finalizer(
 
     return templates.TemplateResponse(
         "partials/blog_detail.html",
-        {
-            "request": request,
-            "idea": idea,
-            "toast": f"Refiner + Editor triggered (run: {run_id}). Will be READY_TO_PUBLISH shortly.",
-        },
+        {"request": request, "idea": idea,
+         "toast": f"Refiner + Editor triggered (run: {run_id})."},
     )
 
 
@@ -344,7 +309,7 @@ async def update_status(
     )
 
 
-# ── Archive (back to backlog) ──────────────────────────────────────────────────
+# ── Archive / Delete ───────────────────────────────────────────────────────────
 
 @router.patch("/ideas/{idea_id}/archive", response_class=HTMLResponse)
 async def archive_idea(
@@ -365,8 +330,6 @@ async def archive_idea(
     )
 
 
-# ── Delete ─────────────────────────────────────────────────────────────────────
-
 @router.delete("/ideas/{idea_id}", response_class=HTMLResponse)
 async def delete_idea(
     idea_id: int,
@@ -381,7 +344,7 @@ async def delete_idea(
     return HTMLResponse("")
 
 
-# ── Scout DAG trigger ──────────────────────────────────────────────────────────
+# ── Scout trigger ──────────────────────────────────────────────────────────────
 
 @router.post("/scout", response_class=HTMLResponse)
 async def trigger_scout(request: Request):
@@ -398,7 +361,7 @@ async def trigger_scout(request: Request):
         )
 
 
-# ── Full article reader view ───────────────────────────────────────────────────
+# ── Article reader ─────────────────────────────────────────────────────────────
 
 @router.get("/ideas/{idea_id}/article", response_class=HTMLResponse)
 async def view_article(

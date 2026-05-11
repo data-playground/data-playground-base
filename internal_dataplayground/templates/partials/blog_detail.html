@@ -1,14 +1,10 @@
 {# templates/partials/blog_detail.html
    Loaded into #detail-drawer via HTMX GET /blog/ideas/{id}
-   `idea`  = BlogIdea ORM object
-   `toast` = optional success message
-   `error` = optional error message
-
-   Changes vs original:
-     - Header row shows difficulty badge alongside project type
-     - Evidence form includes a difficulty selector so the user can
-       override or set difficulty on BYOI ideas
-     - Tutorial project type is surfaced in the type badge
+   `idea`          = BlogIdea ORM object
+   `toast`         = optional success message
+   `error`         = optional error message
+   `code_files`    = list of CodeFile ORM objects for dropdown
+   `code_projects` = list of CodeProject ORM objects for dropdown
 #}
 <div style="padding:0;" data-toast="{{ toast or '' }}">
 
@@ -16,16 +12,13 @@
     <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
         <div style="flex:1;min-width:0;padding-right:12px;">
 
-            {# Badge row: project type + difficulty + enriching indicator #}
+            {# Badge row #}
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-                {# Project type #}
                 <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
                     {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
                     {% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
                     {% else %}⊕ New Build{% endif %}
                 </div>
-
-                {# Difficulty badge #}
                 {% if idea.difficulty %}
                 <span class="detail-difficulty-badge difficulty-{{ idea.difficulty }}">
                     {% if idea.difficulty == 'starter' %}⬡ Starter
@@ -33,7 +26,6 @@
                     {% else %}◉ Ambitious{% endif %}
                 </span>
                 {% endif %}
-
                 {% if not idea.the_build %}
                 <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">
                     ⏳ Enriching…
@@ -46,7 +38,8 @@
             </div>
             <div style="font-size:10px;color:var(--text-muted);margin-top:4px;display:flex;align-items:center;gap:6px;">
                 <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:
-                    {% if idea.status.value == 'writing_in_progress' %}var(--blue)
+                    {% if idea.status.value == 'in_development' %}var(--accent)
+                    {% elif idea.status.value == 'writing_in_progress' %}var(--blue)
                     {% elif idea.status.value in ('waiting_for_review','review_completed') %}var(--yellow)
                     {% elif idea.status.value in ('ready_to_publish','published') %}var(--green)
                     {% else %}var(--text-muted){% endif %};"></span>
@@ -54,23 +47,61 @@
             </div>
         </div>
 
-        <div style="display:flex;gap:6px;flex-shrink:0;">
+        {# ── ACTION BUTTONS ── #}
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+
+            {# Start Building — shown when idea is in backlog statuses #}
+            {% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/status"
+                hx-vals='{"status": "in_development"}'
+                hx-target="#detail-drawer"
+                hx-swap="innerHTML"
+                style="background:transparent;border:1px solid var(--accent);color:var(--accent);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;"
+                title="Start building the code for this idea">
+                ⚙ Start Building
+            </button>
+            {% endif %}
+
+            {# Code Done — shown when idea is in_development, moves back to ready-to-write #}
+            {% if idea.status.value == 'in_development' %}
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/status"
+                hx-vals='{"status": "waiting_for_writing_trigger"}'
+                hx-target="#detail-drawer"
+                hx-swap="innerHTML"
+                style="background:transparent;border:1px solid var(--green);color:var(--green);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;"
+                title="Code is done, ready to write">
+                ✓ Code Done, Ready to Write
+            </button>
+            {% endif %}
+
             <button
                 hx-patch="/blog/ideas/{{ idea.id }}/archive"
                 hx-target="#detail-drawer"
                 hx-swap="innerHTML"
-                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;"
                 title="Move back to backlog">
                 ↩ Backlog
             </button>
             <button
                 onclick="deleteIdea({{ idea.id }})"
-                style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;"
+                style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;"
                 title="Delete permanently">
                 ✕ Delete
             </button>
             <button onclick="closeDetail()"
-                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;">
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;">
                 ✕ Close
             </button>
         </div>
@@ -116,7 +147,7 @@
             </div>
             <form id="evidence-form-{{ idea.id }}">
 
-                {# ── DIFFICULTY SELECTOR ─────────────────────────────────── #}
+                {# Difficulty selector #}
                 <div style="margin-bottom:10px;">
                     <label class="form-label">Difficulty</label>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -153,8 +184,7 @@
                                border-radius:5px;outline:none;">
                         <option value="">— none —</option>
                         {% for p in code_projects %}
-                        <option value="{{ p.id }}"
-                            {% if idea.code_project_id == p.id %}selected{% endif %}>
+                        <option value="{{ p.id }}" {% if idea.code_project_id == p.id %}selected{% endif %}>
                             {{ p.project_name }} ({{ p.github_repo }})
                         </option>
                         {% endfor %}
@@ -171,8 +201,7 @@
                                border-radius:5px;outline:none;">
                         <option value="">— none —</option>
                         {% for f in code_files %}
-                        <option value="{{ f.id }}"
-                            {% if idea.code_file_id == f.id %}selected{% endif %}>
+                        <option value="{{ f.id }}" {% if idea.code_file_id == f.id %}selected{% endif %}>
                             {{ f.file_name }} — {{ f.github_path }}
                         </option>
                         {% endfor %}
@@ -206,7 +235,7 @@
                 ② Ghostwriter
                 <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">writes draft_v1 · Llama 3.3 70B via Groq</span>
             </div>
-            {% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
+            {% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger', 'in_development') %}
             <button
                 hx-patch="/blog/ideas/{{ idea.id }}/trigger"
                 hx-target="#detail-drawer"
@@ -217,7 +246,7 @@
             {% elif idea.status.value == 'writing_in_progress' %}
             <div style="font-size:11px;color:var(--blue);">⚙ Writing in progress… (Airflow run: {{ idea.airflow_run_id or '—' }})</div>
             {% else %}
-            <div style="font-size:10px;color:var(--text-muted);">Ghostwriter already completed. Re-trigger to regenerate draft_v1.</div>
+            <div style="font-size:10px;color:var(--text-muted);">Ghostwriter already completed.</div>
             <button hx-patch="/blog/ideas/{{ idea.id }}/trigger" hx-target="#detail-drawer" hx-swap="innerHTML"
                 style="margin-top:6px;padding:4px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">
                 ⟳ Regenerate draft_v1
@@ -233,7 +262,6 @@
                 ③ Review Draft
                 <span style="font-size:8px;color:var(--text-muted);text-transform:none;letter-spacing:0;margin-left:4px;">read draft_v1, add feedback for Refiner</span>
             </div>
-
             {% if idea.draft_v1 %}
             <div style="display:flex;gap:6px;margin-bottom:6px;">
                 <button onclick="setEditorTab('edit')" id="tab-edit"
@@ -243,28 +271,23 @@
                 <button onclick="setEditorTab('split')" id="tab-split"
                     style="padding:3px 10px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);background:transparent;color:var(--text-muted);border-radius:3px;cursor:pointer;">Split</button>
             </div>
-
             <div id="editor-wrap" style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:10px;">
                 <textarea id="draft-editor" rows="10"
                     style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.7;"
                     oninput="updatePreview()">{{ idea.draft_v1 }}</textarea>
                 <div id="draft-preview"
-                    style="display:none;font-size:11px;line-height:1.8;color:var(--text-secondary);border:1px solid var(--border);border-radius:5px;padding:10px 14px;background:var(--bg-hover);overflow-y:auto;max-height:300px;">
-                </div>
+                    style="display:none;font-size:11px;line-height:1.8;color:var(--text-secondary);border:1px solid var(--border);border-radius:5px;padding:10px 14px;background:var(--bg-hover);overflow-y:auto;max-height:300px;"></div>
             </div>
-
             <div style="margin-bottom:10px;">
                 <label class="form-label">Your Review Notes for the Refiner</label>
                 <textarea id="review-notes-{{ idea.id }}" rows="3"
                     style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;resize:vertical;line-height:1.6;"
-                    placeholder="e.g. Make the intro punchier. Add a section on the Alembic migration issues. Remove the third paragraph in the intro.">{{ idea.user_review_notes or '' }}</textarea>
+                    placeholder="e.g. Make the intro punchier. Add a section on the migration issues.">{{ idea.user_review_notes or '' }}</textarea>
             </div>
-
             <button onclick="saveReview({{ idea.id }})"
                 style="padding:5px 13px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:transparent;color:var(--green);border:1px solid var(--green);border-radius:4px;cursor:pointer;">
                 ✓ Save Review Notes
             </button>
-
             {% else %}
             <div style="font-size:11px;color:var(--text-muted);padding:10px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);">
                 draft_v1 not yet generated. Trigger the Ghostwriter above.
@@ -329,7 +352,6 @@
 </div>
 
 <script>
-// Highlight the selected difficulty option card
 function highlightDifficultyOption(radio) {
     const form = radio.closest('form');
     form.querySelectorAll('input[name="difficulty"]').forEach(r => {
@@ -339,7 +361,6 @@ function highlightDifficultyOption(radio) {
     });
 }
 
-// Evidence save — now also persists difficulty
 async function saveEvidence(id) {
     const form = document.getElementById(`evidence-form-${id}`);
     const fd = new FormData(form);
@@ -350,7 +371,6 @@ async function saveEvidence(id) {
     }
 }
 
-// Review notes save
 async function saveReview(id) {
     const notes = document.getElementById(`review-notes-${id}`).value;
     const fd = new FormData();
@@ -362,18 +382,16 @@ async function saveReview(id) {
     }
 }
 
-// Markdown split editor tabs
 function setEditorTab(mode) {
-    const editor = document.getElementById('draft-editor');
+    const editor  = document.getElementById('draft-editor');
     const preview = document.getElementById('draft-preview');
-    const wrap = document.getElementById('editor-wrap');
+    const wrap    = document.getElementById('editor-wrap');
     ['tab-edit','tab-preview','tab-split'].forEach(id => {
         const b = document.getElementById(id);
         if (b) { b.style.background = 'transparent'; b.style.color = 'var(--text-muted)'; b.style.borderColor = 'var(--border)'; }
     });
     const active = document.getElementById(`tab-${mode}`);
     if (active) { active.style.background = 'var(--accent)'; active.style.color = '#fff'; active.style.borderColor = 'var(--accent)'; }
-
     if (mode === 'edit') {
         wrap.style.gridTemplateColumns = '1fr';
         editor.style.display = 'block'; preview.style.display = 'none';
@@ -391,9 +409,7 @@ function setEditorTab(mode) {
 function updatePreview() {
     const src = document.getElementById('draft-editor');
     const pre = document.getElementById('draft-preview');
-    if (src && pre && typeof marked !== 'undefined') {
-        pre.innerHTML = marked.parse(src.value);
-    }
+    if (src && pre && typeof marked !== 'undefined') pre.innerHTML = marked.parse(src.value);
 }
 
 document.addEventListener('DOMContentLoaded', updatePreview);
