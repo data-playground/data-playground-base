@@ -61,6 +61,16 @@ async def internal_error_handler(request: Request, exc: Exception):
         status_code=500,
     )
 
+# ── Global 404 handler ─────────────────────────────────────────────────────────
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception):
+    """
+    Returns a styled HTML error page for unhandled 404 instead of
+    simple {"detail":"Not Found"} message. Logs the exception for debugging.
+    """
+    return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+
 
 # ── Root redirect ──────────────────────────────────────────────────────────────
 from fastapi.responses import RedirectResponse

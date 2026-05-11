@@ -1,4 +1,6 @@
 # airflow/dags/life_os_blog_finalizer.py
+# ARCHITECTURAL RULE: This DAG file must never import from models.py,
+# database.py, or any FastAPI router. All database access uses dag_db.py.
 """
 Blog Finalizer DAG  (Trigger 2 of 2)
 ──────────────────────────────────────
@@ -6,7 +8,7 @@ Triggered from the LifeOS Blog UI after you complete your review
 of draft_v1 and click "Finalize".
 
 Runs: Refiner → Editor (sequential)
-Sets status: READY_TO_PUBLISH
+Sets status: ready_to_publish
 
 Conf (required):
   {"idea_id": 42}
@@ -21,7 +23,6 @@ sys.path.insert(0, '/opt/airflow/project/airflow')
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from agents.blog_agents import agent_refiner, agent_editor
 
 log = logging.getLogger(__name__)
 
@@ -56,65 +57,70 @@ def _parse_editor_output(raw: str) -> tuple[str, str, str, str]:
 
 
 def task_refiner(**context):
-    from dag_db import get_sync_session
-    from models import BlogIdea, BlogIdeaStatus
+    # ARCHITECTURAL RULE: raw SQL only — no ORM imports
+    from dag_db import fetch_one, execute
+    from agents.blog_agents import agent_refiner
 
     idea_id = context["dag_run"].conf.get("idea_id")
-    session = get_sync_session()
-    try:
-        idea = session.get(BlogIdea, idea_id)
-        if not idea:
-            raise ValueError(f"BlogIdea {idea_id} not found")
-        if not idea.draft_v1:
-            raise ValueError(f"BlogIdea {idea_id} has no draft_v1")
+    idea = fetch_one("SELECT * FROM blog_ideas WHERE id = %s", (idea_id,))
+    if not idea:
+        raise ValueError(f"BlogIdea {idea_id} not found")
+    if not idea.get("draft_v1"):
+        raise ValueError(f"BlogIdea {idea_id} has no draft_v1")
 
-        log.info("Running Refiner for idea %d", idea_id)
-        refined = agent_refiner(
-            original_draft=idea.draft_v1,
-            user_feedback=idea.user_review_notes or "No specific feedback provided.",
-        )
-        idea.draft_v2 = refined
-        idea.status = BlogIdeaStatus.REVIEW_COMPLETED
-        session.commit()
-        log.info("draft_v2 written for idea %d", idea_id)
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    log.info("Running Refiner for idea %d", idea_id)
+    refined = agent_refiner(
+        original_draft=idea["draft_v1"],
+        user_feedback=idea.get("user_review_notes") or "No specific feedback provided.",
+    )
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    execute(
+        "UPDATE blog_ideas SET draft_v2 = %s, status = %s, updated_at = %s WHERE id = %s",
+        (refined, "review_completed", now, idea_id),
+    )
+    log.info("draft_v2 written for idea %d", idea_id)
 
 
 def task_editor(**context):
-    from dag_db import get_sync_session
-    from models import BlogIdea, BlogIdeaStatus
+    # ARCHITECTURAL RULE: raw SQL only — no ORM imports
+    from dag_db import fetch_one, execute
+    from agents.blog_agents import agent_editor
 
     idea_id = context["dag_run"].conf.get("idea_id")
-    session = get_sync_session()
-    try:
-        idea = session.get(BlogIdea, idea_id)
-        if not idea:
-            raise ValueError(f"BlogIdea {idea_id} not found")
+    idea = fetch_one("SELECT * FROM blog_ideas WHERE id = %s", (idea_id,))
+    if not idea:
+        raise ValueError(f"BlogIdea {idea_id} not found")
 
-        source = idea.draft_v2 or idea.draft_v1 or ""
-        if not source:
-            raise ValueError(f"BlogIdea {idea_id} has no draft to edit")
+    source = idea.get("draft_v2") or idea.get("draft_v1") or ""
+    if not source:
+        raise ValueError(f"BlogIdea {idea_id} has no draft to edit")
 
-        log.info("Running Editor for idea %d", idea_id)
-        final_output = agent_editor(draft_content=source)
-        seo_title, seo_desc, seo_tags, article = _parse_editor_output(final_output)
+    log.info("Running Editor for idea %d", idea_id)
+    final_output = agent_editor(draft_content=source)
+    seo_title, seo_desc, seo_tags, article = _parse_editor_output(final_output)
 
-        idea.final_article = article
-        idea.seo_title = seo_title or idea.title_concept
-        idea.seo_description = seo_desc
-        idea.seo_tags = seo_tags
-        idea.status = BlogIdeaStatus.READY_TO_PUBLISH
-        session.commit()
-        log.info("Final article written for idea %d", idea_id)
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    execute(
+        """UPDATE blog_ideas
+           SET final_article    = %s,
+               seo_title        = %s,
+               seo_description  = %s,
+               seo_tags         = %s,
+               status           = %s,
+               updated_at       = %s
+           WHERE id = %s""",
+        (
+            article,
+            seo_title or idea.get("title_concept", ""),
+            seo_desc,
+            seo_tags,
+            "ready_to_publish",
+            now,
+            idea_id,
+        ),
+    )
+    log.info("Final article written for idea %d", idea_id)
 
 
 with DAG(
@@ -127,5 +133,5 @@ with DAG(
 ) as dag:
 
     refine = PythonOperator(task_id="refiner", python_callable=task_refiner)
-    edit = PythonOperator(task_id="editor", python_callable=task_editor)
+    edit   = PythonOperator(task_id="editor",  python_callable=task_editor)
     refine >> edit
