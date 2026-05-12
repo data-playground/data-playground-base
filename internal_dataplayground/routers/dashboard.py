@@ -19,6 +19,7 @@ from models import (
     Job, ApplicationLog, ApplicationStatus,
     StagingJob, StagingJobStatus,
     Transaction, BlogIdea, BlogIdeaStatus,
+    Habit, HabitLog, HabitSettings,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -158,6 +159,72 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         select(func.count(Job.ID)).where(Job.fit_score >= 90)
     )
     high_fit_count = high_fit_result.scalar() or 0
+    
+    
+    # ── 8. Habit summary ──────────────────────────────────────────────────
+    _today_date = datetime.date.today()
+ 
+    habit_count_result = await db.execute(
+        select(func.count(Habit.id)).where(Habit.is_active == True)
+    )
+    habits_total = habit_count_result.scalar() or 0
+ 
+    habit_today_result = await db.execute(
+        select(func.count(HabitLog.id))
+        .where(HabitLog.logged_date == _today_date)
+    )
+    habits_done_today = habit_today_result.scalar() or 0
+ 
+    grace_result = await db.execute(select(HabitSettings).limit(1))
+    grace_settings = grace_result.scalar_one_or_none()
+    grace_period = grace_settings.grace_period_days if grace_settings else 1
+ 
+    active_habits_result = await db.execute(
+        select(Habit).where(Habit.is_active == True)
+    )
+    active_habits = active_habits_result.scalars().all()
+ 
+    cutoff = _today_date - datetime.timedelta(days=400)
+    all_logs_result = await db.execute(
+        select(HabitLog.habit_id, HabitLog.logged_date)
+        .where(HabitLog.logged_date >= cutoff)
+    )
+    logs_by_habit: dict[int, set] = {}
+    for _row in all_logs_result.all():
+        logs_by_habit.setdefault(_row[0], set()).add(_row[1])
+ 
+    def _dash_streak(dates: set) -> int:
+        if not dates:
+            return 0
+        yesterday = _today_date - datetime.timedelta(days=1)
+        streak = 0
+        missed = 0
+        cursor = yesterday
+        for _ in range(730):
+            if cursor in dates:
+                streak += 1
+                missed = 0
+            else:
+                missed += 1
+                if missed > grace_period:
+                    break
+            cursor -= datetime.timedelta(days=1)
+        return streak
+ 
+    best_streak = max(
+        (_dash_streak(logs_by_habit.get(h.id, set())) for h in active_habits),
+        default=0,
+    )
+ 
+    week_start = _today_date - datetime.timedelta(days=6)
+    week_logs_result = await db.execute(
+        select(func.count(HabitLog.id))
+        .where(HabitLog.logged_date >= week_start)
+        .where(HabitLog.logged_date <= _today_date)
+    )
+    week_logs_count = week_logs_result.scalar() or 0
+    possible = habits_total * 7
+    week_completion_pct = round((week_logs_count / possible) * 100) if possible > 0 else 0
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -181,4 +248,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "staging_pending": staging_pending,
         "staging_processing": staging_processing,
         "staging_done": staging_done,
+        "habits_total":        habits_total,
+        "habits_done_today":   habits_done_today,
+        "best_streak":         best_streak,
+        "week_completion_pct": week_completion_pct,
     })

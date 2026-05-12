@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Life OS — Habit Settings{% endblock %}
+{% block page_title %}Habit Settings{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/habits">← Back to Habits</a>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/habits.css">{% endblock %}
+
+{% block content %}
+<main class="main-content">
+<div class="settings-wrap">
+
+    {# ── GRACE PERIOD CONFIG ── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Streak Settings</div>
+        <div class="grace-row">
+            <label class="form-label" style="white-space:nowrap;">Grace Period</label>
+            <form style="display:flex;align-items:center;gap:8px;"
+                  hx-patch="/habits/settings/grace-period"
+                  hx-target="#grace-result"
+                  hx-swap="innerHTML">
+                <select class="grace-select" name="grace_period_days">
+                    {% for i in range(8) %}
+                    <option value="{{ i }}" {% if i == grace_period %}selected{% endif %}>
+                        {{ i }} day{{ 's' if i != 1 else '' }}{% if i == 0 %} (strict){% elif i == 1 %} (default){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary" style="font-size:9px;padding:4px 12px;">Save</button>
+                <span id="grace-result"></span>
+            </form>
+        </div>
+        <p class="grace-note" style="margin-top:8px;">
+            Number of missed days still allowed within a streak. Set to 0 for strict consecutive days only.
+        </p>
+    </div>
+
+    {# ── ADD NEW HABIT ── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Add Habit</div>
+        <form class="add-habit-form"
+              hx-post="/habits/new"
+              hx-target="#habit-list-container"
+              hx-swap="innerHTML"
+              hx-on::after-request="this.reset()">
+            <div class="form-group">
+                <label class="form-label">Icon</label>
+                <input class="form-input icon-input" type="text" name="icon"
+                       placeholder="💧" maxlength="4" value="✅">
+            </div>
+            <div class="form-group" style="flex:1;min-width:140px;">
+                <label class="form-label">Name *</label>
+                <input class="form-input" type="text" name="name"
+                       placeholder="e.g. Morning Walk" required>
+            </div>
+            <div class="form-group" style="flex:2;min-width:160px;">
+                <label class="form-label">Description</label>
+                <input class="form-input" type="text" name="description"
+                       placeholder="Optional note">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Color</label>
+                <input class="color-input" type="color" name="color" value="#7c6fff">
+            </div>
+            <div class="form-group" style="justify-content:flex-end;">
+                <label class="form-label" style="visibility:hidden;">·</label>
+                <button type="submit" class="btn btn-primary">+ Add</button>
+            </div>
+        </form>
+    </div>
+
+    {# ── HABIT LIST ── #}
+    <div class="settings-section">
+        <div class="settings-section-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Habits</span>
+            <div class="save-order-bar" id="save-order-bar">
+                <button class="btn btn-primary" style="font-size:9px;padding:4px 12px;"
+                        onclick="saveOrder()">Save Order</button>
+                <span id="save-order-result"></span>
+            </div>
+        </div>
+
+        <div class="habit-settings-list" id="habit-list-container">
+            {% for habit in habits %}
+                {% include "partials/habit_settings_row.html" %}
+            {% else %}
+            <p style="font-size:11px;color:var(--text-muted);padding:8px 0;">No habits yet. Add one above.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+</main>
+
+<script>
+// ── INLINE EDIT TOGGLE ─────────────────────────────────────────────────────
+function toggleEditFields(habitId) {
+    const el = document.getElementById(`edit-fields-${habitId}`);
+    el.classList.toggle('open');
+}
+
+async function saveHabitEdit(habitId) {
+    const name = document.getElementById(`edit-name-${habitId}`).value.trim();
+    const desc = document.getElementById(`edit-desc-${habitId}`).value.trim();
+    const icon = document.getElementById(`edit-icon-${habitId}`).value.trim();
+    const color = document.getElementById(`edit-color-${habitId}`).value;
+    if (!name) { showToast('Name is required.', true); return; }
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('description', desc);
+    fd.append('icon', icon);
+    fd.append('color', color);
+    const resp = await fetch(`/habits/${habitId}`, { method: 'PATCH', body: fd });
+    if (resp.ok) {
+        const html = await resp.text();
+        document.getElementById(`settings-row-${habitId}`).outerHTML = html;
+        showToast('Habit updated.');
+    } else {
+        showToast('Update failed.', true);
+    }
+}
+
+// ── HEATMAP ───────────────────────────────────────────────────────────────
+const _heatmapLoaded = new Set();
+
+function toggleHeatmap(habitId, color, btn) {
+    const section = document.getElementById(`heatmap-${habitId}`);
+    const isOpen = section.classList.toggle('open');
+    if (isOpen && !_heatmapLoaded.has(habitId)) {
+        _heatmapLoaded.add(habitId);
+        renderHeatmap(habitId, color);
+    }
+}
+
+async function renderHeatmap(habitId, color) {
+    const wrap = document.getElementById(`heatmap-wrap-${habitId}`);
+    try {
+        const resp = await fetch(`/habits/heatmap/${habitId}`);
+        const data = await resp.json();
+        wrap.innerHTML = '';
+        wrap.appendChild(buildHeatmapSvg(data, color));
+    } catch(e) {
+        wrap.innerHTML = '<span style="font-size:10px;color:var(--red);">⚠ Failed to load.</span>';
+    }
+}
+
+function buildHeatmapSvg(data, color) {
+    // 52 columns (weeks) × 7 rows (days). Cell = 11px + 2px gap.
+    const CELL = 11;
+    const GAP  = 2;
+    const COLS = 53;
+    const ROWS = 7;
+    const LEFT_PAD = 24;   // space for day labels (Mon/Wed/Fri)
+    const TOP_PAD  = 16;   // space for month labels
+
+    const W = LEFT_PAD + COLS * (CELL + GAP);
+    const H = TOP_PAD  + ROWS * (CELL + GAP);
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.classList.add('heatmap-svg');
+
+    // Build a map of date → count
+    const dateMap = {};
+    data.forEach(d => { dateMap[d.date] = d.count; });
+
+    // Walk 364 days back from today to find the Sunday that starts column 0
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Find the Sunday at or before (today - 363 days)
+    const startDay = new Date(today);
+    startDay.setDate(startDay.getDate() - 363);
+    const dow = startDay.getDay(); // 0=Sun
+    startDay.setDate(startDay.getDate() - dow);
+
+    const emptyColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--border').trim() || '#2a2a35';
+
+    // Month label tracking
+    let lastMonth = -1;
+    const DAY_LABELS = ['Sun','','Mon','','Wed','','Fri'];
+
+    // Draw day labels on left
+    DAY_LABELS.forEach((label, row) => {
+        if (!label) return;
+        const txt = document.createElementNS(NS, 'text');
+        txt.setAttribute('x', LEFT_PAD - 3);
+        txt.setAttribute('y', TOP_PAD + row * (CELL + GAP) + CELL - 2);
+        txt.setAttribute('text-anchor', 'end');
+        txt.classList.add('heatmap-day-label');
+        txt.textContent = label;
+        svg.appendChild(txt);
+    });
+
+    for (let col = 0; col < COLS; col++) {
+        for (let row = 0; row < ROWS; row++) {
+            const d = new Date(startDay);
+            d.setDate(d.getDate() + col * 7 + row);
+            if (d > today) continue;
+
+            const dateStr = d.toISOString().slice(0, 10);
+            const count = dateMap[dateStr] || 0;
+
+            const x = LEFT_PAD + col * (CELL + GAP);
+            const y = TOP_PAD + row * (CELL + GAP);
+
+            // Month label on first row when month changes
+            if (row === 0) {
+                const m = d.getMonth();
+                if (m !== lastMonth) {
+                    lastMonth = m;
+                    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
+                                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const txt = document.createElementNS(NS, 'text');
+                    txt.setAttribute('x', x);
+                    txt.setAttribute('y', TOP_PAD - 4);
+                    txt.classList.add('heatmap-month-label');
+                    txt.textContent = MONTHS[m];
+                    svg.appendChild(txt);
+                }
+            }
+
+            const rect = document.createElementNS(NS, 'rect');
+            rect.setAttribute('x', x);
+            rect.setAttribute('y', y);
+            rect.setAttribute('width', CELL);
+            rect.setAttribute('height', CELL);
+            rect.setAttribute('rx', 2);
+            rect.setAttribute('fill', count > 0 ? color : emptyColor);
+            rect.setAttribute('opacity', count > 0 ? '1' : '0.5');
+            rect.setAttribute('title', `${dateStr}: ${count > 0 ? 'logged' : 'not logged'}`);
+            svg.appendChild(rect);
+        }
+    }
+    return svg;
+}
+
+// ── DRAG AND DROP REORDER ─────────────────────────────────────────────────
+let _draggedEl = null;
+
+document.addEventListener('dragstart', e => {
+    const row = e.target.closest('.habit-settings-row');
+    if (!row) return;
+    _draggedEl = row;
+    row.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+});
+
+document.addEventListener('dragend', e => {
+    const row = e.target.closest('.habit-settings-row');
+    if (row) row.style.opacity = '';
+    _draggedEl = null;
+});
+
+document.addEventListener('dragover', e => {
+    e.preventDefault();
+    const target = e.target.closest('.habit-settings-row');
+    if (!target || target === _draggedEl) return;
+    const list = document.getElementById('habit-list-container');
+    const rows = [...list.querySelectorAll('.habit-settings-row')];
+    const targetIdx = rows.indexOf(target);
+    const draggedIdx = rows.indexOf(_draggedEl);
+    if (draggedIdx < targetIdx) {
+        target.after(_draggedEl);
+    } else {
+        target.before(_draggedEl);
+    }
+    // Show save order bar
+    document.getElementById('save-order-bar').classList.add('visible');
+});
+
+async function saveOrder() {
+    const rows = document.querySelectorAll('#habit-list-container .habit-settings-row');
+    const payload = [...rows].map((row, idx) => ({
+        id: parseInt(row.dataset.habitId),
+        sort_order: idx,
+    }));
+    const resp = await fetch('/habits/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const resultEl = document.getElementById('save-order-result');
+    if (resp.ok) {
+        resultEl.innerHTML = await resp.text();
+        document.getElementById('save-order-bar').classList.remove('visible');
+    } else {
+        resultEl.innerHTML = '<span style="color:var(--red);font-size:10px;">⚠ Failed</span>';
+    }
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.toggle('error', isError);
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2600);
+}
+</script>
+{% endblock %}

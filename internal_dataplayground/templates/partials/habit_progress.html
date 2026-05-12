@@ -1,0 +1,17 @@
+{# templates/partials/habit_progress.html
+   Returned by GET /habits/progress and swapped into #progress-section
+   after every card toggle.
+
+   Context:
+     completed_today = int
+     total_active    = int
+#}
+<div class="progress-header">
+    <span class="progress-label">Today's Check-In</span>
+    <span class="progress-count">{{ completed_today }} of {{ total_active }} done</span>
+</div>
+<div class="progress-track">
+    <div class="progress-fill {% if completed_today == total_active and total_active > 0 %}complete{% endif %}"
+         style="width: {% if total_active > 0 %}{{ ((completed_today / total_active) * 100) | round | int }}{% else %}0{% endif %}%">
+    </div>
+</div>

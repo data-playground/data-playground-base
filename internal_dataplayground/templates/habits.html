@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Life OS — Habits{% endblock %}
+{% block page_title %}Habits{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/habits/settings">⚙ Settings</a>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/css/habits.css">{% endblock %}
+
+{% block content %}
+<main class="main-content" id="main-content">
+
+    {# ── PROGRESS BAR ── #}
+    <div class="progress-section" id="progress-section">
+        <div class="progress-header">
+            <span class="progress-label">Today's Check-In</span>
+            <span class="progress-count">{{ completed_today }} of {{ total_active }} done</span>
+        </div>
+        <div class="progress-track">
+            <div class="progress-fill {% if completed_today == total_active and total_active > 0 %}complete{% endif %}"
+                 style="width: {% if total_active > 0 %}{{ ((completed_today / total_active) * 100) | round | int }}{% else %}0{% endif %}%">
+            </div>
+        </div>
+    </div>
+
+    {# ── HABIT CARDS GRID ── #}
+    <div class="habits-grid" id="habits-grid">
+        {% set ns = namespace(shown_incomplete=false, shown_complete=false) %}
+        {% for view in habit_views %}
+            {% if not view.today_logged and not ns.shown_incomplete %}
+                {% set ns.shown_incomplete = true %}
+                <div class="habits-section-label">To Do</div>
+            {% endif %}
+            {% if view.today_logged and not ns.shown_complete %}
+                {% set ns.shown_complete = true %}
+                <div class="habits-section-label">Completed</div>
+            {% endif %}
+            {% include "partials/habit_card.html" %}
+        {% else %}
+            <p style="grid-column:1/-1;font-size:12px;color:var(--text-muted);padding:20px 0;">
+                No active habits yet. <a href="/habits/settings" style="color:var(--accent);">Add one →</a>
+            </p>
+        {% endfor %}
+    </div>
+
+    {# ── WEEKLY OVERVIEW ── #}
+    <div class="weekly-section">
+        <div class="weekly-header">This Week</div>
+        <div class="weekly-grid">
+            <table class="weekly-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        {% for d in week_dates %}
+                        <th {% if d == today %}class="today-col"{% endif %}>
+                            {{ d.strftime('%a') }}<br>
+                            <span style="font-size:8px;">{{ d.strftime('%-d') }}</span>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for view in habit_views %}
+                    {% set habit = view.habit %}
+                    <tr>
+                        <td title="{{ habit.name }}">{{ habit.icon or '' }} {{ habit.name }}</td>
+                        {% for d in week_dates %}
+                        <td>
+                            <span class="week-dot {% if (habit.id, d) in week_logged_set %}logged{% endif %} {% if d == today %}today-dot{% endif %}"
+                                  style="{% if (habit.id, d) in week_logged_set %}--dot-color:{{ habit.color or 'var(--accent)' }};{% endif %}">
+                            </span>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# ── STREAKS ── #}
+    <div class="streaks-section">
+        <div class="streaks-header">Streaks</div>
+        {% set sorted_views = habit_views | sort(attribute='streak', reverse=true) %}
+        {% for view in sorted_views %}
+        <div class="streak-row {% if view.streak == 0 %}zero{% endif %}">
+            <span class="streak-rank">{{ loop.index }}</span>
+            <span class="streak-icon">{{ view.habit.icon or '●' }}</span>
+            <span class="streak-name">{{ view.habit.name }}</span>
+            <span class="streak-value">{{ view.streak }}</span>
+            <span class="streak-label">day{{ 's' if view.streak != 1 else '' }}</span>
+        </div>
+        {% else %}
+        <p style="font-size:11px;color:var(--text-muted);">No habits yet.</p>
+        {% endfor %}
+    </div>
+
+</main>
+{% endblock %}

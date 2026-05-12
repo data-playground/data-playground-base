@@ -11,6 +11,7 @@ from database import init_db
 from routers import jobs, ats, staging, dashboard, blog, explorer
 from routers import finance_summary, finance_ledger, finance_upload, finance_settings
 from routers import ci_projects, ci_files, ci_readme
+from routers import habits
 
 templates = Jinja2Templates(directory="templates")
 
@@ -36,6 +37,7 @@ app.include_router(ats.router)
 app.include_router(staging.router)
 app.include_router(blog.router)
 app.include_router(explorer.router)
+app.include_router(habits.router)
 
 # ── Code Intelligence (files + readme before projects for path specificity) ────
 app.include_router(ci_files.router)

@@ -1,0 +1,17 @@
+{# templates/partials/habit_settings_list.html
+   Returned by POST /habits/new to refresh the full list after adding a habit.
+
+   Context:
+     habits      = list of Habit ORM objects
+     grace_period = int
+     toast       = optional success message string
+#}
+{% if toast %}
+<script>showToast('{{ toast }}');</script>
+{% endif %}
+
+{% for habit in habits %}
+    {% include "partials/habit_settings_row.html" %}
+{% else %}
+<p style="font-size:11px;color:var(--text-muted);padding:8px 0;">No habits yet. Add one above.</p>
+{% endfor %}

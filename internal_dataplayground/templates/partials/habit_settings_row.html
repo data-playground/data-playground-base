@@ -1,0 +1,103 @@
+{# templates/partials/habit_settings_row.html
+   A single habit row in the settings drag-and-drop list.
+   Used by:
+     - habits_settings.html (iterated)
+     - PATCH /habits/{id} response (HTMX outerHTML swap)
+
+   Context:
+     habit = Habit ORM object
+#}
+<div class="habit-settings-row {% if not habit.is_active %}inactive{% endif %}"
+     id="settings-row-{{ habit.id }}"
+     draggable="true"
+     data-habit-id="{{ habit.id }}"
+     style="--habit-color: {{ habit.color or 'var(--accent)' }};">
+
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
+
+    <span class="habit-settings-icon">{{ habit.icon or '●' }}</span>
+
+    <div style="flex:1;min-width:0;">
+        <div class="habit-settings-name">{{ habit.name }}</div>
+        {% if habit.description %}
+        <div class="habit-settings-desc">{{ habit.description }}</div>
+        {% endif %}
+    </div>
+
+    <div class="habit-settings-actions">
+        {# Activity heatmap expand button #}
+        <button class="action-btn"
+                onclick="toggleHeatmap({{ habit.id }}, '{{ habit.color or '#7c6fff' }}', this)"
+                title="View activity heatmap">
+            📊
+        </button>
+
+        {# Inline edit expand button #}
+        <button class="action-btn"
+                onclick="toggleEditFields({{ habit.id }})"
+                title="Edit habit">
+            ✎
+        </button>
+
+        {# Active / inactive toggle #}
+        <button class="toggle-active-btn {% if habit.is_active %}active{% endif %}"
+                hx-patch="/habits/{{ habit.id }}"
+                hx-vals='{"is_active": "{% if habit.is_active %}false{% else %}true{% endif %}"}'
+                hx-target="#settings-row-{{ habit.id }}"
+                hx-swap="outerHTML"
+                title="{% if habit.is_active %}Deactivate{% else %}Activate{% endif %}">
+            {% if habit.is_active %}Active{% else %}Inactive{% endif %}
+        </button>
+
+        {# Soft delete #}
+        <button class="action-btn danger"
+                hx-delete="/habits/{{ habit.id }}"
+                hx-target="#settings-row-{{ habit.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Deactivate '{{ habit.name }}'? Logs are kept."
+                title="Deactivate habit">
+            ✕
+        </button>
+    </div>
+</div>
+
+{# Inline edit fields — hidden by default, toggled by JS #}
+<div class="habit-edit-fields" id="edit-fields-{{ habit.id }}">
+    <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="form-input" type="text" id="edit-name-{{ habit.id }}"
+               value="{{ habit.name }}" placeholder="Habit name" style="width:140px;">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Description</label>
+        <input class="form-input" type="text" id="edit-desc-{{ habit.id }}"
+               value="{{ habit.description or '' }}" placeholder="Optional description" style="width:200px;">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Icon</label>
+        <input class="form-input icon-input" type="text" id="edit-icon-{{ habit.id }}"
+               value="{{ habit.icon or '' }}" placeholder="💧" maxlength="4">
+    </div>
+    <div class="form-group">
+        <label class="form-label">Color</label>
+        <input class="color-input" type="color" id="edit-color-{{ habit.id }}"
+               value="{{ habit.color or '#7c6fff' }}">
+    </div>
+    <div class="form-group" style="justify-content:flex-end;">
+        <label class="form-label" style="visibility:hidden;">·</label>
+        <button class="btn btn-primary" style="font-size:9px;padding:4px 10px;"
+                onclick="saveHabitEdit({{ habit.id }})">
+            Save
+        </button>
+    </div>
+</div>
+
+{# Heatmap section — hidden by default, populated lazily via JS fetch #}
+<div class="heatmap-section" id="heatmap-{{ habit.id }}">
+    <div style="font-size:9px;color:var(--text-muted);margin-bottom:6px;letter-spacing:.1em;text-transform:uppercase;">
+        Activity — last 365 days
+    </div>
+    <div class="heatmap-wrap" id="heatmap-wrap-{{ habit.id }}">
+        <span style="font-size:10px;color:var(--text-muted);">Loading…</span>
+    </div>
+</div>

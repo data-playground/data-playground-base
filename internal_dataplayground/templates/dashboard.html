@@ -698,6 +698,55 @@
             </div>
         </div>
 
+        {# Habit Summary #}
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+            <div class="section-head" style="margin-bottom:10px;">
+                <span class="section-title">Habits · Today</span>
+                <a href="/habits" class="section-link">Check in →</a>
+            </div>
+
+            {% if habits_total > 0 %}
+            {# Progress bar #}
+            <div style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:5px;">
+                    <span>{{ habits_done_today }} of {{ habits_total }} done</span>
+                    <span style="color:{% if habits_done_today == habits_total %}var(--green){% else %}var(--text-muted){% endif %};">
+                        {% if habits_done_today == habits_total %}✓ All done!{% else %}{{ habits_total - habits_done_today }} remaining{% endif %}
+                    </span>
+                </div>
+                <div style="height:5px;background:var(--bg-hover);border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;border-radius:3px;
+                                background:{% if habits_done_today == habits_total %}var(--green){% else %}var(--accent){% endif %};
+                                width:{{ ((habits_done_today / habits_total) * 100) | round | int }}%;
+                                transition:width .4s ease;">
+                    </div>
+                </div>
+            </div>
+
+            {# Stats row #}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div style="background:var(--bg-hover);border-radius:6px;padding:8px 10px;text-align:center;">
+                    <div style="font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:3px;">Best Streak</div>
+                    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;color:var(--accent);">{{ best_streak }}</div>
+                    <div style="font-size:8px;color:var(--text-muted);">days</div>
+                </div>
+                <div style="background:var(--bg-hover);border-radius:6px;padding:8px 10px;text-align:center;">
+                    <div style="font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:3px;">7-Day Rate</div>
+                    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;
+                                color:{% if week_completion_pct >= 80 %}var(--green){% elif week_completion_pct >= 50 %}var(--yellow){% else %}var(--red){% endif %};">
+                        {{ week_completion_pct }}%
+                    </div>
+                    <div style="font-size:8px;color:var(--text-muted);">completion</div>
+                </div>
+            </div>
+            {% else %}
+            <div style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-muted);line-height:1.7;">
+                No habits set up yet.<br>
+                <a href="/habits/settings" style="color:var(--accent);text-decoration:none;">Add your first habit →</a>
+            </div>
+            {% endif %}
+        </div>
+
         {# Quick Actions #}
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;">
             <div class="section-head" style="margin-bottom:10px;">
@@ -719,6 +768,10 @@
                 <a href="/explorer" class="btn" style="justify-content:space-between;">
                     <span>⊟ SQL Explorer</span>
                     <span style="color:var(--text-muted);font-size:9px;">Read-only</span>
+                </a>
+                <a href="/habits" class="btn" style="justify-content:space-between;">
+                    <span>✓ Habits</span>
+                    <span style="color:var(--text-muted);font-size:9px;">{{ habits_done_today }}/{{ habits_total }} today</span>
                 </a>
             </div>
         </div>
