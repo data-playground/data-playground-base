@@ -6,6 +6,8 @@
    ─────────────────────────────────────────────────────────────────────────
 */
 
+.main-content { padding: 1%; }
+
 /* ── PROGRESS BAR ── */
 .progress-section { margin-bottom:22px; }
 .progress-header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
