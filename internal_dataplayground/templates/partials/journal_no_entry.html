@@ -1,0 +1,17 @@
+{# templates/partials/journal_no_entry.html
+   Shown when a past date has no entry and is too old to backdate.
+   `entry_date` = datetime.date
+   `today`      = datetime.date
+#}
+<div style="padding:24px;">
+    <div class="no-entry-state">
+        <div class="no-entry-icon">📭</div>
+        <div class="no-entry-title">No entry for {{ entry_date.strftime('%B %-d, %Y') }}</div>
+        <div class="no-entry-body">
+            This day is more than 7 days ago — entries can only be created
+            within a week of the date.
+            <br><br>
+            <a href="/journal" style="color:var(--accent);text-decoration:none;">← Back to today</a>
+        </div>
+    </div>
+</div>

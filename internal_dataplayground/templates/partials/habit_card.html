@@ -17,16 +17,16 @@
 #}
 <div class="habit-card {% if today_logged %}completed{% endif %}"
      id="habit-card-{{ habit.id }}"
-     style="--habit-color: {{ habit.color or \'var(--accent)\' }};">
+     style="--habit-color: {{ habit.color or 'var(--accent)' }};">
  
-    <span class="habit-icon">{{ habit.icon or \'●\' }}</span>
+    <span class="habit-icon">{{ habit.icon or '●' }}</span>
  
     <div class="habit-info">
         <div class="habit-name">{{ habit.name }}</div>
         <div class="habit-streak">
             {% if streak > 0 %}
                 <span class="habit-streak-count">{{ streak }}</span>
-                day{{ \'s\' if streak != 1 else \'\' }} streak
+                day{{ 's' if streak != 1 else '' }} streak
             {% else %}
                 Start your streak today
             {% endif %}
@@ -36,20 +36,20 @@
     {% if today_logged %}
     <button class="habit-toggle checked"
             hx-delete="/habits/log"
-            hx-vals=\'{"habit_id": {{ habit.id }}, "logged_date": "{{ today.isoformat() }}"  }\'
+            hx-vals='{"habit_id": {{ habit.id }}, "logged_date": "{{ today.isoformat() }}"  }'
             hx-target="#habit-card-{{ habit.id }}"
             hx-swap="outerHTML"
-            hx-on::after-request="htmx.ajax(\'GET\', \'/habits/progress\', {target: \'#progress-section\', swap: \'innerHTML\'})"
+            hx-on::after-request="htmx.ajax('GET', '/habits/progress', {target: '#progress-section', swap: 'innerHTML'})"
             title="Mark as not done">
         ✓
     </button>
     {% else %}
     <button class="habit-toggle"
             hx-post="/habits/log"
-            hx-vals=\'{"habit_id": {{ habit.id }}, "logged_date": "{{ today.isoformat() }}"  }\'
+            hx-vals='{"habit_id": {{ habit.id }}, "logged_date": "{{ today.isoformat() }}"  }'
             hx-target="#habit-card-{{ habit.id }}"
             hx-swap="outerHTML"
-            hx-on::after-request="htmx.ajax(\'GET\', \'/habits/progress\', {target: \'#progress-section\', swap: \'innerHTML\'})"
+            hx-on::after-request="htmx.ajax('GET', '/habits/progress', {target: '#progress-section', swap: 'innerHTML'})"
             title="Mark as done">
         ○
     </button>

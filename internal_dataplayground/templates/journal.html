@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Journal{% endblock %}
+{% block page_title %}Daily Journal{% endblock %}
+
+{% block topbar_meta %}
+    {% if streak > 0 %}
+    <span style="font-size:10px;color:var(--accent);letter-spacing:.06em;">🔥 {{ streak }}-day streak</span>
+    {% endif %}
+{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/journal/synthesis/history">Synthesis History →</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/journal.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="journal-workspace">
+
+    {# ── LEFT PANEL: Calendar + Synthesis History ── #}
+    <div class="journal-left">
+        <div class="journal-left-scroll">
+
+            {# Streak badge #}
+            {% if streak > 0 %}
+            <div class="streak-badge">
+                <span class="streak-flame">🔥</span>
+                <div>
+                    <div class="streak-count">{{ streak }}</div>
+                    <div class="streak-label">day streak</div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# 3-month calendar #}
+            {% for month in calendar_months %}
+            <div class="calendar-section">
+                <div class="calendar-month-label">{{ month.month_name }}</div>
+                <div class="calendar-grid">
+                    {# Day headers — Mon through Sun #}
+                    {% for day_abbr in ['M','T','W','T','F','S','S'] %}
+                    <div class="calendar-day-header">{{ day_abbr }}</div>
+                    {% endfor %}
+
+                    {# Day cells #}
+                    {% for week in month.weeks %}
+                    {% for cell in week %}
+                    {% if cell is none %}
+                    <div class="calendar-day"></div>
+                    {% else %}
+                    <div class="calendar-day
+                        {% if cell.has_entry %}has-entry mood-{{ cell.mood_class }}{% endif %}
+                        {% if cell.is_today %}is-today{% endif %}
+                        {% if cell.is_future %}is-future{% endif %}"
+                        {% if not cell.is_future %}
+                        onclick="navigateDate('{{ cell.date_str }}', {{ cell.is_today | lower }})"
+                        title="{{ cell.date_str }}{% if cell.has_entry %} — mood: {{ cell.mood_score or '—' }}/5{% endif %}"
+                        {% endif %}
+                    >
+                        {{ cell.day_num }}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% if not loop.last %}
+            <hr class="calendar-divider">
+            {% endif %}
+            {% endfor %}
+
+            {# Synthesis history mini-cards #}
+            {% if recent_syntheses %}
+            <hr class="calendar-divider">
+            <div class="section-label-left">Weekly Syntheses</div>
+            {% for s in recent_syntheses %}
+            <div class="synthesis-mini-card"
+                 onclick="openSynthesisDrawer('{{ s.week_start_date.isoformat() }}')">
+                <div class="synthesis-mini-week">{{ s.week_label }}</div>
+                <div class="synthesis-mini-scores">
+                    {% if s.avg_mood %}
+                    <div class="synthesis-mini-score">Mood <span>{{ "%.1f"|format(s.avg_mood) }}</span></div>
+                    {% endif %}
+                    {% if s.avg_energy %}
+                    <div class="synthesis-mini-score">Energy <span>{{ "%.1f"|format(s.avg_energy) }}</span></div>
+                    {% endif %}
+                </div>
+                <div class="synthesis-mini-excerpt">{{ s.synthesis_text[:120] }}…</div>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+        </div>
+    </div>
+
+    {# ── RIGHT PANEL: Today's Entry ── #}
+    <div class="journal-right">
+
+        {# Entry header #}
+        <div class="entry-date-header">
+            <div class="entry-date-label">
+                {% set view_date = viewing_date if viewing_date is defined else today %}
+                {% if view_date == today %}
+                    Today · {{ today.strftime('%B %-d, %Y') }}
+                {% else %}
+                    {{ view_date.strftime('%A, %B %-d, %Y') }}
+                {% endif %}
+            </div>
+            {% if today_entry %}
+                {% if today_entry.is_locked %}
+                <span class="lock-badge locked">🔒 Locked</span>
+                {% else %}
+                <span class="lock-badge unlocked" id="lock-countdown">
+                    🔓 Locks in {{ today_entry.hours_until_lock | round(1) }}h
+                </span>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        {# Entry form / read-only view #}
+        <div id="entry-panel">
+            {% if today_entry and today_entry.is_locked %}
+                {# ── READ-ONLY VIEW ── #}
+                {% include "partials/journal_readonly.html" %}
+            {% else %}
+                {# ── EDIT FORM ── #}
+                {% include "partials/journal_form.html" %}
+            {% endif %}
+        </div>
+
+        {# HTMX save result slot #}
+        <div id="entry-save-result"></div>
+
+        {# Latest synthesis card at the bottom of the right panel #}
+        {% if latest_synthesis %}
+        <div class="synthesis-card">
+            <div class="synthesis-card-header">
+                <span class="synthesis-card-title">⟳ Weekly Synthesis</span>
+                <span class="synthesis-card-week">{{ latest_synthesis.week_label }}</span>
+            </div>
+            <div class="synthesis-card-body">{{ latest_synthesis.synthesis_text }}</div>
+            <a href="#" class="synthesis-card-link"
+               onclick="openSynthesisDrawer('{{ latest_synthesis.week_start_date.isoformat() }}'); return false;">
+                Read full synthesis →
+            </a>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{# Synthesis drawer #}
+<div class="detail-overlay" id="synth-overlay" onclick="closeSynthesisDrawer()"></div>
+<div class="detail-drawer" id="synth-drawer"></div>
+
+<div id="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── CALENDAR NAVIGATION ──────────────────────────────────────────────────────
+function navigateDate(dateStr, isToday) {
+    if (isToday) {
+        window.location.href = '/journal';
+    } else {
+        window.location.href = '/journal/' + dateStr;
+    }
+}
+
+// ── SCORE SELECTORS ──────────────────────────────────────────────────────────
+function selectScore(type, value) {
+    // Update hidden input
+    document.getElementById(type + '-score-input').value = value;
+    // Update button visual state
+    document.querySelectorAll('.score-btn[data-type="' + type + '"]').forEach(btn => {
+        btn.classList.toggle('selected', parseInt(btn.dataset.value) === value);
+    });
+}
+
+// Initialize score buttons from pre-existing values (edit mode)
+document.addEventListener('DOMContentLoaded', () => {
+    ['mood', 'energy'].forEach(type => {
+        const input = document.getElementById(type + '-score-input');
+        if (input && input.value) {
+            const val = parseInt(input.value);
+            document.querySelectorAll('.score-btn[data-type="' + type + '"]').forEach(btn => {
+                btn.classList.toggle('selected', parseInt(btn.dataset.value) === val);
+            });
+        }
+    });
+});
+
+// ── MARKDOWN PREVIEW ─────────────────────────────────────────────────────────
+function setEditorTab(tab) {
+    const textarea = document.getElementById('content-textarea');
+    const preview = document.getElementById('content-preview');
+    const tabs = document.querySelectorAll('.editor-tab');
+
+    tabs.forEach(t => t.classList.remove('active'));
+    document.querySelector('.editor-tab[data-tab="' + tab + '"]').classList.add('active');
+
+    if (tab === 'write') {
+        textarea.style.display = 'block';
+        preview.style.display = 'none';
+    } else {
+        textarea.style.display = 'none';
+        preview.style.display = 'block';
+        preview.innerHTML = typeof marked !== 'undefined'
+            ? marked.parse(textarea.value || '')
+            : '<em>Preview not available</em>';
+    }
+}
+
+// ── SYNTHESIS DRAWER ─────────────────────────────────────────────────────────
+function openSynthesisDrawer(weekStart) {
+    const drawer = document.getElementById('synth-drawer');
+    const overlay = document.getElementById('synth-overlay');
+    drawer.innerHTML = '<div style="padding:24px;font-size:11px;color:var(--text-muted);">Loading…</div>';
+    drawer.classList.add('open');
+    overlay.classList.add('visible');
+
+    fetch('/journal/synthesis/' + weekStart)
+        .then(r => r.text())
+        .then(html => { drawer.innerHTML = html; })
+        .catch(() => {
+            drawer.innerHTML = '<div style="padding:24px;color:var(--red);font-size:11px;">⚠ Could not load synthesis.</div>';
+        });
+}
+
+function closeSynthesisDrawer() {
+    document.getElementById('synth-drawer').classList.remove('open');
+    document.getElementById('synth-overlay').classList.remove('visible');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSynthesisDrawer();
+});
+
+// ── ENTRY SAVE (HTMX) ────────────────────────────────────────────────────────
+document.addEventListener('htmx:afterSwap', e => {
+    if (e.target.id === 'entry-save-result') {
+        e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+});
+</script>
+{% endblock %}

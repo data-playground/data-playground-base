@@ -1,0 +1,102 @@
+{# templates/partials/journal_form.html
+   Rendered inside #entry-panel for today's entry (new or existing unlocked).
+   `today_entry` = JournalEntry ORM object or None
+   Submits via HTMX POST /journal → swaps #entry-save-result
+#}
+<form id="journal-entry-form"
+      hx-post="/journal"
+      hx-target="#entry-save-result"
+      hx-swap="innerHTML"
+      hx-on::after-request="onEntrySaved(event)">
+
+    {# ── MOOD SCORE ── #}
+    <div class="score-section">
+        <span class="score-label">Mood</span>
+        <input type="hidden" id="mood-score-input" name="mood_score"
+               value="{{ today_entry.mood_score or '' }}">
+        <div class="score-buttons">
+            {% for val, emoji in [(1,'😞'),(2,'😕'),(3,'😐'),(4,'🙂'),(5,'😄')] %}
+            <button type="button"
+                    class="score-btn {% if today_entry and today_entry.mood_score == val %}selected{% endif %}"
+                    data-type="mood"
+                    data-value="{{ val }}"
+                    onclick="selectScore('mood', {{ val }})"
+                    title="{{ val }}/5">
+                {{ emoji }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── ENERGY SCORE ── #}
+    <div class="score-section">
+        <span class="score-label">Energy</span>
+        <input type="hidden" id="energy-score-input" name="energy_score"
+               value="{{ today_entry.energy_score or '' }}">
+        <div class="score-buttons">
+            {% for val, bars in [(1,'▁'),(2,'▂'),(3,'▄'),(4,'▆'),(5,'█')] %}
+            <button type="button"
+                    class="score-btn energy-btn {% if today_entry and today_entry.energy_score == val %}selected{% endif %}"
+                    data-type="energy"
+                    data-value="{{ val }}"
+                    onclick="selectScore('energy', {{ val }})"
+                    title="{{ val }}/5">
+                {{ bars }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── MAIN CONTENT ── #}
+    <div class="entry-form">
+        <div>
+            <div class="entry-field-label">
+                <span>Journal</span>
+                <div class="editor-tabs">
+                    <button type="button" class="editor-tab active" data-tab="write"
+                            onclick="setEditorTab('write')">Write</button>
+                    <button type="button" class="editor-tab" data-tab="preview"
+                            onclick="setEditorTab('preview')">Preview</button>
+                </div>
+            </div>
+            <textarea class="entry-textarea" id="content-textarea" name="content"
+                      rows="8"
+                      placeholder="How was your day? What's on your mind?&#10;&#10;Markdown is supported.&#10;This text stays on your server — it's never sent to any AI.">{{ today_entry.content or '' }}</textarea>
+            <div class="markdown-preview" id="content-preview"></div>
+            <div class="privacy-notice">
+                🔒 This text is stored locally and never sent to any external AI service.
+            </div>
+        </div>
+
+        <div>
+            <div class="entry-field-label">What went well today?</div>
+            <textarea class="entry-textarea" name="gratitude" rows="3"
+                      placeholder="Even small things count.">{{ today_entry.gratitude or '' }}</textarea>
+        </div>
+
+        <div>
+            <div class="entry-field-label">What was hard?</div>
+            <textarea class="entry-textarea" name="challenges" rows="3"
+                      placeholder="Friction, blockers, difficult moments.">{{ today_entry.challenges or '' }}</textarea>
+        </div>
+
+        <button type="submit" class="entry-save-btn" id="save-btn">
+            {% if today_entry %}Save Changes{% else %}Save Entry{% endif %}
+        </button>
+    </div>
+
+</form>
+
+<script>
+function onEntrySaved(event) {
+    // Re-enable the save button after HTMX completes
+    const btn = document.getElementById('save-btn');
+    if (btn) btn.disabled = false;
+}
+
+// Disable button on submit to prevent double-submit
+document.getElementById('journal-entry-form')?.addEventListener('submit', () => {
+    const btn = document.getElementById('save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+});
+</script>

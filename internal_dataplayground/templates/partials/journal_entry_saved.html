@@ -1,0 +1,25 @@
+{# templates/partials/journal_entry_saved.html
+   Returned by POST /journal and swapped into #entry-save-result via HTMX.
+   `entry` = JournalEntry ORM object
+   `error` = string or None
+#}
+{% if error %}
+<div class="entry-saved-box error">
+    <div class="entry-saved-title">⚠ Could not save</div>
+    <div class="entry-saved-sub">{{ error }}</div>
+</div>
+{% else %}
+<div class="entry-saved-box">
+    <div class="entry-saved-title">✓ Entry saved</div>
+    <div class="entry-saved-sub">
+        {% if entry.is_locked %}
+            🔒 This entry is now locked.
+        {% elif entry.hours_until_lock > 0 %}
+            Locks in {{ entry.hours_until_lock | round(1) }}h
+            · {{ entry.updated_at.strftime('%-I:%M %p') }}
+        {% else %}
+            Saved · {{ entry.updated_at.strftime('%-I:%M %p') }}
+        {% endif %}
+    </div>
+</div>
+{% endif %}

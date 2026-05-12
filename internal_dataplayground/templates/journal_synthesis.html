@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Weekly Synthesis History{% endblock %}
+{% block page_title %}Weekly Synthesis{% endblock %}
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);">{{ syntheses|length }} week{{ 's' if syntheses|length != 1 else '' }}</span>
+{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/journal">← Journal</a>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/journal.css">
+{% endblock %}
+
+{% block content %}
+<div class="synthesis-history">
+
+    {% if not syntheses %}
+    <div class="no-entry-state" style="padding:64px 24px;">
+        <div class="no-entry-icon">📊</div>
+        <div class="no-entry-title">No syntheses yet</div>
+        <div class="no-entry-body">
+            Syntheses are generated every Sunday night from your mood and energy scores.
+            Start journaling and the first one will appear after your first full week.
+        </div>
+    </div>
+    {% else %}
+
+    {% for s in syntheses %}
+    <div class="synthesis-full-card">
+        <div class="synthesis-week-header">
+            <div class="synthesis-week-label">{{ s.week_label }}</div>
+            <div style="font-size:9px;color:var(--text-muted);">
+                Generated {{ s.generated_at.strftime('%b %-d') }}
+            </div>
+        </div>
+
+        <div class="synthesis-metrics-row">
+            {% if s.avg_mood %}
+            <div class="synthesis-metric">
+                Mood avg <strong>{{ "%.1f"|format(s.avg_mood) }}/5</strong>
+            </div>
+            {% endif %}
+            {% if s.avg_energy %}
+            <div class="synthesis-metric">
+                Energy avg <strong>{{ "%.1f"|format(s.avg_energy) }}/5</strong>
+            </div>
+            {% endif %}
+            {% if s.habits_completion_rate is not none %}
+            <div class="synthesis-metric">
+                Habits <strong>{{ "%.0f"|format(s.habits_completion_rate) }}%</strong>
+            </div>
+            {% endif %}
+            {% if s.workout_count is not none %}
+            <div class="synthesis-metric">
+                Workouts <strong>{{ s.workout_count }}</strong>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Mood bar #}
+        {% if s.avg_mood %}
+        <div style="margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font-size:9px;color:var(--text-muted);width:50px;flex-shrink:0;">Mood</div>
+                <div style="flex:1;height:5px;background:var(--bg-hover);border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:{{ (s.avg_mood / 5 * 100)|round|int }}%;
+                                background:{% if s.avg_mood >= 4 %}var(--score-high){% elif s.avg_mood >= 3 %}var(--score-mid){% else %}var(--score-low){% endif %};
+                                border-radius:3px;"></div>
+                </div>
+                <div style="font-size:9px;color:var(--text-secondary);width:24px;text-align:right;">{{ "%.1f"|format(s.avg_mood) }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Energy bar #}
+        {% if s.avg_energy %}
+        <div style="margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font-size:9px;color:var(--text-muted);width:50px;flex-shrink:0;">Energy</div>
+                <div style="flex:1;height:5px;background:var(--bg-hover);border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:{{ (s.avg_energy / 5 * 100)|round|int }}%;
+                                background:var(--accent);border-radius:3px;"></div>
+                </div>
+                <div style="font-size:9px;color:var(--text-secondary);width:24px;text-align:right;">{{ "%.1f"|format(s.avg_energy) }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="synthesis-text-body">{{ s.synthesis_text }}</div>
+
+        <div class="synthesis-model-tag">
+            🔒 Built from numeric scores only — no journal text was shared with AI.
+            {% if s.model_used %} · {{ s.model_used }}{% endif %}
+            {% if s.data_sources %} · Sources: {{ s.data_sources | join(', ') if s.data_sources is iterable and s.data_sources is not string else s.data_sources }}{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{# templates/partials/journal_readonly.html
+   Rendered when an entry is locked (is_locked=True).
+   `today_entry` = JournalEntry ORM object
+#}
+<div class="entry-readonly">
+
+    {# Scores row #}
+    <div>
+        <div class="readonly-section-label">How the day went</div>
+        <div class="readonly-scores">
+            {% if today_entry.mood_score %}
+            <div class="readonly-score-card">
+                <div class="readonly-score-icon">{{ today_entry.mood_label }}</div>
+                <div class="readonly-score-val">{{ today_entry.mood_score }}/5</div>
+                <div class="readonly-score-sub">Mood</div>
+            </div>
+            {% endif %}
+            {% if today_entry.energy_score %}
+            <div class="readonly-score-card">
+                <div class="readonly-score-icon" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--accent);">
+                    {{ today_entry.energy_label }}
+                </div>
+                <div class="readonly-score-val">{{ today_entry.energy_score }}/5</div>
+                <div class="readonly-score-sub">Energy</div>
+            </div>
+            {% endif %}
+            {% if not today_entry.mood_score and not today_entry.energy_score %}
+            <div style="font-size:11px;color:var(--text-muted);">No scores recorded for this day.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Content #}
+    {% if today_entry.content %}
+    <div>
+        <div class="readonly-section-label">Journal</div>
+        <div class="readonly-text-block" id="readonly-content-rendered"></div>
+        <script>
+        (function(){
+            const raw = {{ today_entry.content | tojson }};
+            const el = document.getElementById('readonly-content-rendered');
+            if (el && typeof marked !== 'undefined') {
+                el.innerHTML = marked.parse(raw);
+                el.style.whiteSpace = 'normal';
+            } else if (el) {
+                el.textContent = raw;
+            }
+        })();
+        </script>
+    </div>
+    {% endif %}
+
+    {# Gratitude #}
+    {% if today_entry.gratitude %}
+    <div>
+        <div class="readonly-section-label" style="color:var(--score-high);">What went well</div>
+        <div class="readonly-text-block">{{ today_entry.gratitude }}</div>
+    </div>
+    {% endif %}
+
+    {# Challenges #}
+    {% if today_entry.challenges %}
+    <div>
+        <div class="readonly-section-label" style="color:var(--score-low);">What was hard</div>
+        <div class="readonly-text-block">{{ today_entry.challenges }}</div>
+    </div>
+    {% endif %}
+
+    {# Lock notice #}
+    <div style="font-size:9px;color:var(--text-muted);padding:6px 0;display:flex;align-items:center;gap:5px;">
+        🔒 This entry is locked · created {{ today_entry.created_at.strftime('%b %-d at %-I:%M %p') }}
+    </div>
+
+</div>

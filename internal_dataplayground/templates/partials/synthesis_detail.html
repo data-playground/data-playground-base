@@ -1,0 +1,109 @@
+{# templates/partials/synthesis_detail.html
+   Loaded into #synth-drawer via JS fetch.
+   `synthesis` = WeeklySynthesis ORM object
+#}
+<div style="padding:0;">
+
+    {# Sticky header #}
+    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);
+                display:flex;justify-content:space-between;align-items:flex-start;
+                position:sticky;top:0;background:var(--bg-card);z-index:10;">
+        <div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
+                        color:var(--text-primary);margin-bottom:3px;">
+                Week of {{ synthesis.week_label }}
+            </div>
+            <div style="font-size:9px;color:var(--text-muted);">
+                Generated {{ synthesis.generated_at.strftime('%b %-d, %Y at %-I:%M %p') }}
+                {% if synthesis.model_used %}· {{ synthesis.model_used }}{% endif %}
+            </div>
+        </div>
+        <button onclick="closeSynthesisDrawer()"
+                style="background:transparent;border:1px solid var(--border);
+                       color:var(--text-muted);border-radius:4px;padding:4px 10px;
+                       font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;
+                       flex-shrink:0;margin-left:12px;">
+            ✕ Close
+        </button>
+    </div>
+
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:16px;">
+
+        {# Metrics row #}
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            {% if synthesis.avg_mood %}
+            <div class="synthesis-metric">
+                Avg Mood <strong>{{ "%.1f"|format(synthesis.avg_mood) }}/5</strong>
+            </div>
+            {% endif %}
+            {% if synthesis.avg_energy %}
+            <div class="synthesis-metric">
+                Avg Energy <strong>{{ "%.1f"|format(synthesis.avg_energy) }}/5</strong>
+            </div>
+            {% endif %}
+            {% if synthesis.habits_completion_rate is not none %}
+            <div class="synthesis-metric">
+                Habits <strong>{{ "%.0f"|format(synthesis.habits_completion_rate) }}%</strong>
+            </div>
+            {% endif %}
+            {% if synthesis.workout_count is not none %}
+            <div class="synthesis-metric">
+                Workouts <strong>{{ synthesis.workout_count }}</strong>
+            </div>
+            {% endif %}
+        </div>
+
+        {# Mood bar #}
+        {% if synthesis.avg_mood %}
+        <div>
+            <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;
+                        letter-spacing:.12em;margin-bottom:5px;">Mood Average</div>
+            <div style="height:6px;background:var(--bg-hover);border-radius:3px;overflow:hidden;">
+                <div style="height:100%;width:{{ (synthesis.avg_mood / 5 * 100)|round|int }}%;
+                            border-radius:3px;
+                            background:{% if synthesis.avg_mood >= 4 %}var(--score-high)
+                                       {% elif synthesis.avg_mood >= 3 %}var(--score-mid)
+                                       {% else %}var(--score-low){% endif %};
+                            transition:width .4s ease;"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Energy bar #}
+        {% if synthesis.avg_energy %}
+        <div>
+            <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;
+                        letter-spacing:.12em;margin-bottom:5px;">Energy Average</div>
+            <div style="height:6px;background:var(--bg-hover);border-radius:3px;overflow:hidden;">
+                <div style="height:100%;width:{{ (synthesis.avg_energy / 5 * 100)|round|int }}%;
+                            border-radius:3px;background:var(--accent);
+                            transition:width .4s ease;"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="border-top:1px solid var(--border);"></div>
+
+        {# Synthesis text #}
+        <div>
+            <div style="font-size:9px;color:var(--accent);text-transform:uppercase;
+                        letter-spacing:.14em;margin-bottom:10px;">AI Synthesis</div>
+            <div style="font-size:11px;line-height:1.8;color:var(--text-secondary);
+                        white-space:pre-wrap;">{{ synthesis.synthesis_text }}</div>
+        </div>
+
+        {# Privacy note #}
+        <div class="privacy-notice">
+            🔒 This synthesis was generated from mood and energy scores only.
+            Your journal text was never shared with any AI service.
+        </div>
+
+        {# Data sources #}
+        {% if synthesis.data_sources %}
+        <div style="font-size:9px;color:var(--text-muted);">
+            Data sources: {{ synthesis.data_sources | join(', ') if synthesis.data_sources is iterable else synthesis.data_sources }}
+        </div>
+        {% endif %}
+
+    </div>
+</div>

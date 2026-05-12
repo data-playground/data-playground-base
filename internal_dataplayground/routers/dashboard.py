@@ -20,6 +20,7 @@ from models import (
     StagingJob, StagingJobStatus,
     Transaction, BlogIdea, BlogIdeaStatus,
     Habit, HabitLog, HabitSettings,
+    JournalEntry, WeeklySynthesis,  
 )
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -225,6 +226,44 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     week_logs_count = week_logs_result.scalar() or 0
     possible = habits_total * 7
     week_completion_pct = round((week_logs_count / possible) * 100) if possible > 0 else 0
+    
+    # ── 9. Journal — today's entry + streak + latest synthesis ───────────────────
+
+    import datetime as _dt
+
+    _today = _dt.date.today()
+
+    # Today's entry (mood + energy only — not the text fields)
+    today_journal_result = await db.execute(
+        select(JournalEntry.mood_score, JournalEntry.energy_score, JournalEntry.is_locked)
+        .where(JournalEntry.entry_date == _today)
+    )
+    today_journal_row = today_journal_result.one_or_none()
+    today_mood = today_journal_row.mood_score if today_journal_row else None
+    today_energy = today_journal_row.energy_score if today_journal_row else None
+    has_today_journal = today_journal_row is not None
+
+    # Journal streak (consecutive days with entries)
+    streak_result = await db.execute(
+        select(JournalEntry.entry_date)
+        .where(JournalEntry.entry_date <= _today)
+        .order_by(desc(JournalEntry.entry_date))
+        .limit(365)
+    )
+    streak_dates = {row.entry_date for row in streak_result.all()}
+    journal_streak = 0
+    _check = _today
+    while _check in streak_dates:
+        journal_streak += 1
+        _check -= _dt.timedelta(days=1)
+
+    # Latest weekly synthesis
+    latest_synthesis_result = await db.execute(
+        select(WeeklySynthesis)
+        .order_by(desc(WeeklySynthesis.week_start_date))
+        .limit(1)
+    )
+    latest_synthesis = latest_synthesis_result.scalar_one_or_none()
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
@@ -248,8 +287,13 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "staging_pending": staging_pending,
         "staging_processing": staging_processing,
         "staging_done": staging_done,
-        "habits_total":        habits_total,
-        "habits_done_today":   habits_done_today,
-        "best_streak":         best_streak,
+        "habits_total": habits_total,
+        "habits_done_today": habits_done_today,
+        "best_streak": best_streak,
         "week_completion_pct": week_completion_pct,
+        "today_mood": today_mood,
+        "today_energy": today_energy,
+        "has_today_journal": has_today_journal,
+        "journal_streak": journal_streak,
+        "latest_synthesis": latest_synthesis,
     })

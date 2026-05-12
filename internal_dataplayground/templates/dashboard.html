@@ -527,6 +527,28 @@
             <div class="stat-sub">pending enrichment</div>
         </div>
 
+		{# ── JOURNAL STAT CARD (add inside .stat-strip div) ── #}
+		<div class="stat-card" style="--accent-line: {% if today_mood and today_mood >= 4 %}var(--score-high){% elif today_mood and today_mood <= 2 %}var(--score-low){% else %}var(--score-mid){% endif %};">
+			<div class="stat-label">Today's Journal</div>
+			<div class="stat-value">
+				{% if has_today_journal %}
+					{% if today_mood %}{{ ['','😞','😕','😐','🙂','😄'][today_mood] }}{% else %}✓{% endif %}
+				{% else %}
+					—
+				{% endif %}
+			</div>
+			<div class="stat-sub">
+				{% if has_today_journal %}
+					{% if today_mood %}Mood {{ today_mood }}/5{% endif %}{% if today_energy %} · Energy {{ today_energy }}/5{% endif %}
+					· 🔥 {{ journal_streak }}-day streak
+				{% elif journal_streak > 0 %}
+					🔥 {{ journal_streak }}-day streak · <a href="/journal" style="color:var(--accent);text-decoration:none;">Log today →</a>
+				{% else %}
+					<a href="/journal" style="color:var(--accent);text-decoration:none;">Start journaling →</a>
+				{% endif %}
+			</div>
+		</div>
+
     </div>
 
     {# ── LEFT COLUMN ── #}
@@ -746,6 +768,45 @@
             </div>
             {% endif %}
         </div>
+		
+		{# ── JOURNAL PANEL (add in right column of dashboard) ── #}
+		{% if latest_synthesis %}
+		<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;border-left:3px solid var(--accent);">
+			<div class="section-head">
+				<span class="section-title">Latest Synthesis</span>
+				<a href="/journal/synthesis/history" class="section-link">All weeks →</a>
+			</div>
+			<div style="font-size:9px;color:var(--text-muted);margin-bottom:8px;">
+				{{ latest_synthesis.week_label }}
+				{% if latest_synthesis.avg_mood %} · Mood {{ "%.1f"|format(latest_synthesis.avg_mood) }}{% endif %}
+				{% if latest_synthesis.avg_energy %} · Energy {{ "%.1f"|format(latest_synthesis.avg_energy) }}{% endif %}
+			</div>
+			<div style="font-size:11px;line-height:1.7;color:var(--text-secondary);
+						overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;
+						-webkit-box-orient:vertical;margin-bottom:8px;">
+				{{ latest_synthesis.synthesis_text }}
+			</div>
+			<a href="/journal" style="font-size:9px;color:var(--accent);text-decoration:none;">Open journal →</a>
+		</div>
+		{% else %}
+		<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+			<div class="section-head" style="margin-bottom:10px;">
+				<span class="section-title">Journal</span>
+				<a href="/journal" class="section-link">Open →</a>
+			</div>
+			<div style="font-size:11px;color:var(--text-muted);line-height:1.7;">
+				{% if has_today_journal %}
+					✓ Entry logged for today.
+					{% if journal_streak > 1 %}🔥 {{ journal_streak }}-day streak.{% endif %}
+				{% else %}
+					No entry yet today.
+					<a href="/journal" style="color:var(--accent);text-decoration:none;">Log it now →</a>
+				{% endif %}
+				<br>
+				<span style="font-size:10px;">Weekly synthesis appears after your first full week.</span>
+			</div>
+		</div>
+		{% endif %}
 
         {# Quick Actions #}
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;">
