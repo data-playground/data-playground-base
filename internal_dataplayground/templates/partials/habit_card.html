@@ -15,7 +15,7 @@
 {# templates/partials/habit_card.html
    Context: habit, today_logged (bool), streak (int), today (date)
 #}
-<div class="habit-card {% if today_logged %}completed{% endif %}"
+<div class="habit-card {% if view.today_logged %}completed{% endif %}"
      id="habit-card-{{ habit.id }}"
      style="--habit-color: {{ habit.color or 'var(--accent)' }};">
  
@@ -24,16 +24,16 @@
     <div class="habit-info">
         <div class="habit-name">{{ habit.name }}</div>
         <div class="habit-streak">
-            {% if streak > 0 %}
-                <span class="habit-streak-count">{{ streak }}</span>
-                day{{ 's' if streak != 1 else '' }} streak
+            {% if view.streak > 0 %}
+                <span class="habit-streak-count">{{ view.streak }}</span>
+                day{{ 's' if view.streak != 1 else '' }} streak
             {% else %}
                 Start your streak today
             {% endif %}
         </div>
     </div>
  
-    {% if today_logged %}
+    {% if view.today_logged %}
     <button class="habit-toggle checked"
             hx-delete="/habits/log"
             hx-vals='{"habit_id": {{ habit.id }}, "logged_date": "{{ today.isoformat() }}"  }'
