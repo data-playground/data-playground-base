@@ -1,18 +1,19 @@
 {# templates/partials/blog_card.html
-   Used in the kanban board columns and returned by POST /blog/ideas
-   `idea` = BlogIdea ORM object
+   Used in the kanban board columns and returned by PATCH /blog/ideas/{id}/status.
+   data-column is read by relocateCard() in blog_detail.html to move the card
+   to the correct column after a status change without reloading the page.
 #}
-<div class="idea-card" id="blog-card-{{ idea.id }}" onclick="openDetail({{ idea.id }})">
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;justify-content:space-between;">
+<div class="idea-card"
+     id="blog-card-{{ idea.id }}"
+     data-column="{{ idea.status.kanban_column }}"
+     onclick="openDetail({{ idea.id }})">
 
-        {# Project type badge #}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;justify-content:space-between;">
         <div class="card-type-badge {% if idea.project_type.value == 'existing_asset' %}badge-existing{% elif idea.project_type.value == 'tutorial' %}badge-tutorial{% else %}badge-new{% endif %}">
             {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
             {% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
             {% else %}⊕ New Build{% endif %}
         </div>
-
-        {# Difficulty badge — only shown when set #}
         {% if idea.difficulty %}
         <div class="card-difficulty-badge difficulty-{{ idea.difficulty }}">
             {% if idea.difficulty == 'starter' %}⬡ Starter
@@ -20,12 +21,8 @@
             {% else %}◉ Ambitious{% endif %}
         </div>
         {% endif %}
-
         {% if not idea.the_build %}
-        <div style="font-size:9px; letter-spacing:.14em; text-transform:uppercase;
-                    color:var(--yellow);">
-            ⏳ Enriching…
-        </div>
+        <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">⏳ Enriching…</div>
         {% endif %}
     </div>
 
@@ -38,7 +35,8 @@
     <div class="card-footer">
         <span class="card-status">
             <span class="status-pip
-                {% if idea.status.value == 'writing_in_progress' %}pip-writing
+                {% if idea.status.value == 'in_development' %}pip-building
+                {% elif idea.status.value == 'writing_in_progress' %}pip-writing
                 {% elif idea.status.value in ('waiting_for_review', 'review_completed') %}pip-review
                 {% elif idea.status.value in ('ready_to_publish', 'published') %}pip-done
                 {% endif %}

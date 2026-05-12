@@ -1,19 +1,20 @@
 {# templates/partials/blog_detail.html
    Loaded into #detail-drawer via HTMX GET /blog/ideas/{id}
-   `idea`          = BlogIdea ORM object
-   `toast`         = optional success message
-   `error`         = optional error message
-   `code_files`    = list of CodeFile ORM objects for dropdown
-   `code_projects` = list of CodeProject ORM objects for dropdown
+
+   Status-change buttons (Start Building, Code Done) target the board card
+   (#blog-card-{id}) with hx-swap="outerHTML" so the card is replaced on the
+   board. A JS htmx:afterSwap listener then relocates the card to the correct
+   column based on the data-column attribute on the returned card.
+
+   The drawer itself is refreshed via a separate fetch so both views stay in sync.
 #}
 <div style="padding:0;" data-toast="{{ toast or '' }}">
 
     {# ── HEADER ── #}
-    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;flex-direction:column;">
-        {# ── ACTION BUTTONS ── #}
-		<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px">
-            {# Badge row #}
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
+        <div style="flex:1;min-width:0;padding-right:12px;">
+
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
                 <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
                     {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
                     {% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
@@ -27,73 +28,9 @@
                 </span>
                 {% endif %}
                 {% if not idea.the_build %}
-                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">
-                    ⏳ Enriching…
-                </div>
+                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">⏳ Enriching…</div>
                 {% endif %}
             </div>
-			
-			<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
-
-				{# Start Building — shown when idea is in backlog statuses #}
-				{% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
-				<button
-					hx-patch="/blog/ideas/{{ idea.id }}/status"
-					hx-vals='{"status": "in_development"}'
-					hx-target="#detail-drawer"
-					hx-swap="innerHTML"
-					style="background:transparent;border:1px solid var(--accent);color:var(--accent);
-						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-						   font-size:10px;cursor:pointer;"
-					title="Start building the code for this idea">
-					⚙ Start Building
-				</button>
-				{% endif %}
-
-				{# Code Done — shown when idea is in_development, moves back to ready-to-write #}
-				{% if idea.status.value == 'in_development' %}
-				<button
-					hx-patch="/blog/ideas/{{ idea.id }}/status"
-					hx-vals='{"status": "waiting_for_writing_trigger"}'
-					hx-target="#detail-drawer"
-					hx-swap="innerHTML"
-					style="background:transparent;border:1px solid var(--green);color:var(--green);
-						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-						   font-size:10px;cursor:pointer;"
-					title="Code is done, ready to write">
-					✓ Code Done, Ready to Write
-				</button>
-				{% endif %}
-
-				<button
-					hx-patch="/blog/ideas/{{ idea.id }}/archive"
-					hx-target="#detail-drawer"
-					hx-swap="innerHTML"
-					style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
-						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-						   font-size:10px;cursor:pointer;"
-					title="Move back to backlog">
-					↩ Backlog
-				</button>
-				<button
-					onclick="deleteIdea({{ idea.id }})"
-					style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);
-						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-						   font-size:10px;cursor:pointer;"
-					title="Delete permanently">
-					✕ Delete
-				</button>
-				<button onclick="closeDetail()"
-					style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
-						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-						   font-size:10px;cursor:pointer;">
-					✕ Close
-				</button>
-			</div>
-		</div>
-		
-		{# ── HEADER ── #}
-        <div style="flex:1;min-width:0;padding-right:12px;">
 
             <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text-primary);line-height:1.3;">
                 {{ idea.title_concept }}
@@ -107,6 +44,65 @@
                     {% else %}var(--text-muted){% endif %};"></span>
                 {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
             </div>
+        </div>
+
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+
+            {# ── Start Building: targets the board card so it moves to In Development column ── #}
+            {% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/status"
+                hx-vals='{"status": "in_development"}'
+                hx-target="#blog-card-{{ idea.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="refreshDrawer({{ idea.id }})"
+                style="background:transparent;border:1px solid var(--accent);color:var(--accent);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;"
+                title="Start building the code for this idea">
+                ⚙ Start Building
+            </button>
+            {% endif %}
+
+            {# ── Code Done: targets the board card so it moves back to backlog column ── #}
+            {% if idea.status.value == 'in_development' %}
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/status"
+                hx-vals='{"status": "waiting_for_writing_trigger"}'
+                hx-target="#blog-card-{{ idea.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="refreshDrawer({{ idea.id }})"
+                style="background:transparent;border:1px solid var(--green);color:var(--green);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;"
+                title="Code is done, ready to write">
+                ✓ Ready to Write
+            </button>
+            {% endif %}
+
+            <button
+                hx-patch="/blog/ideas/{{ idea.id }}/archive"
+                hx-target="#blog-card-{{ idea.id }}"
+                hx-swap="outerHTML"
+                hx-on::after-request="refreshDrawer({{ idea.id }})"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;">
+                ↩ Backlog
+            </button>
+            <button
+                onclick="deleteIdea({{ idea.id }})"
+                style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;display:none;">
+                ✕ Delete
+            </button>
+            <button onclick="closeDetail()"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;">
+                ✕ Close
+            </button>
         </div>
     </div>
 
@@ -150,7 +146,6 @@
             </div>
             <form id="evidence-form-{{ idea.id }}">
 
-                {# Difficulty selector #}
                 <div style="margin-bottom:10px;">
                     <label class="form-label">Difficulty</label>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -177,7 +172,6 @@
                     </div>
                 </div>
 
-                {# Code Project dropdown #}
                 <div style="margin-bottom:10px;">
                     <label class="form-label">Linked Code Project (optional)</label>
                     <select name="code_project_id"
@@ -194,9 +188,8 @@
                     </select>
                 </div>
 
-                {# Code File dropdown #}
                 <div style="margin-bottom:10px;">
-                    <label class="form-label">Linked Code File (optional — overrides project)</label>
+                    <label class="form-label">Linked Code File (optional)</label>
                     <select name="code_file_id"
                         style="width:100%;font-family:'DM Mono',monospace;font-size:10px;
                                padding:8px 10px;border:1px solid var(--border);
@@ -232,7 +225,7 @@
 
         <div style="border-top:1px solid var(--border);"></div>
 
-        {# ── TRIGGER 1: GHOSTWRITER ── #}
+        {# ── GHOSTWRITER ── #}
         <div>
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">
                 ② Ghostwriter
@@ -247,7 +240,7 @@
                 ▶ Trigger Ghostwriter
             </button>
             {% elif idea.status.value == 'writing_in_progress' %}
-            <div style="font-size:11px;color:var(--blue);">⚙ Writing in progress… (Airflow run: {{ idea.airflow_run_id or '—' }})</div>
+            <div style="font-size:11px;color:var(--blue);">⚙ Writing in progress… (run: {{ idea.airflow_run_id or '—' }})</div>
             {% else %}
             <div style="font-size:10px;color:var(--text-muted);">Ghostwriter already completed.</div>
             <button hx-patch="/blog/ideas/{{ idea.id }}/trigger" hx-target="#detail-drawer" hx-swap="innerHTML"
@@ -259,7 +252,7 @@
 
         <div style="border-top:1px solid var(--border);"></div>
 
-        {# ── HITL 2: REVIEW DRAFT V1 ── #}
+        {# ── REVIEW DRAFT V1 ── #}
         <div>
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:10px;">
                 ③ Review Draft
@@ -300,7 +293,7 @@
 
         <div style="border-top:1px solid var(--border);"></div>
 
-        {# ── TRIGGER 2: FINALIZE ── #}
+        {# ── FINALIZE ── #}
         <div>
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;">
                 ④ Finalize
@@ -314,36 +307,17 @@
                 style="padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">
                 ▶ Run Refiner + Editor
             </button>
-            <div style="font-size:9px;color:var(--text-muted);margin-top:6px;">
-                Triggers life_os_blog_finalizer DAG. Saves draft_v2 then final_article to DB.
-            </div>
             {% else %}
             <div style="font-size:10px;color:var(--text-muted);">Complete the Ghostwriter step first.</div>
             {% endif %}
         </div>
 
-        {# ── FINAL ARTICLE ── #}
         {% if idea.final_article %}
         <div style="border-top:1px solid var(--border);padding-top:14px;">
             <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px;">⑤ Final Article</div>
-            {% if idea.seo_title %}
-            <div style="font-size:11px;margin-bottom:4px;">
-                <strong style="color:var(--text-primary);">SEO Title:</strong>
-                <span style="color:var(--text-secondary);">{{ idea.seo_title }}</span>
-            </div>
-            {% endif %}
-            {% if idea.seo_description %}
-            <div style="font-size:11px;margin-bottom:4px;">
-                <strong style="color:var(--text-primary);">Meta:</strong>
-                <span style="color:var(--text-secondary);">{{ idea.seo_description }}</span>
-            </div>
-            {% endif %}
-            {% if idea.seo_tags %}
-            <div style="font-size:11px;margin-bottom:12px;">
-                <strong style="color:var(--text-primary);">Tags:</strong>
-                <span style="color:var(--text-secondary);">{{ idea.seo_tags }}</span>
-            </div>
-            {% endif %}
+            {% if idea.seo_title %}<div style="font-size:11px;margin-bottom:4px;"><strong style="color:var(--text-primary);">SEO Title:</strong> <span style="color:var(--text-secondary);">{{ idea.seo_title }}</span></div>{% endif %}
+            {% if idea.seo_description %}<div style="font-size:11px;margin-bottom:4px;"><strong style="color:var(--text-primary);">Meta:</strong> <span style="color:var(--text-secondary);">{{ idea.seo_description }}</span></div>{% endif %}
+            {% if idea.seo_tags %}<div style="font-size:11px;margin-bottom:12px;"><strong style="color:var(--text-primary);">Tags:</strong> <span style="color:var(--text-secondary);">{{ idea.seo_tags }}</span></div>{% endif %}
             <a href="/blog/ideas/{{ idea.id }}/article"
                style="display:inline-block;padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;background:var(--text-primary);color:var(--bg-card);border-radius:4px;text-decoration:none;">
                 ↗ View Full Article
@@ -355,6 +329,38 @@
 </div>
 
 <script>
+// After a status button targets the board card, refresh the drawer
+// and relocate the card to the correct column.
+function refreshDrawer(ideaId) {
+    // Re-fetch the drawer so status label and buttons update
+    htmx.ajax('GET', `/blog/ideas/${ideaId}`, {
+        target: '#detail-drawer',
+        swap: 'innerHTML',
+    });
+}
+
+// Called by htmx:afterSwap in blog.html — moves the card to the right column
+function relocateCard(cardEl) {
+    const column = cardEl.dataset.column;
+    const colMap = {
+        'backlog':        'col-backlog',
+        'in_development': 'col-in-development',
+        'in_progress':    'col-in-progress',
+        'done':           'col-done',
+    };
+    const targetColId = colMap[column];
+    if (!targetColId) return;
+    const targetCol = document.getElementById(targetColId);
+    if (!targetCol) return;
+
+    // Remove empty-col placeholder if present
+    const empty = targetCol.querySelector('.empty-col');
+    if (empty) empty.remove();
+
+    // Move card to top of target column
+    targetCol.insertAdjacentElement('afterbegin', cardEl);
+}
+
 function highlightDifficultyOption(radio) {
     const form = radio.closest('form');
     form.querySelectorAll('input[name="difficulty"]').forEach(r => {
