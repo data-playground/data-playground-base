@@ -11,27 +11,85 @@
 <div style="padding:0;" data-toast="{{ toast or '' }}">
 
     {# ── HEADER ── #}
-    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;">
+    <div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;background:var(--bg-card);z-index:10;flex-direction:column;gap:10px;">
+		<div style="display: flex;width: 100%;justify-content: space-between;align-items: center;">
+			<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+				<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
+					{% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
+					{% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
+					{% else %}⊕ New Build{% endif %}
+				</div>
+				{% if idea.difficulty %}
+				<span class="detail-difficulty-badge difficulty-{{ idea.difficulty }}">
+					{% if idea.difficulty == 'starter' %}⬡ Starter
+					{% elif idea.difficulty == 'weekend' %}◈ Weekend
+					{% else %}◉ Ambitious{% endif %}
+				</span>
+				{% endif %}
+				{% if not idea.the_build %}
+				<div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">⏳ Enriching…</div>
+				{% endif %}
+			</div>
+			<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+
+				{# ── Start Building: targets the board card so it moves to In Development column ── #}
+				{% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
+				<button
+					hx-patch="/blog/ideas/{{ idea.id }}/status"
+					hx-vals='{"status": "in_development"}'
+					hx-target="#blog-card-{{ idea.id }}"
+					hx-swap="outerHTML"
+					hx-on::after-request="refreshDrawer({{ idea.id }})"
+					style="background:transparent;border:1px solid var(--accent);color:var(--accent);
+						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+						   font-size:10px;cursor:pointer;"
+					title="Start building the code for this idea">
+					⚙ Start Building
+				</button>
+				{% endif %}
+
+				{# ── Code Done: targets the board card so it moves back to backlog column ── #}
+				{% if idea.status.value == 'in_development' %}
+				<button
+					hx-patch="/blog/ideas/{{ idea.id }}/status"
+					hx-vals='{"status": "waiting_for_writing_trigger"}'
+					hx-target="#blog-card-{{ idea.id }}"
+					hx-swap="outerHTML"
+					hx-on::after-request="refreshDrawer({{ idea.id }})"
+					style="background:transparent;border:1px solid var(--green);color:var(--green);
+						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+						   font-size:10px;cursor:pointer;"
+					title="Code is done, ready to write">
+					✓ Ready to Write
+				</button>
+				{% endif %}
+
+				<button
+					hx-patch="/blog/ideas/{{ idea.id }}/archive"
+					hx-target="#blog-card-{{ idea.id }}"
+					hx-swap="outerHTML"
+					hx-on::after-request="refreshDrawer({{ idea.id }})"
+					style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+						   font-size:10px;cursor:pointer;">
+					↩ Backlog
+				</button>
+				<button
+					onclick="deleteIdea({{ idea.id }})"
+					style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);
+						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+						   font-size:10px;cursor:pointer;display:none;">
+					✕ Delete
+				</button>
+				<button onclick="closeDetail()"
+					style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+						   font-size:10px;cursor:pointer;">
+					✕ Close
+				</button>
+			</div>
+		</div>
         <div style="flex:1;min-width:0;padding-right:12px;">
-
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);">
-                    {% if idea.project_type.value == 'existing_asset' %}◈ Existing Asset
-                    {% elif idea.project_type.value == 'tutorial' %}✎ Tutorial
-                    {% else %}⊕ New Build{% endif %}
-                </div>
-                {% if idea.difficulty %}
-                <span class="detail-difficulty-badge difficulty-{{ idea.difficulty }}">
-                    {% if idea.difficulty == 'starter' %}⬡ Starter
-                    {% elif idea.difficulty == 'weekend' %}◈ Weekend
-                    {% else %}◉ Ambitious{% endif %}
-                </span>
-                {% endif %}
-                {% if not idea.the_build %}
-                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);">⏳ Enriching…</div>
-                {% endif %}
-            </div>
-
             <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text-primary);line-height:1.3;">
                 {{ idea.title_concept }}
             </div>
@@ -44,65 +102,6 @@
                     {% else %}var(--text-muted){% endif %};"></span>
                 {{ idea.status.label }} · {{ idea.created_at.strftime('%b %d, %Y') }}
             </div>
-        </div>
-
-        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
-
-            {# ── Start Building: targets the board card so it moves to In Development column ── #}
-            {% if idea.status.value in ('idea_generated', 'waiting_for_writing_trigger') %}
-            <button
-                hx-patch="/blog/ideas/{{ idea.id }}/status"
-                hx-vals='{"status": "in_development"}'
-                hx-target="#blog-card-{{ idea.id }}"
-                hx-swap="outerHTML"
-                hx-on::after-request="refreshDrawer({{ idea.id }})"
-                style="background:transparent;border:1px solid var(--accent);color:var(--accent);
-                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-                       font-size:10px;cursor:pointer;"
-                title="Start building the code for this idea">
-                ⚙ Start Building
-            </button>
-            {% endif %}
-
-            {# ── Code Done: targets the board card so it moves back to backlog column ── #}
-            {% if idea.status.value == 'in_development' %}
-            <button
-                hx-patch="/blog/ideas/{{ idea.id }}/status"
-                hx-vals='{"status": "waiting_for_writing_trigger"}'
-                hx-target="#blog-card-{{ idea.id }}"
-                hx-swap="outerHTML"
-                hx-on::after-request="refreshDrawer({{ idea.id }})"
-                style="background:transparent;border:1px solid var(--green);color:var(--green);
-                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-                       font-size:10px;cursor:pointer;"
-                title="Code is done, ready to write">
-                ✓ Ready to Write
-            </button>
-            {% endif %}
-
-            <button
-                hx-patch="/blog/ideas/{{ idea.id }}/archive"
-                hx-target="#blog-card-{{ idea.id }}"
-                hx-swap="outerHTML"
-                hx-on::after-request="refreshDrawer({{ idea.id }})"
-                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
-                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-                       font-size:10px;cursor:pointer;">
-                ↩ Backlog
-            </button>
-            <button
-                onclick="deleteIdea({{ idea.id }})"
-                style="background:transparent;border:1px solid rgba(240,64,64,0.4);color:var(--red);
-                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-                       font-size:10px;cursor:pointer;display:none;">
-                ✕ Delete
-            </button>
-            <button onclick="closeDetail()"
-                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
-                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
-                       font-size:10px;cursor:pointer;">
-                ✕ Close
-            </button>
         </div>
     </div>
 
