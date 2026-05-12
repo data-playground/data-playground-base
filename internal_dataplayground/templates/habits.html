@@ -26,6 +26,7 @@
     <div class="habits-grid" id="habits-grid">
         {% set ns = namespace(shown_incomplete=false, shown_complete=false) %}
         {% for view in habit_views %}
+		{% set habit = view.habit %}
             {% if not view.today_logged and not ns.shown_incomplete %}
                 {% set ns.shown_incomplete = true %}
                 <div class="habits-section-label">To Do</div>
