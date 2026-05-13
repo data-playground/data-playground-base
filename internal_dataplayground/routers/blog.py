@@ -49,7 +49,9 @@ EXPANDER_DAG  = "life_os_idea_expander"
 @router.get("", response_class=HTMLResponse)
 async def blog_kanban(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(BlogIdea).order_by(desc(BlogIdea.updated_at))
+        select(BlogIdea)
+        .where(BlogIdea.status != BlogIdeaStatus.ARCHIVED) # Filter here
+        .order_by(desc(BlogIdea.updated_at))
     )
     all_ideas = result.scalars().all()
 
@@ -320,14 +322,21 @@ async def archive_idea(
     idea = await db.get(BlogIdea, idea_id)
     if not idea:
         raise HTTPException(status_code=404)
-    idea.status = BlogIdeaStatus.IDEA_GENERATED
+
+    # 1. Update status to ARCHIVED (ensure this is added to your Enum in models.py)
+    idea.status = BlogIdeaStatus.ARCHIVED 
     idea.updated_at = datetime.utcnow()
+    
     await db.commit()
-    await db.refresh(idea)
-    return templates.TemplateResponse(
-        "partials/blog_detail.html",
-        {"request": request, "idea": idea, "toast": "Moved back to backlog."},
-    )
+
+    # 2. Return an empty response with a Trigger header
+    # This avoids the "weird behavior" by not sending back HTML to be swapped incorrectly
+    response = HTMLResponse(content="")
+    
+    # We trigger a client-side event that our JS will listen for
+    response.headers["HX-Trigger"] = f'{"ideaArchived": {idea_id}}'
+    
+    return response
 
 
 @router.delete("/ideas/{idea_id}", response_class=HTMLResponse)

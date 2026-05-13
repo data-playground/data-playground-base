@@ -24,21 +24,21 @@
 {% block content %}
 
     <!-- MOBILE TAB STRIP — 4 tabs -->
-    <div class="mobile-kanban-tabs" id="mobile-kanban-tabs">
-        <button class="mobile-kanban-tab active" onclick="switchMobileKanban(0, this)">
-            Ideation <span class="mobile-kanban-tab-count">{{ backlog|length }}</span>
-        </button>
-        <button class="mobile-kanban-tab" onclick="switchMobileKanban(1, this)">
-            Building <span class="mobile-kanban-tab-count">{{ in_development|length }}</span>
-        </button>
-        <button class="mobile-kanban-tab" onclick="switchMobileKanban(2, this)">
-            Writing <span class="mobile-kanban-tab-count">{{ in_progress|length }}</span>
-        </button>
-        <button class="mobile-kanban-tab" onclick="switchMobileKanban(3, this)">
-            Publish <span class="mobile-kanban-tab-count">{{ done|length }}</span>
-        </button>
-    </div>
-
+	<div class="mobile-kanban-tabs" id="mobile-kanban-tabs">
+		<button class="mobile-kanban-tab active" onclick="switchMobileKanban(0, this)">
+			Ideation <span class="mobile-kanban-tab-count" id="m-count-backlog">{{ backlog|length }}</span>
+		</button>
+		<button class="mobile-kanban-tab" onclick="switchMobileKanban(1, this)">
+			Building <span class="mobile-kanban-tab-count" id="m-count-in_development">{{ in_development|length }}</span>
+		</button>
+		<button class="mobile-kanban-tab" onclick="switchMobileKanban(2, this)">
+			Writing <span class="mobile-kanban-tab-count" id="m-count-in_progress">{{ in_progress|length }}</span>
+		</button>
+		<button class="mobile-kanban-tab" onclick="switchMobileKanban(3, this)">
+			Publish <span class="mobile-kanban-tab-count" id="m-count-done">{{ done|length }}</span>
+		</button>
+	</div>
+	
     <!-- KANBAN BOARD — 4 columns -->
     <div class="board">
 
@@ -158,42 +158,30 @@ const COUNT_MAP = {
 document.body.addEventListener('htmx:afterSwap', function (evt) {
     const el = evt.target;
 
-    // Only act on board cards (id starts with "blog-card-")
+    // 1. If we just archived an item, the target might be the card that was removed
+    // or the drawer that was cleared. Always refresh counts to be safe.
+    updateColumnCounts();
+
+    // 2. Only perform "Relocation" logic if the element is actually a board card
     if (!el.id || !el.id.startsWith('blog-card-')) return;
 
     const targetColumn = el.dataset.column;
     const targetColId  = COLUMN_MAP[targetColumn];
+    
+    // If status is "ARCHIVED", it won't have a targetColId, so it stays hidden/removed
     if (!targetColId) return;
 
     const targetColEl = document.getElementById(targetColId);
     if (!targetColEl) return;
 
-    // If the card is already in the right column, nothing to do
-    if (el.parentElement && el.parentElement.id === targetColId) {
-        updateColumnCounts();
-        return;
+    // Move logic
+    if (el.parentElement && el.parentElement.id !== targetColId) {
+        const empty = targetColEl.querySelector('.empty-col');
+        if (empty) empty.remove();
+        targetColEl.insertAdjacentElement('afterbegin', el);
     }
 
-    // Remove empty-col placeholder in the destination if present
-    const empty = targetColEl.querySelector('.empty-col');
-    if (empty) empty.remove();
-
-    // Move card to top of destination column
-    targetColEl.insertAdjacentElement('afterbegin', el);
-
-    // Add empty-col placeholder to the source column if now empty
-    Object.values(COLUMN_MAP).forEach(colId => {
-        const colEl = document.getElementById(colId);
-        if (!colEl) return;
-        const hasCards = colEl.querySelector('.idea-card');
-        const hasEmpty = colEl.querySelector('.empty-col');
-        if (!hasCards && !hasEmpty) {
-            colEl.innerHTML = '<div class="empty-col"><div class="empty-icon">◻</div><p>Nothing here.</p></div>';
-        }
-    });
-
-    updateColumnCounts();
-    showToast('Idea moved.');
+    showToast('Board updated.');
 });
 
 // Recount cards in each column and update the header badges.
@@ -201,8 +189,19 @@ function updateColumnCounts() {
     Object.entries(COUNT_MAP).forEach(([colId, countId]) => {
         const colEl   = document.getElementById(colId);
         const countEl = document.getElementById(countId);
+        const mobCountEl = document.getElementById('m-' + countId); // Update mobile badge too
+        
         if (!colEl || !countEl) return;
-        countEl.textContent = colEl.querySelectorAll('.idea-card').length;
+        
+        const count = colEl.querySelectorAll('.idea-card').length;
+        countEl.textContent = count;
+        if (mobCountEl) mobCountEl.textContent = count;
+
+        // Logic to show "Nothing here" if you archive the last item
+        const hasEmpty = colEl.querySelector('.empty-col');
+        if (count === 0 && !hasEmpty) {
+            colEl.innerHTML = '<div class="empty-col"><div class="empty-icon">◻</div><p>Nothing here.</p></div>';
+        }
     });
 }
 
