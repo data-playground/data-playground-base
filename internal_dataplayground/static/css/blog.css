@@ -156,7 +156,7 @@
 .form-hint { font-size:9px; color:var(--text-muted); margin-top:5px; }
 
 /* ── DETAIL DRAWER ── */
-.detail-drawer { position:fixed; top:0; right:-560px; width:560px; height:100vh; background:var(--bg-card); border-left:1px solid var(--border); box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:300; overflow-y:auto; transition:right 0.3s cubic-bezier(0.4,0,0.2,1); }
+.detail-drawer { position:fixed; top:0; right:-650px; width:650px; height:100vh; background:var(--bg-card); border-left:1px solid var(--border); box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:300; overflow-y:auto; transition:right 0.3s cubic-bezier(0.4,0,0.2,1); }
 .detail-drawer.open { right:0; }
 .detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.25); z-index:299; }
 .detail-overlay.visible { display:block; }
