@@ -318,6 +318,7 @@ class BlogIdeaStatus(enum.Enum):
     REVIEW_COMPLETED            = "review_completed"
     READY_TO_PUBLISH            = "ready_to_publish"
     PUBLISHED                   = "published"
+    ARCHIVED                    = "archived"
  
     @property
     def label(self) -> str:
@@ -330,17 +331,26 @@ class BlogIdeaStatus(enum.Enum):
             "review_completed":            "Review Done",
             "ready_to_publish":            "Ready to Publish",
             "published":                   "Published",
+            "archived":                    "Archived"
         }[self.value]
  
     @property
     def kanban_column(self) -> str:
+        # 3. Explicitly map columns so 'archived' doesn't fall into 'done'
         if self.value in ("idea_generated", "waiting_for_writing_trigger"):
             return "backlog"
+        
         if self.value == "in_development":
-            return "in_development"                            # new column
+            return "in_development"
+        
         if self.value in ("writing_in_progress", "waiting_for_review", "review_completed"):
             return "in_progress"
-        return "done"
+        
+        if self.value in ("ready_to_publish", "published"):
+            return "done"
+            
+        # Return something that doesn't exist in your frontend COLUMN_MAP
+        return "hidden"
 
 # Allowed difficulty values — enforced at the application layer.
 # Stored as VARCHAR(20) in the DB (not ENUM) for forward flexibility.
