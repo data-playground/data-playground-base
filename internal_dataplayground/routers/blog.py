@@ -337,7 +337,7 @@ async def archive_idea(
     )
     
     # This trigger tells the frontend to remove the card from the UI
-    response.headers["HX-Trigger"] = f'{"ideaArchived": {idea_id}}'
+    response.headers["HX-Trigger"] = f'{{"ideaArchived": {idea_id}}}'
     
     return response
 
