@@ -63,16 +63,27 @@
 					✓ Ready to Write
 				</button>
 				{% endif %}
-
+				
+				{% set status = idea.status.value %}
 				<button
-					hx-patch="/blog/ideas/{{ idea.id }}/archive"
+					hx-patch="/blog/ideas/{{ idea.id }}/revert"
 					hx-target="#blog-card-{{ idea.id }}"
 					hx-swap="outerHTML"
 					hx-on::after-request="refreshDrawer({{ idea.id }})"
 					style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
 						   border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
 						   font-size:10px;cursor:pointer;">
-					↩ Archive
+				    {% if status in ['idea_generated', 'waiting_for_writing_trigger'] %}
+						Archive
+					{% elif status in ['in_development', 'writing_in_progress'] %}
+						← Back to Ideation
+					{% elif status in ['waiting_for_review', 'review_completed'] %}
+						← Back to Dev
+					{% elif status in ['ready_to_publish', 'published'] %}
+						← Back to Review
+					{% else %}
+						Revert
+					{% endif %}
 				</button>
 				<button
 					onclick="deleteIdea({{ idea.id }})"

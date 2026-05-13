@@ -354,6 +354,36 @@ async def delete_idea(
     await db.delete(idea)
     await db.commit()
     return HTMLResponse("")
+    
+@router.patch("/ideas/{idea_id}/revert", response_class=HTMLResponse)
+async def revert_idea_status(
+    idea_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    idea = await db.get(BlogIdea, idea_id)
+    if not idea:
+        raise HTTPException(status_code=404)
+
+    curr = idea.status
+    
+    # Define the "Backwards" logic
+    if curr in [BlogIdeaStatus.IDEA_GENERATED, BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER]:
+        idea.status = BlogIdeaStatus.ARCHIVED
+    elif curr in [BlogIdeaStatus.IN_DEVELOPMENT, BlogIdeaStatus.WRITING_IN_PROGRESS]:
+        idea.status = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
+    elif curr in [BlogIdeaStatus.WAITING_FOR_REVIEW, BlogIdeaStatus.REVIEW_COMPLETED]:
+        idea.status = BlogIdeaStatus.IN_DEVELOPMENT
+    elif curr in [BlogIdeaStatus.READY_TO_PUBLISH, BlogIdeaStatus.PUBLISHED]:
+        idea.status = BlogIdeaStatus.WAITING_FOR_REVIEW
+    
+    await db.commit()
+
+    # Return the updated card so HTMX can move it to the correct column
+    return templates.TemplateResponse(
+        "partials/blog_card.html",
+        {"request": request, "idea": idea}
+    )
 
 
 # ── Scout trigger ──────────────────────────────────────────────────────────────
