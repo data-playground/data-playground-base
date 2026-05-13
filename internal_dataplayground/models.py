@@ -982,8 +982,8 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Integer, JSON, Numeric, SmallInteger,
-    String, Text,
+    BigInteger, String, Boolean, Date, Text, Integer, Enum,
+    ForeignKey, DateTime, Numeric, SmallInteger, JSON  # ← add SmallInteger, JSON
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
