@@ -324,16 +324,19 @@ async def archive_idea(
         raise HTTPException(status_code=404)
 
     # 1. Update status to ARCHIVED (ensure this is added to your Enum in models.py)
-    idea.status = BlogIdeaStatus.ARCHIVED 
+    idea.status = BlogIdeaStatus.ARCHIVED
     idea.updated_at = datetime.utcnow()
     
     await db.commit()
 
     # 2. Return an empty response with a Trigger header
     # This avoids the "weird behavior" by not sending back HTML to be swapped incorrectly
-    response = HTMLResponse(content="")
+    response = templates.TemplateResponse(
+        "partials/blog_card.html",
+        {"request": request, "idea": idea}
+    )
     
-    # We trigger a client-side event that our JS will listen for
+    # This trigger tells the frontend to remove the card from the UI
     response.headers["HX-Trigger"] = f'{"ideaArchived": {idea_id}}'
     
     return response
