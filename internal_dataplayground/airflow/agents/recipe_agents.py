@@ -186,8 +186,8 @@ Rules:
 - Strip ALL quantities and units from canonical_name — those go in quantity/unit fields.
 - Strip ALL preparation methods from canonical_name — those go in preparation_note.
 - canonical_name should be the simplest recognizable form of the ingredient.
-- For "salt and pepper to taste" → two separate items: {name:"salt", quantity:null, unit:"to_taste"} and {name:"black pepper", quantity:null, unit:"to_taste"}.
-- For "1 can (14 oz) diced tomatoes" → {name:"diced tomatoes", quantity:1, unit:"can", preparation_note:null}.
+- For "salt and pepper to taste" → two separate items: {{name:"salt", quantity:null, unit:"to_taste"}} and {{name:"black pepper", quantity:null, unit:"to_taste"}}.
+- For "1 can (14 oz) diced tomatoes" → {{name:"diced tomatoes", quantity:1, unit:"can", preparation_note:null}}.
 
 Respond with ONLY a JSON array. No markdown, no explanation.
 
