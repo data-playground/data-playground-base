@@ -1,4 +1,8 @@
-{# templates/partials/sidebar.html — updated with Dashboard link #}
+{# templates/partials/sidebar.html — UPDATED with Recipes and Pantry nav entries
+   This is the full updated sidebar.html. Replace your existing file with this.
+   The only change from your current version is the addition of two nav items
+   (Recipes and Pantry) and the Recipes sub-nav block.
+#}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <aside class="sidebar" id="sidebar">
@@ -10,7 +14,6 @@
     <nav class="sidebar-nav">
         <div class="nav-label">Modules</div>
 
-        {# Dashboard — new home screen #}
         <a class="nav-item {% if active_module == 'dashboard' %}active{% endif %}" href="/dashboard">
             <i class="fas fa-house icon"></i>
             <span class="sidebar-text">Dashboard</span>
@@ -20,30 +23,43 @@
             <i class="fas fa-book icon"></i>
             <span class="sidebar-text">Journal</span>
         </a>
+
         <a class="nav-item {% if active_module == 'jobs' %}active{% endif %}" href="/jobs">
             <i class="fas fa-briefcase icon"></i>
             <span class="sidebar-text">Job Tracker</span>
         </a>
+
         <a class="nav-item {% if active_module == 'finance' %}active{% endif %}" href="/finance">
             <i class="fas fa-dollar-sign icon"></i>
             <span class="sidebar-text">Finance</span>
         </a>
+
         <a class="nav-item {% if active_module == 'workouts' %}active{% endif %}" href="#">
             <i class="fas fa-dumbbell icon"></i>
             <span class="sidebar-text">Workouts</span>
         </a>
+
+        {# ── NEW: Recipes ── #}
+        <a class="nav-item {% if active_module in ('recipes', 'pantry') %}active{% endif %}" href="/recipes">
+            <i class="fas fa-utensils icon"></i>
+            <span class="sidebar-text">Recipes</span>
+        </a>
+
         <a class="nav-item {% if active_module == 'blog' %}active{% endif %}" href="/blog">
             <i class="fas fa-pen-to-square icon"></i>
             <span class="sidebar-text">Blog Ideas</span>
         </a>
+
         <a class="nav-item {% if active_module == 'explorer' %}active{% endif %}" href="/explorer">
             <i class="fas fa-database icon"></i>
             <span class="sidebar-text">SQL Explorer</span>
         </a>
-		<a class="nav-item {% if active_module in ('habits', 'habits_settings') %}active{% endif %}" href="/habits">
-			<i class="fas fa-check-circle icon"></i>
-			<span class="sidebar-text">Habits</span>
-		</a>
+
+        <a class="nav-item {% if active_module in ('habits', 'habits_settings') %}active{% endif %}" href="/habits">
+            <i class="fas fa-check-circle icon"></i>
+            <span class="sidebar-text">Habits</span>
+        </a>
+
         <a class="nav-item {% if active_module == 'code_intel' %}active{% endif %}" href="/code-intel">
             <i class="fas fa-code icon"></i>
             <span class="sidebar-text">Code Intel</span>
@@ -76,6 +92,23 @@
         </a>
         {% endif %}
 
+        {# ── NEW: Recipes sub-nav ── #}
+        {% if active_module in ('recipes', 'pantry') %}
+        <div class="nav-label">Recipes</div>
+        <a class="nav-item" href="/recipes/extract">
+            <span class="icon">⊕</span>
+            <span class="sidebar-text">Add Recipe</span>
+        </a>
+        <a class="nav-item" href="/recipes/discover">
+            <span class="icon">✦</span>
+            <span class="sidebar-text">Discover</span>
+        </a>
+        <a class="nav-item {% if active_module == 'pantry' %}active{% endif %}" href="/pantry">
+            <span class="icon">🧺</span>
+            <span class="sidebar-text">Pantry</span>
+        </a>
+        {% endif %}
+
         {# ── Blog sub-nav ── #}
         {% if active_module in ('blog', 'blog_new') %}
         <div class="nav-label">Blog</div>
@@ -100,13 +133,14 @@
         {% endif %}
 
         {# ── Habits sub-nav ── #}
-		{% if active_module in ('habits', 'habits_settings') %}
-		<div class="nav-label">Habits</div>
-		<a class="nav-item {% if active_module == 'habits_settings' %}active{% endif %}" href="/habits/settings">
-			<span class="icon">⚙</span>
-			<span class="sidebar-text">Settings</span>
-		</a>
-		{% endif %}
+        {% if active_module in ('habits', 'habits_settings') %}
+        <div class="nav-label">Habits</div>
+        <a class="nav-item {% if active_module == 'habits_settings' %}active{% endif %}" href="/habits/settings">
+            <span class="icon">⚙</span>
+            <span class="sidebar-text">Settings</span>
+        </a>
+        {% endif %}
+
     </nav>
 
     <div class="sidebar-footer">
