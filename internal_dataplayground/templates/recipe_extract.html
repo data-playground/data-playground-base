@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}Add Recipe{% endblock %}
+{% block page_title %}Add Recipe{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/recipes">← Library</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── EXTRACT PAGE ─────────────────────────────────────────────────────────── */
+.extract-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+}
+
+/* ── TAB STRIP ───────────────────────────────────────────────────────────── */
+.extract-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 24px;
+    gap: 0;
+}
+.extract-tab {
+    padding: 10px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color var(--transition), border-color var(--transition);
+}
+.extract-tab:hover { color: var(--text-primary); }
+.extract-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.extract-pane { display: none; }
+.extract-pane.active { display: block; }
+
+/* ── SHARED FORM ELEMENTS ─────────────────────────────────────────────────── */
+.field-label {
+    display: block;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+}
+.field-input {
+    width: 100%;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color var(--transition);
+    box-sizing: border-box;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-input::placeholder { color: var(--text-muted); }
+textarea.field-input { resize: vertical; line-height: 1.6; }
+select.field-input { cursor: pointer; }
+
+.field-group { margin-bottom: 16px; }
+
+.field-hint {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+
+.submit-btn {
+    width: 100%;
+    padding: 11px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: opacity var(--transition);
+    margin-top: 4px;
+}
+.submit-btn:hover { opacity: .85; }
+.submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── DROP ZONE (file upload) ─────────────────────────────────────────────── */
+.drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition);
+    margin-bottom: 16px;
+}
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(124,111,255,0.04);
+}
+.drop-zone-icon { font-size: 32px; margin-bottom: 10px; color: var(--text-muted); }
+.drop-zone-text { font-size: 12px; color: var(--text-secondary); }
+.drop-zone-sub  { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.drop-zone-name { font-size: 11px; color: var(--accent); margin-top: 8px; font-weight: 500; }
+input[type=file].hidden { display: none; }
+
+/* ── PREVIEW RESULT AREA ─────────────────────────────────────────────────── */
+#extract-result { margin-top: 20px; }
+
+/* ── SPINNER ─────────────────────────────────────────────────────────────── */
+.loading-box {
+    padding: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+    width: 24px; height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+}
+
+/* ── MANUAL FORM GRID ────────────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+@media (max-width: 600px) {
+    .extract-wrap { padding: 16px 12px 60px; }
+    .extract-tab { padding: 8px 12px; font-size: 10px; }
+    .two-col { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="extract-wrap">
+
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;color:var(--text-primary);margin-bottom:6px;">
+        Add a Recipe
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">
+        Import from a URL, upload a PDF or photo, or enter manually.
+        All imports go through AI extraction — you can review and edit before saving.
+    </p>
+
+    {# ── TABS ── #}
+    <div class="extract-tabs">
+        <button class="extract-tab active" onclick="switchTab('url', this)">🔗 From URL</button>
+        <button class="extract-tab" onclick="switchTab('file', this)">📄 PDF / Photo</button>
+        <button class="extract-tab" onclick="switchTab('manual', this)">✎ Manual</button>
+    </div>
+
+    {# ── TAB: URL ── #}
+    <div class="extract-pane active" id="pane-url">
+        <div class="field-group">
+            <label class="field-label">Recipe URL</label>
+            <input class="field-input" type="url" id="url-input"
+                   placeholder="https://www.allrecipes.com/recipe/…"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();extractUrl();}">
+            <div class="field-hint">
+                Works best with AllRecipes, Food Network, BBC Good Food, Epicurious, Simply Recipes,
+                and most recipe blogs. For JS-heavy sites that don't load, try copying the text and
+                using the Manual tab.
+            </div>
+        </div>
+        <button class="submit-btn" id="url-btn" onclick="extractUrl()">
+            ⊕ Extract Recipe
+        </button>
+    </div>
+
+    {# ── TAB: FILE ── #}
+    <div class="extract-pane" id="pane-file">
+        <div class="drop-zone" id="drop-zone"
+             onclick="document.getElementById('file-input').click()"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="handleDrop(event)">
+            <div class="drop-zone-icon">⊕</div>
+            <div class="drop-zone-text">Click or drag a file here</div>
+            <div class="drop-zone-sub">PDF, JPEG, PNG, or WEBP</div>
+            <div class="drop-zone-name" id="drop-zone-name"></div>
+            <input type="file" id="file-input" class="hidden"
+                   accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+                   onchange="handleFileSelect(this.files[0])">
+        </div>
+        <button class="submit-btn" id="file-btn" onclick="extractFile()" disabled>
+            ⊕ Extract Recipe
+        </button>
+    </div>
+
+    {# ── TAB: MANUAL ── #}
+    <div class="extract-pane" id="pane-manual">
+        <form action="/recipes/extract/confirm" method="post" id="manual-form">
+            <input type="hidden" name="source_type" value="manual">
+
+            <div class="field-group">
+                <label class="field-label">Recipe Title *</label>
+                <input class="field-input" type="text" name="title" required placeholder="e.g. Grandma's Lasagna">
+            </div>
+
+            <div class="two-col">
+                <div class="field-group">
+                    <label class="field-label">Cuisine</label>
+                    <input class="field-input" type="text" name="cuisine" placeholder="Italian, Mexican…">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Meal Type</label>
+                    <select class="field-input" name="meal_type">
+                        <option value="">—</option>
+                        {% for mt in ['breakfast','lunch','dinner','snack','dessert','side','drink','other'] %}
+                        <option value="{{ mt }}">{{ mt | capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Prep Time (min)</label>
+                    <input class="field-input" type="number" name="prep_time_minutes" placeholder="15">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Cook Time (min)</label>
+                    <input class="field-input" type="number" name="cook_time_minutes" placeholder="45">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Servings</label>
+                    <input class="field-input" type="number" name="servings" placeholder="4">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Difficulty</label>
+                    <select class="field-input" name="difficulty">
+                        <option value="">—</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label">Image URL (optional)</label>
+                <input class="field-input" type="url" name="image_url" placeholder="https://…">
+            </div>
+
+            <div class="field-group">
+                <label class="field-label">Ingredients *</label>
+                <textarea class="field-input" name="raw_ingredients" rows="8" required
+                          placeholder="One per line — include quantity and unit:&#10;2 cups all-purpose flour&#10;1 tsp salt&#10;3 cloves garlic, minced&#10;salt and pepper to taste"></textarea>
+                <div class="field-hint">
+                    Each line is one ingredient. Include quantities, units, and prep notes —
+                    they'll be parsed automatically.
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label">Instructions</label>
+                <textarea class="field-input" name="instructions" rows="10"
+                          placeholder="Numbered steps work best:&#10;1. Preheat oven to 375°F.&#10;2. Mix flour and salt in a bowl.&#10;…"></textarea>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label">Notes (optional)</label>
+                <textarea class="field-input" name="notes" rows="3"
+                          placeholder="Tips, variations, storage instructions…"></textarea>
+            </div>
+
+            <div class="field-group">
+                <label class="field-label">Tags (comma-separated, optional)</label>
+                <input class="field-input" type="text" name="tags"
+                       placeholder="vegetarian, quick, meal-prep">
+            </div>
+
+            <button type="submit" class="submit-btn">Save Recipe →</button>
+        </form>
+    </div>
+
+    {# ── RESULT AREA (HTMX target for URL and file extraction) ── #}
+    <div id="extract-result"></div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+    document.querySelectorAll('.extract-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.extract-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('pane-' + id).classList.add('active');
+    btn.classList.add('active');
+    document.getElementById('extract-result').innerHTML = '';
+}
+
+// ── URL EXTRACTION ────────────────────────────────────────────────────────────
+async function extractUrl() {
+    const url = document.getElementById('url-input').value.trim();
+    if (!url) { alert('Please enter a URL.'); return; }
+
+    const btn    = document.getElementById('url-btn');
+    const result = document.getElementById('extract-result');
+    btn.disabled = true;
+    btn.textContent = 'Extracting…';
+    result.innerHTML = `
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <div>Fetching and analyzing the recipe…</div>
+        </div>`;
+
+    const fd = new FormData();
+    fd.append('url', url);
+    try {
+        const resp = await fetch('/recipes/extract/url', { method: 'POST', body: fd });
+        result.innerHTML = await resp.text();
+        result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch(e) {
+        result.innerHTML = `<p style="color:var(--red);font-size:11px;">⚠ Network error: ${e.message}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '⊕ Extract Recipe';
+    }
+}
+
+// ── FILE UPLOAD ────────────────────────────────────────────────────────────────
+let selectedFile = null;
+
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFileSelect(f);
+}
+
+function handleFileSelect(f) {
+    if (!f) return;
+    selectedFile = f;
+    document.getElementById('drop-zone-name').textContent = f.name;
+    document.getElementById('file-btn').disabled = false;
+}
+
+async function extractFile() {
+    if (!selectedFile) return;
+    const btn    = document.getElementById('file-btn');
+    const result = document.getElementById('extract-result');
+    btn.disabled = true;
+    btn.textContent = 'Extracting…';
+    result.innerHTML = `
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <div>Reading ${selectedFile.name} with AI…</div>
+        </div>`;
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    try {
+        const resp = await fetch('/recipes/extract/file', { method: 'POST', body: fd });
+        result.innerHTML = await resp.text();
+        result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch(e) {
+        result.innerHTML = `<p style="color:var(--red);font-size:11px;">⚠ Network error: ${e.message}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '⊕ Extract Recipe';
+    }
+}
+</script>
+{% endblock %}

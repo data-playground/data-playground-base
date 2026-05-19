@@ -1,0 +1,142 @@
+{# ═══════════════════════════════════════════════════════════════════════════
+   templates/partials/recipe_extract_preview.html
+   Returned by POST /recipes/extract/url and POST /recipes/extract/file.
+   Shows extracted recipe for user review before saving.
+   `extracted` = dict from agent or Schema.org parser, or None on error
+   `error`     = error string or None
+   `source_url` = the original source URL or None
+   ═══════════════════════════════════════════════════════════════════════════ #}
+
+{% if error %}
+<div style="padding:16px 20px;background:rgba(240,64,64,0.07);border:1px solid rgba(240,64,64,0.25);border-radius:8px;font-size:11px;color:var(--red);line-height:1.6;">
+    <strong>⚠ Extraction failed</strong><br>{{ error }}
+</div>
+
+{% elif extracted %}
+<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg-card);">
+
+    <div style="padding:14px 18px;background:rgba(0,201,128,0.06);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+        <span style="color:var(--green);font-size:14px;">✓</span>
+        <span style="font-size:11px;font-weight:500;color:var(--text-primary);">
+            Recipe extracted — review and edit before saving
+        </span>
+    </div>
+
+    <form action="/recipes/extract/confirm" method="post" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+        <input type="hidden" name="source_url"   value="{{ extracted.get('source_url', source_url or '') }}">
+        <input type="hidden" name="source_type"  value="{{ extracted.get('source_type', 'url') }}">
+
+        {# Title #}
+        <div>
+            <label style="display:block;font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;">Title</label>
+            <input style="width:100%;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;padding:8px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:6px;outline:none;box-sizing:border-box;"
+                   type="text" name="title" value="{{ extracted.get('title', '') }}" required>
+        </div>
+
+        {# Two-column meta #}
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+            <div>
+                <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Cuisine</label>
+                <input style="width:100%;font-family:'DM Mono',monospace;font-size:11px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;box-sizing:border-box;"
+                       type="text" name="cuisine" value="{{ extracted.get('cuisine', '') }}">
+            </div>
+            <div>
+                <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Meal Type</label>
+                <select style="width:100%;font-family:'DM Mono',monospace;font-size:11px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;" name="meal_type">
+                    <option value="">—</option>
+                    {% for mt in ['breakfast','lunch','dinner','snack','dessert','side','drink','other'] %}
+                    <option value="{{ mt }}" {% if extracted.get('meal_type') == mt %}selected{% endif %}>{{ mt | capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Difficulty</label>
+                <select style="width:100%;font-family:'DM Mono',monospace;font-size:11px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;" name="difficulty">
+                    <option value="">—</option>
+                    {% for d in ['easy','medium','hard'] %}
+                    <option value="{{ d }}" {% if extracted.get('difficulty') == d %}selected{% endif %}>{{ d | capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Prep (min)</label>
+                <input style="width:100%;font-family:'DM Mono',monospace;font-size:11px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;box-sizing:border-box;"
+                       type="number" name="prep_time_minutes" value="{{ extracted.get('prep_time_minutes', '') }}">
+            </div>
+            <div>
+                <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Cook (min)</label>
+                <input style="width:100%;font-family:'DM Mono',monospace;font-size:11px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;box-sizing:border-box;"
+                       type="number" name="cook_time_minutes" value="{{ extracted.get('cook_time_minutes', '') }}">
+            </div>
+            <div>
+                <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Servings</label>
+                <input style="width:100%;font-family:'DM Mono',monospace;font-size:11px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;box-sizing:border-box;"
+                       type="number" name="servings" value="{{ extracted.get('servings', '') }}">
+            </div>
+        </div>
+
+        {# Image URL #}
+        {% if extracted.get('image_url') %}
+        <div>
+            <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Image URL</label>
+            <input style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:7px 10px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:5px;outline:none;box-sizing:border-box;"
+                   type="url" name="image_url" value="{{ extracted.get('image_url', '') }}">
+        </div>
+        {% else %}
+        <input type="hidden" name="image_url" value="">
+        {% endif %}
+
+        {# Ingredients — editable textarea #}
+        <div>
+            <label style="display:block;font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:5px;">
+                Ingredients
+                <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:9px;margin-left:4px;">
+                    — edit or correct before saving
+                </span>
+            </label>
+            <textarea style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:6px;outline:none;resize:vertical;line-height:1.7;min-height:160px;box-sizing:border-box;"
+                      name="raw_ingredients">{{ (extracted.get('raw_ingredient_lines', []) | join('\n')) }}</textarea>
+        </div>
+
+        {# Instructions #}
+        <div>
+            <label style="display:block;font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;">Instructions</label>
+            <textarea style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:6px;outline:none;resize:vertical;line-height:1.7;min-height:200px;box-sizing:border-box;"
+                      name="instructions">{{ extracted.get('instructions', '') }}</textarea>
+        </div>
+
+        {# Notes #}
+        {% if extracted.get('notes') %}
+        <div>
+            <label style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Notes</label>
+            <textarea style="width:100%;font-family:'DM Mono',monospace;font-size:10px;padding:10px 12px;border:1px solid var(--border);background:var(--bg-hover);color:var(--text-primary);border-radius:6px;outline:none;resize:vertical;line-height:1.7;box-sizing:border-box;"
+                      name="notes" rows="4">{{ extracted.get('notes', '') }}</textarea>
+        </div>
+        {% else %}
+        <input type="hidden" name="notes" value="">
+        {% endif %}
+
+        <input type="hidden" name="tags" value="">
+        <input type="hidden" name="total_time_minutes" value="{{ extracted.get('total_time_minutes', '') }}">
+
+        <button type="submit"
+                style="padding:11px;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;transition:opacity .2s;"
+                onmouseover="this.style.opacity='.85'"
+                onmouseout="this.style.opacity='1'">
+            ✓ Save to Recipe Library →
+        </button>
+    </form>
+</div>
+{% endif %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   templates/partials/discovery_results.html
+   Returned by POST /recipes/discover/pantry and POST /recipes/discover/open.
+   `db_matches`    = list of Recipe ORM objects (pantry mode only)
+   `ai_suggestions` = list of dicts from agent
+   `mode`          = "pantry" | "open"
+   `error`         = string or None
+   `match_threshold` = "exact" | "relaxed" (pantry mode only)
+   ═══════════════════════════════════════════════════════════════════════════ #}
+{# This block is appended below as a second template in the same file. #}

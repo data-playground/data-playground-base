@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block title %}Discover Recipes{% endblock %}
+{% block page_title %}Discover Recipes{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/recipes">← Library</a>
+    <a class="btn" href="/pantry">🧺 Pantry ({{ pantry_count }})</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── DISCOVER PAGE ───────────────────────────────────────────────────────── */
+.discover-wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+}
+
+/* ── MODE TABS ───────────────────────────────────────────────────────────── */
+.discover-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 24px;
+}
+.discover-tab {
+    padding: 10px 22px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color var(--transition), border-color var(--transition);
+}
+.discover-tab:hover { color: var(--text-primary); }
+.discover-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.discover-pane { display: none; }
+.discover-pane.active { display: block; }
+
+/* ── FORM SHARED ─────────────────────────────────────────────────────────── */
+.discover-form {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.field-label {
+    display: block;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+}
+
+.field-input {
+    width: 100%;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color var(--transition);
+    box-sizing: border-box;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-input::placeholder { color: var(--text-muted); }
+
+.two-col-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Threshold toggle (pantry mode) */
+.threshold-toggle {
+    display: flex;
+    gap: 8px;
+}
+.threshold-btn {
+    flex: 1;
+    padding: 8px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+}
+.threshold-btn:hover { border-color: var(--accent); color: var(--accent); }
+.threshold-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+/* Submit button */
+.discover-submit {
+    width: 100%;
+    padding: 11px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: opacity var(--transition);
+}
+.discover-submit:hover { opacity: .85; }
+.discover-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+/* Results area */
+#discover-results { margin-top: 4px; }
+
+/* Pantry empty warning */
+.pantry-empty-warning {
+    padding: 14px 16px;
+    background: rgba(232,160,32,0.07);
+    border: 1px solid rgba(232,160,32,0.25);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--score-mid);
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+/* ── MOBILE ───────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .discover-wrap { padding: 16px 12px 60px; }
+    .two-col-form { grid-template-columns: 1fr; }
+    .discover-tab { padding: 8px 12px; font-size: 10px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="discover-wrap">
+
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;color:var(--text-primary);margin-bottom:6px;">
+        ✦ Recipe Discovery
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin-bottom:22px;line-height:1.6;">
+        Find recipes from your pantry or get AI-powered suggestions based on your mood and preferences.
+    </p>
+
+    {# ── TABS ── #}
+    <div class="discover-tabs">
+        <button class="discover-tab active" onclick="switchMode('pantry', this)">
+            🧺 Pantry Mode
+            {% if pantry_count > 0 %}
+            <span style="font-size:9px;color:var(--text-muted);margin-left:3px;">({{ pantry_count }})</span>
+            {% endif %}
+        </button>
+        <button class="discover-tab" onclick="switchMode('open', this)">✦ Open Discovery</button>
+    </div>
+
+    {# ── PANTRY MODE ── #}
+    <div class="discover-pane active" id="pane-pantry">
+
+        {% if pantry_count == 0 %}
+        <div class="pantry-empty-warning">
+            ⚠ Your pantry is empty — add some ingredients first so we can match recipes for you.
+            <br><a href="/pantry" style="color:var(--score-mid);font-weight:500;">Set up my pantry →</a>
+        </div>
+        {% endif %}
+
+        <form class="discover-form" id="pantry-form">
+            <div>
+                <label class="field-label">What are you in the mood for?</label>
+                <input class="field-input" type="text" name="mood"
+                       placeholder="e.g. something warm and comforting, light and fresh, spicy…">
+            </div>
+
+            <div class="two-col-form">
+                <div>
+                    <label class="field-label">Meal Type</label>
+                    <select class="field-input" name="meal_type">
+                        <option value="">Any</option>
+                        {% for mt in meal_types %}
+                        <option value="{{ mt }}">{{ mt | capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Servings</label>
+                    <input class="field-input" type="number" name="servings"
+                           placeholder="4" min="1" max="20">
+                </div>
+            </div>
+
+            <div>
+                <label class="field-label">Occasion</label>
+                <input class="field-input" type="text" name="occasion"
+                       placeholder="e.g. quick weeknight, date night, meal prep Sunday…">
+            </div>
+
+            <div>
+                <label class="field-label">Ingredient Match Threshold</label>
+                <div class="threshold-toggle" id="threshold-toggle">
+                    <button type="button" class="threshold-btn active" data-val="relaxed"
+                            onclick="setThreshold('relaxed', this)">
+                        <div style="font-weight:500;margin-bottom:2px;">Relaxed (80%+)</div>
+                        <div style="font-size:9px;opacity:.75;">Show recipes where I have most ingredients</div>
+                    </button>
+                    <button type="button" class="threshold-btn" data-val="exact"
+                            onclick="setThreshold('exact', this)">
+                        <div style="font-weight:500;margin-bottom:2px;">Exact (100%)</div>
+                        <div style="font-size:9px;opacity:.75;">Only show recipes I can fully make now</div>
+                    </button>
+                </div>
+                <input type="hidden" name="match_threshold" id="threshold-input" value="relaxed">
+            </div>
+
+            <button type="button" class="discover-submit" id="pantry-submit-btn"
+                    onclick="discover('pantry')"
+                    {% if pantry_count == 0 %}disabled title="Add pantry ingredients first"{% endif %}>
+                🧺 Find Recipes from My Pantry
+            </button>
+        </form>
+    </div>
+
+    {# ── OPEN DISCOVERY MODE ── #}
+    <div class="discover-pane" id="pane-open">
+        <form class="discover-form" id="open-form">
+            <div>
+                <label class="field-label">What are you in the mood for?</label>
+                <input class="field-input" type="text" name="mood"
+                       placeholder="e.g. something indulgent, healthy and light, quick comfort food…">
+            </div>
+
+            <div class="two-col-form">
+                <div>
+                    <label class="field-label">Meal Type</label>
+                    <select class="field-input" name="meal_type">
+                        <option value="">Any</option>
+                        {% for mt in meal_types %}
+                        <option value="{{ mt }}">{{ mt | capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">Servings</label>
+                    <input class="field-input" type="number" name="servings"
+                           placeholder="4" min="1" max="20">
+                </div>
+            </div>
+
+            <div class="two-col-form">
+                <div>
+                    <label class="field-label">Cuisine Preference</label>
+                    <input class="field-input" type="text" name="cuisine_preference"
+                           placeholder="e.g. Italian, Asian, anything but American…">
+                </div>
+                <div>
+                    <label class="field-label">Occasion</label>
+                    <input class="field-input" type="text" name="occasion"
+                           placeholder="e.g. date night, meal prep, brunch…">
+                </div>
+            </div>
+
+            <div>
+                <label class="field-label">Dietary Restrictions</label>
+                <input class="field-input" type="text" name="dietary_restrictions"
+                       placeholder="e.g. vegetarian, no dairy, gluten-free, low-carb…">
+            </div>
+
+            <button type="button" class="discover-submit" id="open-submit-btn"
+                    onclick="discover('open')">
+                ✦ Discover Recipes
+            </button>
+        </form>
+    </div>
+
+    {# ── RESULTS (HTMX target) ── #}
+    <div id="discover-results"></div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── TAB SWITCHING ─────────────────────────────────────────────────────────────
+function switchMode(mode, btn) {
+    document.querySelectorAll('.discover-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.discover-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('pane-' + mode).classList.add('active');
+    btn.classList.add('active');
+    document.getElementById('discover-results').innerHTML = '';
+}
+
+// ── THRESHOLD TOGGLE ──────────────────────────────────────────────────────────
+function setThreshold(val, btn) {
+    document.querySelectorAll('.threshold-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('threshold-input').value = val;
+}
+
+// ── DISCOVERY SUBMIT ──────────────────────────────────────────────────────────
+async function discover(mode) {
+    const formId  = mode === 'pantry' ? 'pantry-form' : 'open-form';
+    const btnId   = mode === 'pantry' ? 'pantry-submit-btn' : 'open-submit-btn';
+    const endpoint = mode === 'pantry' ? '/recipes/discover/pantry' : '/recipes/discover/open';
+
+    const form    = document.getElementById(formId);
+    const btn     = document.getElementById(btnId);
+    const results = document.getElementById('discover-results');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Finding recipes…';
+    results.innerHTML = `
+        <div style="padding:28px;text-align:center;color:var(--text-muted);font-size:11px;display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:8px;">
+            <div class="spinner" style="width:24px;height:24px;"></div>
+            <div>Asking Gemini for ideas…</div>
+        </div>`;
+
+    const fd = new FormData(form);
+    try {
+        const resp = await fetch(endpoint, { method: 'POST', body: fd });
+        results.innerHTML = await resp.text();
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch(e) {
+        results.innerHTML = `<p style="color:var(--red);font-size:11px;margin-top:12px;">⚠ Network error: ${e.message}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = mode === 'pantry'
+            ? '🧺 Find Recipes from My Pantry'
+            : '✦ Discover Recipes';
+    }
+}
+</script>
+{% endblock %}
