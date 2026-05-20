@@ -1500,7 +1500,7 @@ class PantryItem(Base):
 
     # Relationships
     ingredient: Mapped["Ingredient"] = relationship(
-        "Ingredient", back_populates="pantry_item"
+        "Ingredient", back_populates="recipe_ingredients", lazy="selectin"
     )
 
 

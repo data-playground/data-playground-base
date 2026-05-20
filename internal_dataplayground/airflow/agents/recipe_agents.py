@@ -9,7 +9,7 @@ MODEL ROUTING
 Agent                  Provider     Model
 ─────────────────────  ───────────  ──────────────────────────
 Recipe Extractor       Gemini       gemini-2.5-flash
-Ingredient Normalizer  Gemma        gemma-3-27b-it
+Ingredient Normalizer  Gemma        gemma-4-31b-it
 Recipe Discoverer      Gemini       gemini-2.5-flash
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -115,7 +115,7 @@ def _gemma(prompt: str) -> str:
     """
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemma-3-27b-it:generateContent?key={_gemini_key()}"
+        f"models/gemma-4-31b-it:generateContent?key={_gemini_key()}"
     )
     payload = {
         "contents":         [{"parts": [{"text": prompt}]}],
