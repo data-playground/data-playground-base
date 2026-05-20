@@ -1427,8 +1427,9 @@ class RecipeIngredient(Base):
     # Relationships
     recipe: Mapped["Recipe"] = relationship("Recipe", back_populates="ingredients")
     ingredient: Mapped["Ingredient"] = relationship(
-        "Ingredient", back_populates="recipe_ingredients"
+        "Ingredient", back_populates="recipe_ingredients", lazy="selectin"
     )
+
 
     def quantity_scaled(self, scale_factor: float) -> Optional[str]:
         """
@@ -1500,7 +1501,7 @@ class PantryItem(Base):
 
     # Relationships
     ingredient: Mapped["Ingredient"] = relationship(
-        "Ingredient", back_populates="recipe_ingredients", lazy="selectin"
+        "Ingredient", back_populates="pantry_item"
     )
 
 
