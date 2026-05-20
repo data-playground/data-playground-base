@@ -258,13 +258,16 @@ async def add_equipment(
     db.add(equip)
     await db.commit()
 
-    # Reload the location so its equipment relationship is fresh
-    db.expire(location)
-    location = await db.get(WorkoutLocation, location_id)
+    locations_result = await db.execute(
+        select(WorkoutLocation)
+        .where(WorkoutLocation.is_active == True)
+        .order_by(WorkoutLocation.is_default.desc(), WorkoutLocation.name)
+    )
 
-    return templates.TemplateResponse("partials/workout/equipment_list.html", {
+    return templates.TemplateResponse("partials/workout/location_list.html", {
         "request": request,
-        "location": location,
+        "locations": locations_result.scalars().all(),
+        "equipment_types": list(EquipmentType),
         "toast": f"'{name}' added.",
     })
 
@@ -295,11 +298,16 @@ async def update_equipment(
 
     await db.commit()
 
-    location = await db.get(WorkoutLocation, equip.location_id)
+    locations_result = await db.execute(
+        select(WorkoutLocation)
+        .where(WorkoutLocation.is_active == True)
+        .order_by(WorkoutLocation.is_default.desc(), WorkoutLocation.name)
+    )
 
-    return templates.TemplateResponse("partials/workout/equipment_list.html", {
+    return templates.TemplateResponse("partials/workout/location_list.html", {
         "request": request,
-        "location": location,
+        "locations": locations_result.scalars().all(),
+        "equipment_types": list(EquipmentType),
         "toast": "Equipment updated.",
     })
 
@@ -318,11 +326,16 @@ async def delete_equipment(
     equip.is_active = False
     await db.commit()
 
-    location = await db.get(WorkoutLocation, location_id)
+    locations_result = await db.execute(
+        select(WorkoutLocation)
+        .where(WorkoutLocation.is_active == True)
+        .order_by(WorkoutLocation.is_default.desc(), WorkoutLocation.name)
+    )
 
-    return templates.TemplateResponse("partials/workout/equipment_list.html", {
+    return templates.TemplateResponse("partials/workout/location_list.html", {
         "request": request,
-        "location": location,
+        "locations": locations_result.scalars().all(),
+        "equipment_types": list(EquipmentType),
         "toast": "Equipment removed.",
     })
 
