@@ -1591,3 +1591,509 @@ class PantryItemResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+"""
+WORKOUT TRACKER MODULE — append these classes to the bottom of models.py
+
+Imports to add at the top of models.py if not already present:
+  from sqlalchemy import SmallInteger, Numeric, JSON  (Numeric + JSON likely already imported)
+"""
+import datetime
+import enum
+from decimal import Decimal
+from typing import Optional
+
+# ── ENUMS ─────────────────────────────────────────────────────────────────────
+
+class LocationType(enum.Enum):
+    HOME    = "home"
+    GYM     = "gym"
+    OUTDOOR = "outdoor"
+    OTHER   = "other"
+
+
+class EquipmentType(enum.Enum):
+    BARBELL         = "barbell"
+    DUMBBELL        = "dumbbell"
+    MACHINE         = "machine"
+    CABLE           = "cable"
+    BODYWEIGHT      = "bodyweight"
+    CARDIO          = "cardio"
+    RESISTANCE_BAND = "resistance_band"
+    KETTLEBELL      = "kettlebell"
+    OTHER           = "other"
+
+
+class MuscleGroup(enum.Enum):
+    CHEST      = "chest"
+    BACK       = "back"
+    SHOULDERS  = "shoulders"
+    BICEPS     = "biceps"
+    TRICEPS    = "triceps"
+    FOREARMS   = "forearms"
+    QUADS      = "quads"
+    HAMSTRINGS = "hamstrings"
+    GLUTES     = "glutes"
+    CALVES     = "calves"
+    CORE       = "core"
+    FULL_BODY  = "full_body"
+    CARDIO     = "cardio"
+
+    @property
+    def label(self) -> str:
+        return self.value.replace("_", " ").title()
+
+
+class ExerciseEquipmentType(enum.Enum):
+    BARBELL         = "barbell"
+    DUMBBELL        = "dumbbell"
+    MACHINE         = "machine"
+    CABLE           = "cable"
+    BODYWEIGHT      = "bodyweight"
+    RESISTANCE_BAND = "resistance_band"
+    KETTLEBELL      = "kettlebell"
+    CARDIO          = "cardio"
+    OTHER           = "other"
+    ANY             = "any"
+
+
+class PlanOrigin(enum.Enum):
+    USER = "user"
+    AI   = "ai"
+
+
+class WorkoutGoal(enum.Enum):
+    STRENGTH        = "strength"
+    HYPERTROPHY     = "hypertrophy"
+    ENDURANCE       = "endurance"
+    GENERAL_FITNESS = "general_fitness"
+    WEIGHT_LOSS     = "weight_loss"
+
+    @property
+    def label(self) -> str:
+        return {
+            "strength":        "Strength",
+            "hypertrophy":     "Hypertrophy (Muscle Size)",
+            "endurance":       "Endurance",
+            "general_fitness": "General Fitness",
+            "weight_loss":     "Weight Loss",
+        }[self.value]
+
+
+class WeightUnit(enum.Enum):
+    KG = "kg"
+    LB = "lb"
+
+
+# ── MODELS ────────────────────────────────────────────────────────────────────
+
+from sqlalchemy import (
+    BigInteger, Boolean, Date, DateTime, Enum, ForeignKey,
+    Integer, JSON, Numeric, SmallInteger, String, Text, UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+# Base is imported from wherever it's defined in models.py
+
+
+class WorkoutLocation(Base):
+    """
+    Physical location where the user trains.
+    Equipment is scoped to a location — the AI plan generator uses this
+    to know what's available at each location.
+    is_default=True means this location is pre-selected when starting a session.
+    Only one location should have is_default=True (enforced at application layer).
+    """
+    __tablename__ = "workout_locations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    location_type: Mapped[LocationType] = mapped_column(
+        Enum(LocationType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=LocationType.GYM,
+    )
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+
+    equipment: Mapped[list["Equipment"]] = relationship(
+        "Equipment", back_populates="location",
+        cascade="all, delete-orphan", lazy="selectin",
+    )
+    sessions: Mapped[list["WorkoutSession"]] = relationship(
+        "WorkoutSession", back_populates="location",
+    )
+    plans: Mapped[list["WorkoutPlan"]] = relationship(
+        "WorkoutPlan", back_populates="location",
+    )
+
+    @property
+    def active_equipment(self) -> list["Equipment"]:
+        return [e for e in self.equipment if e.is_active]
+
+    @property
+    def equipment_summary(self) -> str:
+        """Short description of available equipment for AI prompt construction."""
+        types = list({e.equipment_type.value for e in self.active_equipment})
+        return ", ".join(sorted(types)) if types else "No equipment logged"
+
+
+class Equipment(Base):
+    """
+    Individual piece of equipment available at a workout location.
+    Used by the AI plan generator to scope exercise recommendations.
+    """
+    __tablename__ = "equipment"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workout_locations.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    equipment_type: Mapped[EquipmentType] = mapped_column(
+        Enum(EquipmentType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    max_weight: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2), nullable=True)
+    weight_unit: Mapped[WeightUnit] = mapped_column(
+        Enum(WeightUnit, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=WeightUnit.LB,
+    )
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+
+    location: Mapped["WorkoutLocation"] = relationship(
+        "WorkoutLocation", back_populates="equipment"
+    )
+
+
+class Exercise(Base):
+    """
+    Reference exercise library. Seeded with 75 common exercises.
+    is_custom=True marks user-added exercises that are not in the seed data.
+    The AI plan generator references exercise names — fuzzy matching happens
+    in the router when AI suggestions don't exactly match DB entries.
+    """
+    __tablename__ = "exercises"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False, unique=True)
+    primary_muscle_group: Mapped[MuscleGroup] = mapped_column(
+        Enum(MuscleGroup, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    # JSON array of secondary muscle group strings
+    secondary_muscle_groups: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    equipment_type: Mapped[ExerciseEquipmentType] = mapped_column(
+        Enum(ExerciseEquipmentType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    is_compound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_custom: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+
+    plan_exercises: Mapped[list["WorkoutPlanExercise"]] = relationship(
+        "WorkoutPlanExercise", back_populates="exercise",
+    )
+    sets: Mapped[list["WorkoutSet"]] = relationship(
+        "WorkoutSet", back_populates="exercise",
+    )
+
+
+class WorkoutPlan(Base):
+    """
+    A structured training program — either user-created or AI-generated.
+    Only one plan can be active at a time (enforced in the router via
+    SET is_active=FALSE on all plans before activating the new one).
+    target_days_per_week drives how many WorkoutPlanDay rows to generate.
+    """
+    __tablename__ = "workout_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    generated_by: Mapped[PlanOrigin] = mapped_column(
+        Enum(PlanOrigin, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=PlanOrigin.USER,
+    )
+    location_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("workout_locations.id", ondelete="SET NULL"), nullable=True
+    )
+    target_days_per_week: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=3)
+    goal: Mapped[WorkoutGoal] = mapped_column(
+        Enum(WorkoutGoal, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=WorkoutGoal.GENERAL_FITNESS,
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow, nullable=False,
+    )
+
+    location: Mapped[Optional["WorkoutLocation"]] = relationship(
+        "WorkoutLocation", back_populates="plans"
+    )
+    days: Mapped[list["WorkoutPlanDay"]] = relationship(
+        "WorkoutPlanDay", back_populates="plan",
+        cascade="all, delete-orphan", lazy="selectin",
+        order_by="WorkoutPlanDay.day_number",
+    )
+    sessions: Mapped[list["WorkoutSession"]] = relationship(
+        "WorkoutSession", back_populates="plan",
+    )
+
+    @property
+    def total_exercises(self) -> int:
+        return sum(len(d.exercises) for d in self.days)
+
+
+class WorkoutPlanDay(Base):
+    """
+    A named day within a workout plan (e.g. "Day 1 — Chest & Triceps").
+    day_number is 1-indexed and determines rotation order during logging.
+    The user can follow any day they choose when logging — plans are guides,
+    not strict schedules.
+    """
+    __tablename__ = "workout_plan_days"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workout_plans.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    day_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    # Human-readable label, e.g. "Chest & Triceps", "Pull Day", "Leg Day"
+    day_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    plan: Mapped["WorkoutPlan"] = relationship("WorkoutPlan", back_populates="days")
+    exercises: Mapped[list["WorkoutPlanExercise"]] = relationship(
+        "WorkoutPlanExercise", back_populates="plan_day",
+        cascade="all, delete-orphan", lazy="selectin",
+        order_by="WorkoutPlanExercise.order_in_day",
+    )
+
+
+class WorkoutPlanExercise(Base):
+    """
+    An exercise prescribed within a specific day of a workout plan.
+    target_weight is in lb (user's default unit) — a starting suggestion only.
+    """
+    __tablename__ = "workout_plan_exercises"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workout_plans.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    plan_day_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("workout_plan_days.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    exercise_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("exercises.id"), nullable=False
+    )
+    target_sets: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=3)
+    target_reps_min: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=8)
+    target_reps_max: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=12)
+    target_weight: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2), nullable=True)
+    order_in_day: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    plan_day: Mapped["WorkoutPlanDay"] = relationship(
+        "WorkoutPlanDay", back_populates="exercises"
+    )
+    exercise: Mapped["Exercise"] = relationship(
+        "Exercise", back_populates="plan_exercises", lazy="selectin"
+    )
+
+    @property
+    def rep_range(self) -> str:
+        if self.target_reps_min == self.target_reps_max:
+            return str(self.target_reps_min)
+        return f"{self.target_reps_min}–{self.target_reps_max}"
+
+
+class WorkoutSession(Base):
+    """
+    A single training session. Can be linked to a plan day (structured)
+    or standalone (free-form logging).
+    weight_unit is the per-session toggle — defaults to lb but user can
+    switch to kg for a session without affecting the global default.
+    duration_minutes is calculated from started_at/ended_at when ending
+    the session, or can be entered manually.
+    """
+    __tablename__ = "workout_sessions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    plan_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("workout_plans.id", ondelete="SET NULL"), nullable=True
+    )
+    plan_day_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("workout_plan_days.id", ondelete="SET NULL"), nullable=True
+    )
+    location_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("workout_locations.id", ondelete="SET NULL"), nullable=True
+    )
+    session_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    started_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fatigue_rating: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)  # 1-5
+    weight_unit: Mapped[WeightUnit] = mapped_column(
+        Enum(WeightUnit, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=WeightUnit.LB,
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+
+    plan: Mapped[Optional["WorkoutPlan"]] = relationship(
+        "WorkoutPlan", back_populates="sessions"
+    )
+    plan_day: Mapped[Optional["WorkoutPlanDay"]] = relationship("WorkoutPlanDay")
+    location: Mapped[Optional["WorkoutLocation"]] = relationship(
+        "WorkoutLocation", back_populates="sessions"
+    )
+    sets: Mapped[list["WorkoutSet"]] = relationship(
+        "WorkoutSet", back_populates="session",
+        cascade="all, delete-orphan", lazy="selectin",
+        order_by="WorkoutSet.created_at",
+    )
+
+    @property
+    def is_active(self) -> bool:
+        """True if the session has been started but not ended."""
+        return self.started_at is not None and self.ended_at is None
+
+    @property
+    def working_sets(self) -> list["WorkoutSet"]:
+        return [s for s in self.sets if not s.is_warmup]
+
+    @property
+    def exercise_count(self) -> int:
+        return len({s.exercise_id for s in self.working_sets})
+
+    @property
+    def total_volume_lb(self) -> Decimal:
+        """Sum of weight × reps across all working sets."""
+        total = Decimal("0")
+        for s in self.working_sets:
+            if s.weight_used:
+                w = s.weight_used
+                if s.weight_unit == WeightUnit.KG:
+                    w = w * Decimal("2.20462")
+                total += w * s.reps_completed
+        return total
+
+    @property
+    def duration_display(self) -> str:
+        if self.duration_minutes:
+            h, m = divmod(self.duration_minutes, 60)
+            return f"{h}h {m}m" if h else f"{m}m"
+        if self.started_at and self.ended_at:
+            mins = int((self.ended_at - self.started_at).total_seconds() / 60)
+            h, m = divmod(mins, 60)
+            return f"{h}h {m}m" if h else f"{m}m"
+        return "—"
+
+    @property
+    def fatigue_label(self) -> str:
+        return {1: "Easy", 2: "Light", 3: "Moderate", 4: "Hard", 5: "Brutal"}.get(
+            self.fatigue_rating or 0, "—"
+        )
+
+
+class WorkoutSet(Base):
+    """
+    An individual set logged during a session.
+    is_warmup=True sets are tracked separately — they don't count toward
+    working volume calculations but are shown in the session log.
+    rpe (Rate of Perceived Exertion) is 1-10 — optional quality signal.
+    weight_unit inherits from the session but is stored per set for
+    historical accuracy if the user toggles units mid-session.
+    """
+    __tablename__ = "workout_sets"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("workout_sessions.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    exercise_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("exercises.id"), nullable=False
+    )
+    set_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    reps_completed: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    weight_used: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2), nullable=True)
+    weight_unit: Mapped[WeightUnit] = mapped_column(
+        Enum(WeightUnit, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=WeightUnit.LB,
+    )
+    rpe: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    is_warmup: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+
+    session: Mapped["WorkoutSession"] = relationship("WorkoutSession", back_populates="sets")
+    exercise: Mapped["Exercise"] = relationship(
+        "Exercise", back_populates="sets", lazy="selectin"
+    )
+
+    @property
+    def weight_display(self) -> str:
+        if self.weight_used is None:
+            return "BW"
+        return f"{self.weight_used:g} {self.weight_unit.value}"
+
+    @property
+    def volume(self) -> Decimal:
+        """Weight × reps for this set."""
+        if self.weight_used is None:
+            return Decimal("0")
+        return self.weight_used * self.reps_completed
+
+
+class BodyMetric(Base):
+    """
+    Daily body weight and body fat percentage tracking.
+    Unique constraint on metric_date — one entry per day, upserted by the router.
+    Default unit is lb (user preference).
+    """
+    __tablename__ = "body_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    metric_date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
+    weight: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    weight_unit: Mapped[WeightUnit] = mapped_column(
+        Enum(WeightUnit, values_callable=lambda x: [e.value for e in x]),
+        nullable=False, default=WeightUnit.LB,
+    )
+    body_fat_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+
+    @property
+    def weight_display(self) -> str:
+        if self.weight is None:
+            return "—"
+        return f"{self.weight:g} {self.weight_unit.value}"

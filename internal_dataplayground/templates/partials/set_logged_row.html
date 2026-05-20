@@ -1,0 +1,42 @@
+{# templates/partials/workout/set_logged_row.html
+   Returned by POST /workout/sessions/{id}/sets after a set is logged.
+   Appended into #sets-logged-list by workout.js.
+
+   Context:
+     workout_set  = WorkoutSet ORM object
+     exercise     = Exercise ORM object
+     prev_best    = WorkoutSet ORM object or None (previous best for this exercise)
+     session      = WorkoutSession ORM object
+#}
+<div class="set-row {% if workout_set.is_warmup %}warmup-row{% endif %}"
+     id="set-row-{{ workout_set.id }}">
+    <span class="set-exercise-name">{{ exercise.name }}</span>
+    <span class="set-details">
+        {{ 'W' if workout_set.is_warmup else workout_set.set_number }}
+        · {{ workout_set.weight_display }} × {{ workout_set.reps_completed }}
+        {% if workout_set.rpe %}
+        <span class="set-rpe">RPE {{ workout_set.rpe }}</span>
+        {% endif %}
+        {# Previous best comparison — only for working sets #}
+        {% if not workout_set.is_warmup and prev_best and prev_best.weight_used and workout_set.weight_used %}
+            {% if workout_set.weight_used > prev_best.weight_used %}
+            <span style="color:var(--green);margin-left:4px;font-size:9px;">↑ PR</span>
+            {% endif %}
+        {% endif %}
+    </span>
+    <button class="delete-set-btn"
+            hx-delete="/workout/sessions/{{ workout_set.session_id }}/sets/{{ workout_set.id }}"
+            hx-target="#set-row-{{ workout_set.id }}"
+            hx-swap="outerHTML"
+            hx-confirm="Remove this set?"
+            title="Remove set">✕</button>
+</div>
+
+{# Emit prev_best data as data attributes for JS to read #}
+{% if prev_best and prev_best.weight_used %}
+<span id="prev-best-data-{{ workout_set.id }}"
+      data-weight="{{ prev_best.weight_used }}"
+      data-reps="{{ prev_best.reps_completed }}"
+      data-unit="{{ prev_best.weight_unit.value }}"
+      style="display:none;"></span>
+{% endif %}

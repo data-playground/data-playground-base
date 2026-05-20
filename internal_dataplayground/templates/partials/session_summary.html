@@ -1,0 +1,75 @@
+{# templates/partials/workout/session_summary.html
+   Returned by PATCH /workout/sessions/{id}/end.
+   Replaces the session banner in #session-zone after ending.
+
+   Context:
+     session = WorkoutSession ORM object (already ended)
+#}
+<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;
+            padding:20px;box-shadow:var(--shadow);text-align:center;">
+
+    <div style="font-size:28px;margin-bottom:10px;">🎉</div>
+
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+                color:var(--text-primary);margin-bottom:6px;">
+        Session Complete
+    </div>
+
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">
+        {{ session.session_date.strftime('%A, %B %-d') }}
+    </div>
+
+    {# Stats row #}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div style="background:var(--bg-hover);border-radius:8px;padding:10px 8px;text-align:center;">
+            <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+                        color:var(--text-muted);margin-bottom:4px;">Duration</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+                        color:var(--text-primary);">{{ session.duration_display }}</div>
+        </div>
+        <div style="background:var(--bg-hover);border-radius:8px;padding:10px 8px;text-align:center;">
+            <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+                        color:var(--text-muted);margin-bottom:4px;">Exercises</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+                        color:var(--text-primary);">{{ session.exercise_count }}</div>
+        </div>
+        <div style="background:var(--bg-hover);border-radius:8px;padding:10px 8px;text-align:center;">
+            <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+                        color:var(--text-muted);margin-bottom:4px;">Working Sets</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+                        color:var(--text-primary);">{{ session.working_sets | length }}</div>
+        </div>
+    </div>
+
+    {% if session.fatigue_rating %}
+    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:14px;">
+        Fatigue: <span class="fatigue-{{ session.fatigue_rating }}" style="font-weight:500;">
+            {{ session.fatigue_label }}
+        </span>
+    </div>
+    {% endif %}
+
+    {# Exercise summary #}
+    {% set seen = [] %}
+    {% for ws in session.working_sets %}
+    {% if ws.exercise_id not in seen %}
+    {% set _ = seen.append(ws.exercise_id) %}
+    {% set ex_sets = session.working_sets | selectattr('exercise_id', 'equalto', ws.exercise_id) | list %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <span style="color:var(--text-secondary);">{{ ws.exercise.name }}</span>
+        <span style="color:var(--text-primary);font-weight:500;">
+            {{ ex_sets | length }} × {{ ex_sets[-1].reps_completed }} reps
+            {% if ex_sets[-1].weight_used %}
+            @ {{ ex_sets[-1].weight_display }}
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
+        <a href="/workout/history/{{ session.id }}" class="btn">View Full Log</a>
+        <a href="/workout" class="btn btn-primary">Back to Workout</a>
+    </div>
+</div>

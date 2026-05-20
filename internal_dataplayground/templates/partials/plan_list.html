@@ -1,0 +1,74 @@
+{# templates/partials/workout/plan_list.html
+   Returned by POST/PATCH/DELETE /workout/plans endpoints.
+   Swapped into #plan-list-container in workout_plans.html.
+
+   Context:
+     plans = list of WorkoutPlan ORM objects
+     toast = optional success message
+#}
+{% if toast %}
+<script>showToast('{{ toast }}');</script>
+{% endif %}
+
+{% if plans %}
+<div style="display:flex;flex-direction:column;gap:10px;">
+    {% for plan in plans %}
+    <div class="plan-card {% if plan.is_active %}active-plan{% endif %}" id="plan-card-{{ plan.id }}">
+        <div style="flex:1;min-width:0;">
+            <div class="plan-card-name">{{ plan.name }}</div>
+            <div class="plan-card-meta">
+                <span>{{ plan.goal.label }}</span>
+                <span>·</span>
+                <span>{{ plan.target_days_per_week }}d/week</span>
+                <span>·</span>
+                <span>{{ plan.days | length }} day{{ 's' if plan.days | length != 1 else '' }}</span>
+                <span>·</span>
+                <span>{{ plan.total_exercises }} exercise{{ 's' if plan.total_exercises != 1 else '' }}</span>
+                {% if plan.generated_by.value == 'ai' %}
+                <span>·</span>
+                <span style="color:var(--accent);">AI generated</span>
+                {% endif %}
+            </div>
+
+            {# Day list #}
+            {% if plan.days %}
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
+                {% for day in plan.days %}
+                <span style="padding:2px 8px;font-size:9px;border-radius:3px;
+                             background:var(--bg-hover);border:1px solid var(--border);
+                             color:var(--text-secondary);">
+                    {{ day.day_name or 'Day ' ~ day.day_number }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="plan-card-actions">
+            {% if not plan.is_active %}
+            <button class="btn btn-sm"
+                    hx-patch="/workout/plans/{{ plan.id }}/activate"
+                    hx-target="#plan-list-container"
+                    hx-swap="innerHTML">
+                Activate
+            </button>
+            {% endif %}
+            <button class="btn btn-sm"
+                    style="color:var(--red);border-color:var(--red);"
+                    hx-delete="/workout/plans/{{ plan.id }}"
+                    hx-target="#plan-list-container"
+                    hx-swap="innerHTML"
+                    hx-confirm="Delete '{{ plan.name }}'? Sessions using this plan are kept.">
+                ✕
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div style="text-align:center;padding:32px 20px;color:var(--text-muted);font-size:11px;
+            background:var(--bg-hover);border-radius:10px;border:1px solid var(--border);">
+    <div style="font-size:24px;margin-bottom:8px;opacity:.3;">📋</div>
+    No plans yet.<br>Generate one with AI or create one manually.
+</div>
+{% endif %}

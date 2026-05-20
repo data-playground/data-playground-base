@@ -1,0 +1,119 @@
+{# templates/partials/workout/session_detail.html
+   Loaded into #session-detail-drawer via JS GET /workout/sessions/{id}.
+   Also used as standalone content in workout_history.html detail view.
+
+   Context:
+     session         = WorkoutSession ORM object
+     exercise_groups = list of {"exercise": Exercise, "sets": [WorkoutSet]}
+#}
+<div style="padding:0;">
+
+    {# Sticky header #}
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);
+                display:flex;align-items:flex-start;justify-content:space-between;
+                position:sticky;top:0;background:var(--bg-card);z-index:10;">
+        <div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
+                        color:var(--text-primary);margin-bottom:3px;">
+                {{ session.session_date.strftime('%A, %B %-d, %Y') }}
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);display:flex;gap:8px;">
+                <span>{{ session.duration_display }}</span>
+                <span>·</span>
+                <span>{{ session.exercise_count }} exercise{{ 's' if session.exercise_count != 1 else '' }}</span>
+                {% if session.plan_day %}
+                <span>·</span>
+                <span>{{ session.plan_day.day_name }}</span>
+                {% endif %}
+                {% if session.fatigue_rating %}
+                <span>·</span>
+                <span class="fatigue-{{ session.fatigue_rating }}">{{ session.fatigue_label }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <button onclick="closeSessionDetail()"
+                style="background:transparent;border:1px solid var(--border);color:var(--text-muted);
+                       border-radius:4px;padding:4px 10px;font-family:'DM Mono',monospace;
+                       font-size:10px;cursor:pointer;flex-shrink:0;margin-left:12px;">
+            ✕ Close
+        </button>
+    </div>
+
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;">
+
+        {% if not exercise_groups %}
+        <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:11px;">
+            No sets logged in this session.
+        </div>
+        {% endif %}
+
+        {% for group in exercise_groups %}
+        <div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:12px;
+                        color:var(--text-primary);margin-bottom:8px;display:flex;
+                        align-items:center;gap:6px;">
+                <span>{{ group.exercise.name }}</span>
+                <span style="font-size:9px;font-weight:400;color:var(--text-muted);
+                             text-transform:uppercase;letter-spacing:.1em;">
+                    {{ group.exercise.primary_muscle_group.value }}
+                </span>
+            </div>
+
+            <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding:4px 8px 6px 0;font-size:9px;
+                                   letter-spacing:.12em;text-transform:uppercase;
+                                   color:var(--text-muted);border-bottom:1px solid var(--border);">Set</th>
+                        <th style="text-align:right;padding:4px 0 6px;font-size:9px;
+                                   letter-spacing:.12em;text-transform:uppercase;
+                                   color:var(--text-muted);border-bottom:1px solid var(--border);">Weight</th>
+                        <th style="text-align:right;padding:4px 0 6px;font-size:9px;
+                                   letter-spacing:.12em;text-transform:uppercase;
+                                   color:var(--text-muted);border-bottom:1px solid var(--border);">Reps</th>
+                        <th style="text-align:right;padding:4px 0 6px 8px;font-size:9px;
+                                   letter-spacing:.12em;text-transform:uppercase;
+                                   color:var(--text-muted);border-bottom:1px solid var(--border);">RPE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ws in group.sets %}
+                    <tr style="{% if ws.is_warmup %}opacity:0.55;{% endif %}">
+                        <td style="padding:6px 8px 6px 0;color:var(--text-muted);
+                                   border-bottom:1px solid var(--border);">
+                            {% if ws.is_warmup %}W{% else %}{{ ws.set_number }}{% endif %}
+                        </td>
+                        <td style="text-align:right;padding:6px 0;color:var(--text-primary);
+                                   font-variant-numeric:tabular-nums;font-weight:500;
+                                   border-bottom:1px solid var(--border);"
+                            data-weight="{{ ws.weight_used or '' }}"
+                            data-reps="{{ ws.reps_completed }}"
+                            data-unit="{{ ws.weight_unit.value }}">
+                            {{ ws.weight_display }}
+                        </td>
+                        <td style="text-align:right;padding:6px 0;color:var(--text-primary);
+                                   font-variant-numeric:tabular-nums;
+                                   border-bottom:1px solid var(--border);">
+                            {{ ws.reps_completed }}
+                        </td>
+                        <td style="text-align:right;padding:6px 0 6px 8px;color:var(--text-muted);
+                                   border-bottom:1px solid var(--border);">
+                            {{ ws.rpe or '—' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+
+        {% if session.notes %}
+        <div style="padding:10px 12px;background:var(--bg-hover);border-radius:6px;
+                    border:1px solid var(--border);font-size:11px;
+                    color:var(--text-secondary);line-height:1.6;">
+            {{ session.notes }}
+        </div>
+        {% endif %}
+
+    </div>
+</div>

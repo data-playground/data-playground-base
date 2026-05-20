@@ -1,0 +1,29 @@
+{# templates/partials/workout/active_session_header.html
+   Shown at the top of the workout page when a session is in progress.
+   `session` = WorkoutSession ORM object
+#}
+<div class="session-active-banner" data-toast="{{ toast or '' }}">
+    <div class="session-active-left">
+        <div class="session-active-title">
+            {% if session.plan_day %}
+                {{ session.plan_day.day_name or 'Workout' }}
+            {% else %}
+                Free Session
+            {% endif %}
+        </div>
+        <div class="session-active-meta">
+            {% if session.location %}
+            <span>📍 {{ session.location.name }}</span>
+            {% endif %}
+            <span class="session-timer" id="session-timer">0:00</span>
+            <span id="session-started-at"
+                  data-started="{{ session.started_at.isoformat() if session.started_at else '' }}"
+                  style="display:none;"></span>
+        </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--green);
+                     display:inline-block;animation:pulse 1.5s infinite;"></span>
+        <span style="font-size:10px;color:var(--green);">Active</span>
+    </div>
+</div>

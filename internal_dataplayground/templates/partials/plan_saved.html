@@ -1,0 +1,32 @@
+{# templates/partials/workout/plan_saved.html
+   Returned by POST /workout/plans/{id}/save after an AI plan is approved.
+
+   Context:
+     plan      = WorkoutPlan ORM object (freshly saved)
+     activated = bool — whether the plan was also activated
+#}
+<div style="text-align:center;padding:32px 20px;max-width:520px;margin:0 auto;">
+    <div style="font-size:32px;margin-bottom:12px;">✓</div>
+
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+                color:var(--text-primary);margin-bottom:6px;">
+        Plan Saved{% if activated %} & Activated{% endif %}
+    </div>
+
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">
+        <strong style="color:var(--text-secondary);">{{ plan.name }}</strong>
+        — {{ plan.target_days_per_week }} days/week · {{ plan.total_exercises }} exercises
+    </div>
+
+    {% if activated %}
+    <div style="padding:10px 16px;background:rgba(0,229,160,0.07);border:1px solid rgba(0,229,160,0.25);
+                border-radius:8px;font-size:11px;color:var(--green);margin-bottom:20px;">
+        ● This plan is now active. Your next session will use it.
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <a href="/workout" class="btn btn-primary">Start Training →</a>
+        <a href="/workout/plans" class="btn">View All Plans</a>
+    </div>
+</div>

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Review AI Plan{% endblock %}
+{% block page_title %}Review Plan{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/workout/plans">← Back to Plans</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/workout.css">
+{% endblock %}
+
+{% block content %}
+<main class="main-content" style="padding:20px;max-width:900px;">
+
+    {# ── HEADER ── #}
+    <div style="margin-bottom:20px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:20px;
+                    color:var(--text-primary);margin-bottom:6px;">
+            {{ plan_data.plan_name }}
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;
+                    margin-bottom:10px;">
+            {{ plan_data.description }}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="padding:3px 10px;font-size:9px;border-radius:3px;
+                         background:rgba(124,111,255,0.1);color:var(--accent);
+                         letter-spacing:.06em;text-transform:uppercase;">
+                {{ goal.label }}
+            </span>
+            <span style="padding:3px 10px;font-size:9px;border-radius:3px;
+                         background:var(--bg-hover);color:var(--text-secondary);
+                         border:1px solid var(--border);">
+                {{ target_days }} days/week
+            </span>
+            {% if location %}
+            <span style="padding:3px 10px;font-size:9px;border-radius:3px;
+                         background:var(--bg-hover);color:var(--text-secondary);
+                         border:1px solid var(--border);">
+                📍 {{ location.name }}
+            </span>
+            {% endif %}
+            <span style="padding:3px 10px;font-size:9px;border-radius:3px;
+                         background:rgba(0,229,160,0.08);color:var(--green);
+                         border:1px solid rgba(0,229,160,0.2);">
+                ⚡ AI Generated
+            </span>
+        </div>
+    </div>
+
+    {# ── UNMATCHED EXERCISE WARNING ── #}
+    {% if unmatched_exercises %}
+    <div style="padding:12px 16px;background:rgba(232,160,32,0.08);
+                border:1px solid rgba(232,160,32,0.3);border-radius:8px;
+                margin-bottom:16px;font-size:11px;color:var(--yellow);">
+        <strong>⚠ {{ unmatched_exercises | length }} exercise{{ 's' if unmatched_exercises | length != 1 else '' }}
+        not found in your library</strong> and will be skipped:
+        {{ unmatched_exercises | join(', ') }}.
+        You can add custom exercises in <a href="/workout/settings" style="color:var(--yellow);">Settings</a>.
+    </div>
+    {% endif %}
+
+    {# ── DAY GRID ── #}
+    <div class="plan-preview-grid">
+        {% for day in plan_data.days %}
+        <div class="plan-preview-day">
+            <div class="plan-preview-day-header">
+                Day {{ day.day_number }} — {{ day.day_name }}
+            </div>
+
+            {% for ex in day.exercises %}
+            <div class="plan-preview-exercise-row">
+                <div class="plan-preview-ex-name">
+                    {% if ex.exercise_id %}
+                    {{ ex.exercise_name }}
+                    {% else %}
+                    <span style="color:var(--text-muted);text-decoration:line-through;">
+                        {{ ex.exercise_name }}
+                    </span>
+                    <span style="font-size:9px;color:var(--yellow);"> (not found)</span>
+                    {% endif %}
+                </div>
+                <div class="plan-preview-ex-target">
+                    {{ ex.target_sets }} sets ×
+                    {{ ex.target_reps_min }}{% if ex.target_reps_max != ex.target_reps_min %}–{{ ex.target_reps_max }}{% endif %} reps
+                    {% if ex.target_weight_lb %}
+                    · {{ ex.target_weight_lb | int }} lb suggested
+                    {% endif %}
+                </div>
+                {% if ex.notes %}
+                <div style="font-size:9px;color:var(--accent);margin-top:2px;
+                            font-style:italic;">{{ ex.notes }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ── SAVE FORM ── #}
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                padding:20px;box-shadow:var(--shadow);">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;
+                    margin-bottom:14px;">Approve & Save</div>
+
+        <form id="save-plan-form">
+            <input type="hidden" name="plan_data_json" value="{{ plan_data_json | e }}">
+            <input type="hidden" name="goal" value="{{ goal.value }}">
+            {% if location %}
+            <input type="hidden" name="location_id" value="{{ location.id }}">
+            {% endif %}
+
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
+                               font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" name="activate" value="true"
+                           style="width:16px;height:16px;accent-color:var(--accent);">
+                    Activate this plan immediately
+                </label>
+            </div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-primary"
+                        onclick="savePlan()" id="save-btn">
+                    ✓ Save Plan
+                </button>
+                <a href="/workout/plans" class="btn">Discard</a>
+            </div>
+        </form>
+    </div>
+
+</main>
+
+<div id="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function savePlan() {
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const form = document.getElementById('save-plan-form');
+    const fd = new FormData(form);
+
+    // Use a placeholder plan_id — the save endpoint ignores it and creates a new plan
+    try {
+        const resp = await fetch('/workout/plans/0/save', { method: 'POST', body: fd });
+        if (resp.ok) {
+            document.open();
+            document.write(await resp.text());
+            document.close();
+        } else {
+            showToast('Could not save plan. Try again.', true);
+            btn.disabled = false;
+            btn.textContent = '✓ Save Plan';
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, true);
+        btn.disabled = false;
+        btn.textContent = '✓ Save Plan';
+    }
+}
+</script>
+{% endblock %}

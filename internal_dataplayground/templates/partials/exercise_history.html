@@ -1,0 +1,48 @@
+{# templates/partials/workout/exercise_history.html
+   Returned by GET /workout/history/{exercise_id}.
+   Used by workout.js to fetch the previous best and pre-fill the log form.
+
+   Context:
+     exercise = Exercise ORM object
+     rows     = list of {"set": WorkoutSet, "date": date}
+#}
+{% if rows %}
+<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">
+    Last {{ rows | length }} working set{{ 's' if rows | length != 1 else '' }} for
+    <strong style="color:var(--text-primary);">{{ exercise.name }}</strong>
+</div>
+<table class="exercise-history-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th style="text-align:right;">Weight</th>
+            <th style="text-align:right;">Reps</th>
+            <th style="text-align:right;">RPE</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td style="color:var(--text-muted);">{{ row.date.strftime('%b %-d') }}</td>
+            <td style="text-align:right;color:var(--text-primary);font-weight:500;
+                       font-variant-numeric:tabular-nums;"
+                data-weight="{{ row.set.weight_used or '' }}"
+                data-reps="{{ row.set.reps_completed }}"
+                data-unit="{{ row.set.weight_unit.value }}">
+                {{ row.set.weight_display }}
+            </td>
+            <td style="text-align:right;color:var(--text-primary);font-variant-numeric:tabular-nums;">
+                {{ row.set.reps_completed }}
+            </td>
+            <td style="text-align:right;color:var(--text-muted);">
+                {{ row.set.rpe or '—' }}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div style="font-size:10px;color:var(--text-muted);padding:8px 0;">
+    No history yet for {{ exercise.name }}.
+</div>
+{% endif %}

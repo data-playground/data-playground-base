@@ -13,6 +13,7 @@ from routers import finance_summary, finance_ledger, finance_upload, finance_set
 from routers import ci_projects, ci_files, ci_readme
 from routers import habits, journal
 from routers import recipe_extract, recipe_discovery, pantry, recipes   # ← NEW
+from routers import workout, workout_log, workout_plans, workout_settings
 
 templates = Jinja2Templates(directory="templates")
 
@@ -53,6 +54,11 @@ app.include_router(recipe_discovery.router)   # ← NEW — before recipes
 app.include_router(pantry.router)             # ← NEW
 app.include_router(recipes.router)            # ← NEW — last, has /{id} catch-all
 
+app.include_router(workout.router)
+app.include_router(workout_log.router)
+app.include_router(workout_log.body_metrics_router)   # separate sub-router!
+app.include_router(workout_plans.router)
+app.include_router(workout_settings.router)
 
 # ── Global 500 handler ─────────────────────────────────────────────────────────
 

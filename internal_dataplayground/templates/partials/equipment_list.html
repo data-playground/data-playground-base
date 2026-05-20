@@ -1,0 +1,28 @@
+{# templates/partials/workout/equipment_list.html
+   Returned by equipment CRUD endpoints.
+   Swapped into the equipment section of a specific location card.
+
+   Context:
+     location = WorkoutLocation ORM object (with equipment loaded)
+     toast    = optional message
+#}
+{% if toast %}
+<script>showToast('{{ toast }}');</script>
+{% endif %}
+
+{% if location.active_equipment %}
+<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+    {% for eq in location.active_equipment %}
+    <span class="equipment-tag" id="equipment-tag-{{ eq.id }}">
+        {{ eq.name }}
+        <button onclick="deleteEquipment({{ eq.id }}, {{ location.id }})"
+                style="background:none;border:none;color:var(--text-muted);
+                       cursor:pointer;font-size:9px;padding:0 0 0 4px;">×</button>
+    </span>
+    {% endfor %}
+</div>
+{% else %}
+<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">
+    No equipment logged yet.
+</div>
+{% endif %}

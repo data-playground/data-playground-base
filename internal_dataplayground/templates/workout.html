@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+{% block title %}Workout{% endblock %}
+{% block page_title %}Workout{% endblock %}
+
+{% block topbar_meta %}
+    {% if active_session %}
+    <span style="font-size:10px;color:var(--green);letter-spacing:.06em;">● Session active</span>
+    {% endif %}
+{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/workout/history">History</a>
+    <a class="btn" href="/workout/progress">Progress</a>
+    <a class="btn" href="/workout/plans">Plans</a>
+    <a class="btn" href="/workout/settings">⚙</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/workout.css">
+{% endblock %}
+
+{% block content %}
+<main class="main-content workout-main" id="main-content">
+
+    {# ══════════════════════════════════════════════════════════════════════
+       SECTION 1 — ACTIVE SESSION BANNER + INLINE LOG FORM
+       If a session is running, show it prominently at the top.
+       The log form stays visible — no modals, no drawers.
+    ══════════════════════════════════════════════════════════════════════ #}
+    <div id="session-zone">
+        {% if active_session %}
+        {% include "partials/workout/active_session_header.html" %}
+        {% else %}
+        {# Start session CTA #}
+        <div class="start-session-card" id="start-session-card">
+            <div class="start-session-label">
+                {% if active_plan %}
+                    <strong>{{ active_plan.name }}</strong> — ready when you are
+                {% else %}
+                    No active plan · log a free session
+                {% endif %}
+            </div>
+            <form id="start-form">
+                {% if active_plan and active_plan.days %}
+                <div class="start-day-row">
+                    <label class="start-label">Day</label>
+                    <select name="plan_day_id" class="start-select" id="plan-day-select">
+                        {% for day in active_plan.days %}
+                        <option value="{{ day.id }}">{{ day.day_name or 'Day ' ~ day.day_number }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <input type="hidden" name="plan_id" value="{{ active_plan.id }}">
+                {% endif %}
+                <div class="start-day-row">
+                    <label class="start-label">Unit</label>
+                    <div class="unit-toggle" id="unit-toggle">
+                        <button type="button" class="unit-btn active" data-unit="lb"
+                                onclick="setUnit('lb', this)">lb</button>
+                        <button type="button" class="unit-btn" data-unit="kg"
+                                onclick="setUnit('kg', this)">kg</button>
+                    </div>
+                    <input type="hidden" name="weight_unit" id="unit-input" value="lb">
+                </div>
+                <button type="button" class="start-btn" onclick="startSession()">
+                    ▶ Start Session
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════════
+       SECTION 2 — INLINE SET LOGGING FORM
+       Always visible when a session is active. No scrolling required.
+       Pre-populates from the plan target; user adjusts before tapping Log.
+    ══════════════════════════════════════════════════════════════════════ #}
+    {% if active_session %}
+    <div class="log-form-card" id="log-form-card">
+        <div class="log-form-title">Log a Set</div>
+
+        {# Exercise selector with search-as-you-type #}
+        <div class="log-field">
+            <label class="log-label">Exercise</label>
+            <input class="log-input" type="text" id="exercise-search"
+                   placeholder="Search exercises…"
+                   autocomplete="off"
+                   oninput="filterExercises(this.value)"
+                   onfocus="showExerciseDropdown()">
+            <input type="hidden" id="selected-exercise-id" name="exercise_id">
+            <div class="exercise-dropdown" id="exercise-dropdown" style="display:none;"></div>
+            <div id="selected-exercise-display" style="display:none;"
+                 class="selected-exercise-pill">
+                <span id="selected-exercise-name"></span>
+                <button type="button" onclick="clearExercise()" class="clear-exercise">✕</button>
+            </div>
+        </div>
+
+        {# Weight + unit toggle #}
+        <div class="log-row">
+            <div class="log-field" style="flex:1;">
+                <label class="log-label">Weight</label>
+                <div class="weight-row">
+                    <input class="log-input weight-input" type="number"
+                           id="weight-input"
+                           min="0" step="2.5"
+                           placeholder="0">
+                    <div class="unit-toggle-sm" id="log-unit-toggle">
+                        <button type="button" class="unit-btn-sm {% if active_session.weight_unit.value == 'lb' %}active{% endif %}"
+                                data-unit="lb" onclick="setLogUnit('lb', this)">lb</button>
+                        <button type="button" class="unit-btn-sm {% if active_session.weight_unit.value == 'kg' %}active{% endif %}"
+                                data-unit="kg" onclick="setLogUnit('kg', this)">kg</button>
+                    </div>
+                    <input type="hidden" id="log-unit-input" value="{{ active_session.weight_unit.value }}">
+                </div>
+            </div>
+
+            {# Reps with + / - buttons #}
+            <div class="log-field" style="flex:1;">
+                <label class="log-label">Reps</label>
+                <div class="reps-row">
+                    <button type="button" class="reps-adj" onclick="adjustReps(-1)">−</button>
+                    <input class="log-input reps-input" type="number"
+                           id="reps-input" min="1" max="100" value="10">
+                    <button type="button" class="reps-adj" onclick="adjustReps(1)">+</button>
+                </div>
+            </div>
+        </div>
+
+        {# Warmup toggle + RPE (collapsed by default) #}
+        <div class="log-extras">
+            <label class="warmup-toggle">
+                <input type="checkbox" id="is-warmup-toggle">
+                <span>Warmup set</span>
+            </label>
+            <button type="button" class="rpe-toggle-btn" onclick="toggleRPE()">
+                RPE <span id="rpe-display">—</span>
+            </button>
+        </div>
+        <div class="rpe-panel" id="rpe-panel" style="display:none;">
+            <label class="log-label">RPE (how hard was that?)</label>
+            <div class="rpe-buttons">
+                {% for i in range(1, 11) %}
+                <button type="button" class="rpe-btn" data-rpe="{{ i }}"
+                        onclick="selectRPE({{ i }}, this)">{{ i }}</button>
+                {% endfor %}
+            </div>
+            <input type="hidden" id="rpe-input" value="">
+        </div>
+
+        {# Previous best reference — shown after selecting an exercise #}
+        <div id="prev-best-display" class="prev-best-box" style="display:none;"></div>
+
+        {# The big Log button #}
+        <button type="button" class="log-set-btn" id="log-set-btn"
+                onclick="logSet()">
+            Log Set
+        </button>
+
+        {# Sets logged this session — live updating list #}
+        <div class="sets-logged-header">
+            <span>Sets this session</span>
+            <span id="session-set-count" style="color:var(--text-muted);font-size:10px;">0 sets</span>
+        </div>
+        <div id="sets-logged-list" class="sets-logged-list">
+            {# Rows are injected here by logSet() #}
+            {% if active_session.sets %}
+            {% for ws in active_session.sets %}
+            <div class="set-row {% if ws.is_warmup %}warmup-row{% endif %}"
+                 id="set-row-{{ ws.id }}">
+                <span class="set-exercise-name">{{ ws.exercise.name }}</span>
+                <span class="set-details">
+                    {{ 'W' if ws.is_warmup else ws.set_number }}
+                    · {{ ws.weight_display }} × {{ ws.reps_completed }}
+                    {% if ws.rpe %}<span class="set-rpe">RPE {{ ws.rpe }}</span>{% endif %}
+                </span>
+                <button class="delete-set-btn"
+                        hx-delete="/workout/sessions/{{ active_session.id }}/sets/{{ ws.id }}"
+                        hx-target="#set-row-{{ ws.id }}"
+                        hx-swap="outerHTML"
+                        hx-confirm="Remove this set?"
+                        title="Remove set">✕</button>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        {# End session #}
+        <div class="end-session-zone">
+            <button type="button" class="end-session-btn" onclick="openEndModal()">
+                ✓ End Session
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════════
+       SECTION 3 — TODAY'S PLAN
+       Shows target exercises for the suggested day.
+       Tapping an exercise row pre-fills the log form above.
+    ══════════════════════════════════════════════════════════════════════ #}
+    {% if active_plan and plan_exercises %}
+    <div class="plan-section">
+        <div class="plan-section-header">
+            <div>
+                <div class="plan-section-title">
+                    {{ suggested_day.day_name or "Today's Plan" }}
+                </div>
+                <div class="plan-section-sub">{{ active_plan.name }}</div>
+            </div>
+        </div>
+
+        <div class="exercise-target-list">
+            {% for item in plan_exercises %}
+            {% set pe = item.plan_exercise %}
+            {% set ex = item.exercise %}
+            {% set prev = item.prev_best %}
+            {% set done = item.sets_logged %}
+            <div class="exercise-target-row {% if done >= pe.target_sets %}completed-row{% endif %}"
+                 onclick="prefillExercise({{ ex.id }}, '{{ ex.name | e }}',
+                     {{ pe.target_reps_min }},
+                     {{ (prev.weight_used | float) if prev and prev.weight_used else (pe.target_weight | float if pe.target_weight else 0) }},
+                     '{{ (prev.weight_unit.value if prev else active_session.weight_unit.value if active_session else 'lb') }}')">
+
+                <div class="ex-target-main">
+                    <div class="ex-target-name">{{ ex.name }}</div>
+                    <div class="ex-target-meta">
+                        {{ pe.target_sets }} × {{ pe.rep_range }}
+                        {% if pe.target_weight %}
+                        · {{ pe.target_weight | int }} lb suggested
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="ex-target-right">
+                    {# Sets progress #}
+                    <div class="sets-progress">
+                        {% for s in range(pe.target_sets) %}
+                        <span class="set-pip {% if s < done %}filled{% endif %}"></span>
+                        {% endfor %}
+                    </div>
+                    {% if prev and prev.weight_used %}
+                    <div class="ex-prev-best">{{ prev.weight_display }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% elif not active_plan %}
+    <div class="no-plan-card">
+        <div class="no-plan-icon">📋</div>
+        <div class="no-plan-title">No active plan</div>
+        <div class="no-plan-body">Generate a plan with AI or create one manually.</div>
+        <a href="/workout/plans" class="btn btn-primary" style="margin-top:8px;">Set Up Plan →</a>
+    </div>
+    {% endif %}
+
+    {# ══════════════════════════════════════════════════════════════════════
+       SECTION 4 — BODY WEIGHT SPARKLINE
+    ══════════════════════════════════════════════════════════════════════ #}
+    <div class="body-weight-card" id="body-weight-card">
+        <div class="bw-header">
+            <div>
+                <div class="bw-title">Body Weight</div>
+                {% if latest_metric %}
+                <div class="bw-current">{{ latest_metric.weight_display }}</div>
+                {% else %}
+                <div class="bw-current" style="color:var(--text-muted);">Not logged</div>
+                {% endif %}
+            </div>
+            <button class="btn btn-sm" onclick="openWeightModal()">+ Log</button>
+        </div>
+        {% if body_metrics %}
+        <canvas id="weight-sparkline" height="50"></canvas>
+        {% else %}
+        <div style="font-size:10px;color:var(--text-muted);padding:8px 0;">
+            Log your weight to see the trend.
+        </div>
+        {% endif %}
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════════
+       SECTION 5 — RECENT SESSIONS
+    ══════════════════════════════════════════════════════════════════════ #}
+    {% if recent_sessions %}
+    <div class="recent-section">
+        <div class="recent-header">
+            <span>Recent Sessions</span>
+            <a href="/workout/history" class="section-link">All →</a>
+        </div>
+        {% for session in recent_sessions %}
+        <a href="#" class="session-card" onclick="loadSessionDetail({{ session.id }}); return false;">
+            <div class="session-card-left">
+                <div class="session-date">{{ session.session_date.strftime('%b %-d') }}</div>
+                {% if session.plan_day %}
+                <div class="session-plan-name">{{ session.plan_day.day_name or 'Workout' }}</div>
+                {% else %}
+                <div class="session-plan-name">Free Session</div>
+                {% endif %}
+            </div>
+            <div class="session-card-right">
+                <span class="session-stat">{{ session.duration_display }}</span>
+                <span class="session-stat">{{ session.exercise_count }} exercise{{ 's' if session.exercise_count != 1 else '' }}</span>
+                {% if session.fatigue_rating %}
+                <span class="session-stat fatigue-{{ session.fatigue_rating }}">
+                    {{ session.fatigue_label }}
+                </span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</main>
+
+{# ── END SESSION MODAL ── #}
+<div class="modal-backdrop" id="end-modal">
+    <div class="modal-box" style="max-width:380px;">
+        <div class="modal-head">
+            <span class="modal-title">End Session</span>
+            <button class="modal-close" onclick="closeEndModal()">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+                <label class="form-label">How did it feel? (Fatigue 1–5)</label>
+                <div class="fatigue-buttons">
+                    {% for val, label in [(1,'Easy'),(2,'Light'),(3,'Moderate'),(4,'Hard'),(5,'Brutal')] %}
+                    <button type="button" class="fatigue-btn" data-val="{{ val }}"
+                            onclick="selectFatigue({{ val }}, this)">
+                        {{ val }} · {{ label }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="fatigue-input" value="">
+            </div>
+            <div>
+                <label class="form-label">Notes (optional)</label>
+                <textarea class="form-textarea" id="end-notes" rows="2"
+                          placeholder="How the session went…"></textarea>
+            </div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" onclick="closeEndModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="endSession()">✓ End Session</button>
+        </div>
+    </div>
+</div>
+
+{# ── BODY WEIGHT MODAL ── #}
+<div class="modal-backdrop" id="weight-modal">
+    <div class="modal-box" style="max-width:340px;">
+        <div class="modal-head">
+            <span class="modal-title">Log Body Weight</span>
+            <button class="modal-close" onclick="closeWeightModal()">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+                <label class="form-label">Weight</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input class="log-input" type="number" id="bw-input"
+                           min="50" max="500" step="0.1" placeholder="175">
+                    <div class="unit-toggle-sm">
+                        <button type="button" class="unit-btn-sm active" data-unit="lb"
+                                onclick="setBWUnit('lb', this)">lb</button>
+                        <button type="button" class="unit-btn-sm" data-unit="kg"
+                                onclick="setBWUnit('kg', this)">kg</button>
+                    </div>
+                    <input type="hidden" id="bw-unit-input" value="lb">
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Body Fat % (optional)</label>
+                <input class="log-input" type="number" id="bf-input"
+                       min="3" max="50" step="0.1" placeholder="—">
+            </div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" onclick="closeWeightModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="logWeight()">Save</button>
+        </div>
+    </div>
+</div>
+
+{# ── SESSION DETAIL DRAWER ── #}
+<div class="detail-overlay" id="session-overlay" onclick="closeSessionDetail()"></div>
+<div class="detail-drawer" id="session-detail-drawer"></div>
+
+<div id="toast"></div>
+
+{# Exercise data for JS #}
+<script>
+const ALL_EXERCISES = [
+    {% for ex in all_exercises %}
+    { id: {{ ex.id }}, name: {{ ex.name | tojson }}, muscle: {{ ex.primary_muscle_group.value | tojson }}, equipment: {{ ex.equipment_type.value | tojson }} },
+    {% endfor %}
+    {% for ex in custom_exercises %}
+    { id: {{ ex.id }}, name: {{ ex.name | tojson }}, muscle: {{ ex.primary_muscle_group.value | tojson }}, equipment: {{ ex.equipment_type.value | tojson }}, custom: true },
+    {% endfor %}
+];
+const SESSION_ID = {{ active_session.id if active_session else 'null' }};
+const BODY_METRICS = {{ body_metrics | map(attribute='weight') | list | tojson }};
+const BODY_METRIC_DATES = {{ body_metrics | map(attribute='metric_date') | map('string') | list | tojson }};
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="/static/js/workout.js"></script>
+{% endblock %}

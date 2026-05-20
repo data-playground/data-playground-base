@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Workout Progress{% endblock %}
+{% block page_title %}Progress{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/workout">← Workout</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/workout.css">
+{% endblock %}
+
+{% block content %}
+<main class="main-content" style="padding:20px;max-width:800px;">
+
+    {# ── BODY WEIGHT CHART ── #}
+    {% if body_metrics %}
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                padding:18px;margin-bottom:20px;box-shadow:var(--shadow);">
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    margin-bottom:14px;">
+            <div>
+                <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+                            color:var(--text-muted);margin-bottom:3px;">Body Weight</div>
+                <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;
+                            color:var(--text-primary);">
+                    {{ body_metrics[-1].weight_display }}
+                </div>
+            </div>
+            {% if body_metrics | length >= 2 %}
+            {% set first_w = body_metrics[0].weight %}
+            {% set last_w = body_metrics[-1].weight %}
+            {% if first_w and last_w %}
+            {% set delta = (last_w - first_w) | round(1) %}
+            <div style="font-size:12px;font-weight:500;
+                        color:{% if delta < 0 %}var(--green){% elif delta > 0 %}var(--red){% else %}var(--text-muted){% endif %};">
+                {% if delta > 0 %}+{% endif %}{{ delta }} {{ body_metrics[-1].weight_unit.value }}
+                <div style="font-size:9px;font-weight:400;color:var(--text-muted);">
+                    last 90 days
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+        <canvas id="body-weight-chart" height="100"></canvas>
+    </div>
+    {% endif %}
+
+    {# ── EXERCISE PROGRESSION CHARTS ── #}
+    {% if progress_data %}
+    <div style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
+                color:var(--text-muted);margin-bottom:12px;">
+        Strength Progress
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;">
+        {% for item in progress_data %}
+        <div class="progress-exercise-card">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;
+                        margin-bottom:10px;">
+                <div class="progress-exercise-name">{{ item.exercise.name }}</div>
+                <div style="font-size:10px;color:var(--text-muted);">
+                    {{ item.exercise.primary_muscle_group.value }}
+                </div>
+            </div>
+
+            {# Max weight and trend summary #}
+            {% if item.data %}
+            {% set first = item.data[0] %}
+            {% set last = item.data[-1] %}
+            <div style="display:flex;gap:14px;margin-bottom:10px;">
+                <div>
+                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;">First logged</div>
+                    <div style="font-size:12px;font-weight:500;color:var(--text-secondary);">
+                        {{ first.weight }} {{ first.unit }}
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;">Most recent</div>
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);">
+                        {{ last.weight }} {{ last.unit }}
+                    </div>
+                </div>
+                {% set delta = (last.weight - first.weight) | round(1) %}
+                {% if delta != 0 %}
+                <div>
+                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;">Change</div>
+                    <div style="font-size:12px;font-weight:500;
+                                color:{% if delta > 0 %}var(--green){% else %}var(--red){% endif %};">
+                        {% if delta > 0 %}+{% endif %}{{ delta }} {{ last.unit }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <canvas id="chart-{{ item.exercise.id }}" height="70"
+                    data-labels="{{ item.data | map(attribute='date') | list | tojson }}"
+                    data-values="{{ item.data | map(attribute='weight') | list | tojson }}"
+                    data-unit="{{ item.data[-1].unit if item.data else 'lb' }}">
+            </canvas>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <div style="font-size:32px;margin-bottom:12px;opacity:.3;">📈</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
+                    color:var(--text-primary);margin-bottom:6px;">
+            No progress data yet
+        </div>
+        <div style="font-size:11px;line-height:1.7;">
+            Log at least 3 sessions with weighted exercises to see your
+            strength progression charts.
+        </div>
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const textColor = isDark ? 'rgba(200,200,220,0.5)' : 'rgba(80,80,120,0.5)';
+
+    // Body weight chart
+    const bwCanvas = document.getElementById('body-weight-chart');
+    if (bwCanvas) {
+        const metrics = {{ body_metrics | map(attribute='weight') | list | tojson }};
+        const dates   = {{ body_metrics | map(attribute='metric_date') | map('string') | list | tojson }};
+        const unit    = '{{ body_metrics[-1].weight_unit.value if body_metrics else "lb" }}';
+
+        new Chart(bwCanvas, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    data: metrics,
+                    borderColor: 'rgba(124,111,255,0.9)',
+                    backgroundColor: 'rgba(124,111,255,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0.3,
+                    fill: true,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.raw} ${unit}`,
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: gridColor },
+                        ticks: {
+                            font: { family: "'DM Mono', monospace", size: 9 },
+                            color: textColor,
+                            maxTicksLimit: 6,
+                        }
+                    },
+                    y: {
+                        grid: { color: gridColor },
+                        ticks: {
+                            font: { family: "'DM Mono', monospace", size: 9 },
+                            color: textColor,
+                            callback: v => `${v} ${unit}`,
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Exercise progression charts
+    document.querySelectorAll('canvas[data-labels]').forEach(canvas => {
+        const labels = JSON.parse(canvas.dataset.labels || '[]');
+        const values = JSON.parse(canvas.dataset.values || '[]');
+        const unit   = canvas.dataset.unit || 'lb';
+
+        if (labels.length < 2) return;
+
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    borderColor: 'rgba(0,229,160,0.85)',
+                    backgroundColor: 'rgba(0,229,160,0.07)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.2,
+                    fill: true,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.raw} ${unit}`,
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: gridColor },
+                        ticks: {
+                            font: { family: "'DM Mono', monospace", size: 9 },
+                            color: textColor,
+                            maxTicksLimit: 5,
+                        }
+                    },
+                    y: {
+                        grid: { color: gridColor },
+                        ticks: {
+                            font: { family: "'DM Mono', monospace", size: 9 },
+                            color: textColor,
+                            callback: v => `${v} ${unit}`,
+                        }
+                    }
+                }
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

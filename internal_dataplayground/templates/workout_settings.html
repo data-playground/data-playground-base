@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Workout Settings{% endblock %}
+{% block page_title %}Workout Settings{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/workout">← Workout</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/workout.css">
+{% endblock %}
+
+{% block content %}
+<main class="main-content" style="padding:20px;">
+
+    <div class="workout-settings-grid">
+
+        {# ── LEFT: LOCATIONS & EQUIPMENT ── #}
+        <div>
+            <div class="settings-panel">
+                <div class="settings-panel-title">Locations & Equipment</div>
+
+                {# Add location form #}
+                <div style="display:flex;flex-direction:column;gap:8px;
+                            margin-bottom:16px;padding-bottom:16px;
+                            border-bottom:1px solid var(--border);">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div>
+                            <label class="form-label">Name</label>
+                            <input class="form-input" type="text" id="loc-name"
+                                   placeholder="Gold's Gym, Home Gym…">
+                        </div>
+                        <div>
+                            <label class="form-label">Type</label>
+                            <select class="form-select" id="loc-type">
+                                {% for lt in location_types %}
+                                <option value="{{ lt.value }}">{{ lt.value | title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">Address (optional)</label>
+                        <input class="form-input" type="text" id="loc-address"
+                               placeholder="123 Main St">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <label style="display:flex;align-items:center;gap:6px;
+                                       font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                            <input type="checkbox" id="loc-default"
+                                   style="width:14px;height:14px;accent-color:var(--accent);">
+                            Set as default location
+                        </label>
+                        <button class="btn btn-sm btn-primary"
+                                onclick="addLocation()" style="margin-left:auto;">
+                            + Add Location
+                        </button>
+                    </div>
+                </div>
+
+                {# Location list #}
+                <div id="location-list-container">
+                    {% include "partials/workout/location_list.html" %}
+                </div>
+            </div>
+        </div>
+
+        {# ── RIGHT: CUSTOM EXERCISES ── #}
+        <div>
+            <div class="settings-panel">
+                <div class="settings-panel-title">Custom Exercises</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;
+                            padding-bottom:10px;border-bottom:1px solid var(--border);">
+                    75 exercises are pre-loaded. Add your own here — they'll
+                    appear in the log form and be available to the AI plan generator.
+                </div>
+
+                {# Add custom exercise form #}
+                <div style="display:flex;flex-direction:column;gap:8px;
+                            margin-bottom:16px;padding-bottom:16px;
+                            border-bottom:1px solid var(--border);">
+                    <div>
+                        <label class="form-label">Exercise Name</label>
+                        <input class="form-input" type="text" id="ex-name"
+                               placeholder="e.g. Meadows Row">
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div>
+                            <label class="form-label">Primary Muscle</label>
+                            <select class="form-select" id="ex-muscle">
+                                {% for mg in muscle_groups %}
+                                <option value="{{ mg.value }}">{{ mg.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Equipment</label>
+                            <select class="form-select" id="ex-equip">
+                                {% for et in exercise_equipment_types %}
+                                <option value="{{ et.value }}">{{ et.value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <label style="display:flex;align-items:center;gap:6px;
+                                       font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                            <input type="checkbox" id="ex-compound"
+                                   style="width:14px;height:14px;accent-color:var(--accent);">
+                            Compound movement
+                        </label>
+                        <button class="btn btn-sm btn-primary" onclick="addCustomExercise()">
+                            + Add Exercise
+                        </button>
+                    </div>
+                </div>
+
+                {# Custom exercise list #}
+                <div id="custom-exercise-list-container">
+                    {% include "partials/workout/custom_exercise_list.html" %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<div id="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── LOCATION ACTIONS ──────────────────────────────────────────────────────────
+async function addLocation() {
+    const name = document.getElementById('loc-name').value.trim();
+    if (!name) { showToast('Location name is required.', true); return; }
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('location_type', document.getElementById('loc-type').value);
+    const addr = document.getElementById('loc-address').value.trim();
+    if (addr) fd.append('address', addr);
+    if (document.getElementById('loc-default').checked) fd.append('is_default', 'true');
+
+    const resp = await fetch('/workout/locations', { method: 'POST', body: fd });
+    if (resp.ok) {
+        document.getElementById('location-list-container').innerHTML = await resp.text();
+        document.getElementById('loc-name').value = '';
+        document.getElementById('loc-address').value = '';
+        document.getElementById('loc-default').checked = false;
+    } else {
+        showToast('Could not add location.', true);
+    }
+}
+
+async function addEquipment(locationId) {
+    const nameInput = document.getElementById(`eq-name-${locationId}`);
+    const typeSelect = document.getElementById(`eq-type-${locationId}`);
+    const name = nameInput?.value.trim();
+    if (!name) { showToast('Equipment name required.', true); return; }
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('equipment_type', typeSelect?.value || 'other');
+
+    const resp = await fetch(`/workout/locations/${locationId}/equipment`, {
+        method: 'POST', body: fd
+    });
+    if (resp.ok) {
+        document.getElementById('location-list-container').innerHTML = await resp.text();
+    } else {
+        showToast('Could not add equipment.', true);
+    }
+}
+
+async function deleteEquipment(equipId, locationId) {
+    const resp = await fetch(`/workout/equipment/${equipId}`, { method: 'DELETE' });
+    if (resp.ok) {
+        document.getElementById('location-list-container').innerHTML = await resp.text();
+    } else {
+        showToast('Could not remove equipment.', true);
+    }
+}
+
+// ── CUSTOM EXERCISE ───────────────────────────────────────────────────────────
+async function addCustomExercise() {
+    const name = document.getElementById('ex-name').value.trim();
+    if (!name) { showToast('Exercise name required.', true); return; }
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('primary_muscle_group', document.getElementById('ex-muscle').value);
+    fd.append('equipment_type', document.getElementById('ex-equip').value);
+    if (document.getElementById('ex-compound').checked) fd.append('is_compound', 'true');
+
+    const resp = await fetch('/workout/exercises', { method: 'POST', body: fd });
+    if (resp.ok) {
+        document.getElementById('custom-exercise-list-container').innerHTML = await resp.text();
+        document.getElementById('ex-name').value = '';
+        document.getElementById('ex-compound').checked = false;
+    } else if (resp.status === 409) {
+        showToast('That exercise already exists.', true);
+    } else {
+        showToast('Could not add exercise.', true);
+    }
+}
+</script>
+{% endblock %}

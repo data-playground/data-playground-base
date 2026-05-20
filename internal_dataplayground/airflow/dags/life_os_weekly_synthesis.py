@@ -11,7 +11,7 @@ PRIVACY ARCHITECTURE — HARD CONSTRAINT:
       - mood_score values (integers 1–5)
       - energy_score values (integers 1–5)
       - habit completion counts (when Phase 2 is built)
-      - workout counts (when Phase 4 is built)
+      - workout metrics (Phase 4)
 
 AI Provider:
     Default: Gemini 2.5 Flash via _gemini_flash() in blog_agents.py
@@ -41,12 +41,8 @@ from airflow.operators.python import PythonOperator
 log = logging.getLogger(__name__)
 
 # ── AI PROVIDER CONFIGURATION ──────────────────────────────────────────────────
-# Change to "ollama" to use local Llama3 instead of Gemini.
-# When "ollama", the Ollama service must be running at http://ollama:11434.
-# Add SYNTHESIS_AI_PROVIDER as an Airflow Variable to override without code changes:
-#   airflow variables set SYNTHESIS_AI_PROVIDER ollama
 _DEFAULT_AI_PROVIDER = "gemini"
-_OLLAMA_MODEL = "llama3.1:8b"           # Requires 16 GB RAM on the server
+_OLLAMA_MODEL = "llama3.1:8b"           
 _OLLAMA_ENDPOINT = "http://ollama:11434/api/generate"
 _GEMINI_MODEL_LABEL = "gemini-2.5-flash"
 
@@ -56,6 +52,43 @@ default_args = {
     "retry_delay": timedelta(minutes=10),
     "email_on_failure": False,
 }
+
+# ── HELPER FUNCTION ────────────────────────────────────────────────────────────
+
+def _format_workout_section(workout_data: dict) -> str:
+    """Format workout data for the synthesis prompt."""
+    if not workout_data or workout_data.get("count", 0) == 0:
+        return "No workout sessions logged this week."
+
+    lines = [f"- Sessions completed: {workout_data['count']}"]
+
+    if workout_data.get("total_minutes"):
+        h, m = divmod(workout_data["total_minutes"], 60)
+        duration_str = f"{int(h)}h {int(m)}m" if h else f"{int(m)}m"
+        lines.append(f"- Total training time: {duration_str}")
+
+    if workout_data.get("avg_fatigue") is not None:
+        fatigue_label = {
+            1: "Easy", 2: "Light", 3: "Moderate", 4: "Hard", 5: "Brutal"
+        }.get(round(workout_data["avg_fatigue"]), "Moderate")
+        lines.append(f"- Average fatigue: {workout_data['avg_fatigue']}/5 ({fatigue_label})")
+
+    bw_start = workout_data.get("body_weight_start")
+    bw_end = workout_data.get("body_weight_end")
+    unit = workout_data.get("body_weight_unit", "lb")
+    
+    if bw_start and bw_end:
+        delta = round(bw_end - bw_start, 1)
+        delta_str = f"+{delta}" if delta > 0 else str(delta)
+        lines.append(f"- Body weight: {bw_start} → {bw_end} {unit} ({delta_str} {unit})")
+    elif bw_end:
+        lines.append(f"- Body weight: {bw_end} {unit}")
+
+    if workout_data.get("muscle_groups_trained"):
+        top_muscles = [r["muscle"].replace("_", " ") for r in workout_data["muscle_groups_trained"][:4]]
+        lines.append(f"- Muscle groups trained: {', '.join(top_muscles)}")
+
+    return "\n".join(lines)
 
 
 # ── TASK 1: Collect numeric data ───────────────────────────────────────────────
@@ -70,15 +103,13 @@ def task_collect_data(**context):
 
     # Calculate week boundaries (Mon–Sun ending last Sunday)
     today = date.today()
-    # Last Sunday = today - days_since_sunday
-    days_since_sunday = (today.weekday() + 1) % 7  # Mon=0..Sun=6 → Sun offset=0..6
+    days_since_sunday = (today.weekday() + 1) % 7 
     week_end = today - timedelta(days=days_since_sunday) if days_since_sunday > 0 else today
     week_start = week_end - timedelta(days=6)
 
     log.info("Collecting data for week %s to %s", week_start, week_end)
 
     # ── MOOD AND ENERGY SCORES ONLY ─────────────────────────────────────────────
-    # Deliberately SELECT only the numeric columns — never select content/gratitude/challenges
     journal_rows = fetch_all(
         """SELECT entry_date, mood_score, energy_score
            FROM journal_entries
@@ -102,11 +133,11 @@ def task_collect_data(**context):
 
     avg_mood = round(sum(mood_scores) / len(mood_scores), 2) if mood_scores else None
     avg_energy = round(sum(energy_scores) / len(energy_scores), 2) if energy_scores else None
+    data_sources = ["journal_entries"]
 
-    # ── HABIT DATA (Phase 2) — graceful skip if table doesn't exist ──────────
+    # ── HABIT DATA (Phase 2) ──────────────────────────────────────────────────
     habits_completion_rate = None
     habit_summary = {}
-    data_sources = ["journal_entries"]
 
     try:
         habit_rows = fetch_all(
@@ -131,27 +162,67 @@ def task_collect_data(**context):
                 for r in habit_rows
             }
             data_sources.append("habit_logs")
-            log.info("Habit data collected: %d habits, %.1f%% completion",
-                     len(habit_rows), habits_completion_rate)
+            log.info("Habit data collected: %d habits, %.1f%% completion", len(habit_rows), habits_completion_rate)
     except Exception as exc:
         log.info("Habit data skipped (Phase 2 not yet built): %s", exc)
 
-    # ── WORKOUT DATA (Phase 4) — graceful skip if table doesn't exist ─────────
-    workout_count = None
+    # ── WORKOUT DATA (Phase 4) ────────────────────────────────────────────────
     try:
-        workout_row = fetch_one(
-            """SELECT COUNT(*) AS cnt
-               FROM workout_sessions
-               WHERE session_date BETWEEN %s AND %s""",
+        workouts = fetch_all(
+            "SELECT session_date, duration_minutes, fatigue_rating "
+            "FROM workout_sessions "
+            "WHERE session_date BETWEEN %s AND %s "
+            "AND ended_at IS NOT NULL",
             (week_start.isoformat(), week_end.isoformat())
         )
-        if workout_row:
-            workout_count = workout_row['cnt']
-            if workout_count > 0:
-                data_sources.append("workout_sessions")
-            log.info("Workout data collected: %d sessions", workout_count)
-    except Exception as exc:
-        log.info("Workout data skipped (Phase 4 not yet built): %s", exc)
+
+        body_start = fetch_one(
+            "SELECT weight, weight_unit FROM body_metrics "
+            "WHERE metric_date >= %s ORDER BY metric_date ASC LIMIT 1",
+            (week_start.isoformat(),)
+        )
+        body_end = fetch_one(
+            "SELECT weight, weight_unit FROM body_metrics "
+            "WHERE metric_date <= %s ORDER BY metric_date DESC LIMIT 1",
+            (week_end.isoformat(),)
+        )
+
+        muscle_freq = fetch_all(
+            "SELECT e.primary_muscle_group, COUNT(ws.id) AS set_count "
+            "FROM workout_sets ws "
+            "JOIN exercises e ON ws.exercise_id = e.id "
+            "JOIN workout_sessions sess ON ws.session_id = sess.id "
+            "WHERE sess.session_date BETWEEN %s AND %s "
+            "  AND ws.is_warmup = 0 "
+            "  AND sess.ended_at IS NOT NULL "
+            "GROUP BY e.primary_muscle_group "
+            "ORDER BY set_count DESC",
+            (week_start.isoformat(), week_end.isoformat())
+        )
+
+        workout_data = {
+            "count": len(workouts),
+            "total_minutes": sum(w["duration_minutes"] or 0 for w in workouts),
+            "avg_fatigue": (
+                round(sum(w["fatigue_rating"] or 0 for w in workouts) / len(workouts), 1)
+                if workouts else None
+            ),
+            "body_weight_start": float(body_start["weight"]) if body_start and body_start.get("weight") else None,
+            "body_weight_end": float(body_end["weight"]) if body_end and body_end.get("weight") else None,
+            "body_weight_unit": body_end["weight_unit"] if body_end else "lb",
+            "muscle_groups_trained": [
+                {"muscle": r["primary_muscle_group"], "sets": r["set_count"]}
+                for r in muscle_freq
+            ],
+        }
+
+        if workout_data["count"] > 0:
+            data_sources.append("workout_sessions")
+            log.info("Workout data collected: %d sessions", workout_data["count"])
+
+    except Exception as e:
+        log.warning(f"Failed to collect workout data: {e}")
+        workout_data = {"count": 0}
 
     structured_data = {
         "week_start": week_start.isoformat(),
@@ -164,7 +235,8 @@ def task_collect_data(**context):
         "energy_scores": energy_scores,
         "habits_completion_rate": habits_completion_rate,
         "habit_summary": habit_summary,
-        "workout_count": workout_count,
+        "workout_count": workout_data.get("count", 0),
+        "workout_data": workout_data,
         "data_sources": data_sources,
     }
 
@@ -196,16 +268,12 @@ def task_generate_synthesis(**context):
         return
 
     # ── BUILD PROMPT FROM NUMBERS ONLY ────────────────────────────────────────
-    # This prompt construction block is the privacy enforcement point.
-    # Only structured_data fields that contain numbers and habit names are used.
     week_start = structured_data['week_start']
     week_end = structured_data['week_end']
     daily_scores = structured_data['daily_scores']
-    mood_scores = structured_data['mood_scores']
-    energy_scores = structured_data['energy_scores']
     habits = structured_data.get('habit_summary', {})
-    workouts = structured_data.get('workout_count')
     habits_rate = structured_data.get('habits_completion_rate')
+    workout_data = structured_data.get('workout_data', {})
 
     # Format daily score table
     day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -230,6 +298,8 @@ def task_generate_synthesis(**context):
         else "  No habit data available (habits module not yet set up)"
     )
 
+    workout_section = _format_workout_section(workout_data)
+
     prompt = f"""Week of {week_start} to {week_end}:
 
 MOOD AND ENERGY SCORES (1-5 scale):
@@ -244,13 +314,12 @@ HABITS:
 {habits_block}
 {"  Overall completion rate: " + str(habits_rate) + "%" if habits_rate is not None else ""}
 
-WORKOUTS:
-  Sessions this week: {workouts if workouts is not None else 'no data'}
+## Workouts This Week
+{workout_section}
 
 Generate a synthesis for this week."""
 
     # ── AI PROVIDER SELECTION ──────────────────────────────────────────────────
-    # Read from Airflow Variable if set, otherwise use the hardcoded default.
     try:
         from airflow.models import Variable
         provider = Variable.get("SYNTHESIS_AI_PROVIDER", default_var=_DEFAULT_AI_PROVIDER)
@@ -258,18 +327,18 @@ Generate a synthesis for this week."""
         provider = _DEFAULT_AI_PROVIDER
 
     system_prompt = """You are a thoughtful, honest weekly observer — not a therapist, not a motivational coach.
-You receive only numeric scores and habit completion counts. You never have access to the user's written journal text.
+You receive only numeric scores and habit/workout metrics. You never have access to the user's written journal text.
 
 Your job: identify 2-3 genuine patterns, make 1-2 specific behavioral suggestions, and note any correlations between metrics.
 
 Rules:
-- Be concrete and behavioral. "You completed mindfulness 2/7 days and your lowest energy days were the days you skipped it" is good.
+- Be concrete and behavioral. "You trained legs 3 times this week but logged brutal fatigue afterward" is good.
 - Do NOT say "you should work on your stress levels" or other emotional interpretations — you can't see the text.
 - Acknowledge when data is sparse (e.g. only 2 days logged) — don't fabricate patterns from thin data.
 - Keep the output under 400 words.
 - No bullet point lists of generic advice. No "Great job!" cheerleading.
 - Write as one thoughtful friend summarizing observations to another. Honest, direct, useful.
-- If mood and energy are both high, say so plainly. If they're both low, say that too.
+- If mood, energy, and workout volume are high, say so plainly. If they're dropping, point it out.
 - Make suggestions like: "Try adding X on Y" not "You should try to feel better about Z."
 - End with one open question the person might find useful to reflect on."""
 
@@ -277,9 +346,6 @@ Rules:
     model_used = None
 
     if provider == "ollama":
-        # ── OLLAMA PATH (local LLM) ────────────────────────────────────────────
-        # Requires Ollama service running at http://ollama:11434
-        # Enable by setting Airflow Variable SYNTHESIS_AI_PROVIDER=ollama
         import requests as req
         try:
             full_prompt = f"{system_prompt}\n\n{prompt}"
@@ -294,10 +360,9 @@ Rules:
             log.info("Synthesis generated via Ollama (%s)", _OLLAMA_MODEL)
         except Exception as exc:
             log.error("Ollama synthesis failed: %s — falling back to Gemini", exc)
-            provider = "gemini"  # fallback
+            provider = "gemini"
 
     if provider == "gemini" and synthesis_text is None:
-        # ── GEMINI PATH (default) ──────────────────────────────────────────────
         from agents.blog_agents import _gemini_flash
         try:
             synthesis_text = _gemini_flash(system_prompt, prompt)
@@ -381,7 +446,7 @@ def task_lock_old_entries(**context):
     from dag_db import execute
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    result = execute(
+    execute(
         """UPDATE journal_entries
            SET is_locked = 1
            WHERE is_locked = 0
@@ -396,10 +461,10 @@ def task_lock_old_entries(**context):
 with DAG(
     dag_id="life_os_weekly_synthesis",
     default_args=default_args,
-    schedule_interval="0 23 * * 0",   # Every Sunday at 11 PM
+    schedule_interval="0 23 * * 0",   
     start_date=datetime(2026, 1, 1),
     catchup=False,
-    tags=["life_os", "journal"],
+    tags=["life_os", "journal", "workouts"],
     doc_md="""
 ## Weekly Synthesis DAG
 

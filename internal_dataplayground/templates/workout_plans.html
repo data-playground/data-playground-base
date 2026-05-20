@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Workout Plans{% endblock %}
+{% block page_title %}Workout Plans{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/workout">← Workout</a>
+    <button class="btn btn-primary" onclick="openGenerateModal()">⚡ Generate with AI</button>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/workout.css">
+{% endblock %}
+
+{% block content %}
+<main class="main-content" style="padding:20px;max-width:720px;">
+
+    {# ── CREATE PLAN MANUALLY ── #}
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+                padding:18px;margin-bottom:20px;box-shadow:var(--shadow);">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;
+                    margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+            Create Plan Manually
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+                <label class="form-label">Plan Name</label>
+                <input class="form-input" type="text" id="plan-name"
+                       placeholder="e.g. Push Pull Legs, Upper Lower">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <label class="form-label">Goal</label>
+                    <select class="form-select" id="plan-goal">
+                        {% for goal in goals %}
+                        <option value="{{ goal.value }}">{{ goal.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Days / Week</label>
+                    <select class="form-select" id="plan-days">
+                        {% for d in range(1, 8) %}
+                        <option value="{{ d }}" {% if d == 3 %}selected{% endif %}>{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Location (optional)</label>
+                <select class="form-select" id="plan-location">
+                    <option value="">— any —</option>
+                    {% for loc in locations %}
+                    <option value="{{ loc.id }}">{{ loc.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">
+                    Day Names
+                    <span style="font-weight:400;text-transform:none;letter-spacing:0;
+                                 color:var(--text-muted);"> — comma separated, e.g. "Push Day, Pull Day, Leg Day"</span>
+                </label>
+                <input class="form-input" type="text" id="plan-day-names"
+                       placeholder="Day 1, Day 2, Day 3 (auto-generated if blank)">
+            </div>
+            <button class="btn btn-primary" onclick="createPlan()" style="align-self:flex-start;">
+                + Create Plan
+            </button>
+        </div>
+    </div>
+
+    {# ── EXISTING PLANS ── #}
+    <div style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
+                color:var(--text-muted);margin-bottom:10px;">Your Plans</div>
+
+    <div id="plan-list-container">
+        {% include "partials/workout/plan_list.html" %}
+    </div>
+
+</main>
+
+{# ── AI GENERATE MODAL ── #}
+<div class="modal-backdrop" id="generate-modal">
+    <div class="modal-box" style="max-width:480px;border-radius:12px;">
+        <div class="modal-head">
+            <span class="modal-title">⚡ Generate Plan with AI</span>
+            <button class="modal-close" onclick="closeGenerateModal()">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div>
+                <label class="form-label">Goal</label>
+                <select class="form-select" id="gen-goal">
+                    {% for goal in goals %}
+                    <option value="{{ goal.value }}">{{ goal.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <label class="form-label">Days / Week</label>
+                    <select class="form-select" id="gen-days">
+                        {% for d in range(2, 7) %}
+                        <option value="{{ d }}" {% if d == 4 %}selected{% endif %}>{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Location</label>
+                    <select class="form-select" id="gen-location">
+                        <option value="">— not specified —</option>
+                        {% for loc in locations %}
+                        <option value="{{ loc.id }}">{{ loc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Additional Notes (optional)</label>
+                <textarea class="form-textarea" id="gen-notes" rows="2"
+                          placeholder="e.g. I have a bad shoulder, prioritize compound lifts…"></textarea>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);padding:8px 10px;
+                        background:rgba(124,111,255,0.06);border-radius:6px;
+                        border:1px solid rgba(124,111,255,0.15);">
+                AI uses your exercise history and available equipment to build the plan.
+                You'll review it before it's saved.
+            </div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn" onclick="closeGenerateModal()">Cancel</button>
+            <button class="btn btn-primary" id="gen-submit-btn" onclick="submitGenerate()">
+                ⚡ Generate Plan
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openGenerateModal() {
+    document.getElementById('generate-modal').classList.add('open');
+}
+function closeGenerateModal() {
+    document.getElementById('generate-modal').classList.remove('open');
+}
+
+document.getElementById('generate-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeGenerateModal();
+});
+
+async function createPlan() {
+    const name = document.getElementById('plan-name').value.trim();
+    if (!name) { showToast('Plan name is required.', true); return; }
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('goal', document.getElementById('plan-goal').value);
+    fd.append('target_days_per_week', document.getElementById('plan-days').value);
+    const loc = document.getElementById('plan-location').value;
+    if (loc) fd.append('location_id', loc);
+    const dayNames = document.getElementById('plan-day-names').value.trim();
+    if (dayNames) fd.append('day_names', dayNames);
+
+    const resp = await fetch('/workout/plans', { method: 'POST', body: fd });
+    if (resp.ok) {
+        document.getElementById('plan-list-container').innerHTML = await resp.text();
+        document.getElementById('plan-name').value = '';
+        document.getElementById('plan-day-names').value = '';
+    } else {
+        showToast('Could not create plan.', true);
+    }
+}
+
+async function submitGenerate() {
+    const btn = document.getElementById('gen-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '⚡ Generating…';
+
+    const fd = new FormData();
+    fd.append('goal', document.getElementById('gen-goal').value);
+    fd.append('target_days_per_week', document.getElementById('gen-days').value);
+    const loc = document.getElementById('gen-location').value;
+    if (loc) fd.append('location_id', loc);
+    const notes = document.getElementById('gen-notes').value.trim();
+    if (notes) fd.append('additional_notes', notes);
+
+    try {
+        const resp = await fetch('/workout/plans/generate', { method: 'POST', body: fd });
+        if (resp.ok) {
+            // Navigate to the full-page preview
+            document.open();
+            document.write(await resp.text());
+            document.close();
+        } else {
+            const html = await resp.text();
+            document.open(); document.write(html); document.close();
+        }
+    } catch (e) {
+        showToast(`Error: ${e.message}`, true);
+        btn.disabled = false;
+        btn.textContent = '⚡ Generate Plan';
+    }
+}
+</script>
+{% endblock %}

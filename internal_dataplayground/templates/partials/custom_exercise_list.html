@@ -1,0 +1,33 @@
+{# templates/partials/workout/custom_exercise_list.html
+   Returned by POST /workout/exercises.
+   Swapped into #custom-exercise-list-container in workout_settings.html.
+
+   Context:
+     custom_exercises = list of Exercise ORM objects (is_custom=True)
+     toast            = optional success message
+#}
+{% if toast %}
+<script>showToast('{{ toast }}');</script>
+{% endif %}
+
+{% if custom_exercises %}
+<div style="display:flex;flex-direction:column;gap:6px;">
+    {% for ex in custom_exercises %}
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
+                background:var(--bg-hover);border:1px solid var(--border);
+                border-radius:6px;font-size:11px;">
+        <div style="flex:1;min-width:0;">
+            <span style="color:var(--text-primary);font-weight:500;">{{ ex.name }}</span>
+            <span style="font-size:9px;color:var(--text-muted);margin-left:6px;">
+                {{ ex.primary_muscle_group.value }} · {{ ex.equipment_type.value }}
+                {% if ex.is_compound %}· compound{% endif %}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div style="font-size:10px;color:var(--text-muted);padding:8px 0;">
+    No custom exercises yet.
+</div>
+{% endif %}

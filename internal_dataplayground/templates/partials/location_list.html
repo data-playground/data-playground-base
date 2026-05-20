@@ -1,0 +1,95 @@
+{# templates/partials/workout/location_list.html
+   Returned by location CRUD endpoints.
+   Swapped into #location-list-container in workout_settings.html.
+
+   Context:
+     locations      = list of WorkoutLocation ORM objects
+     equipment_types = list of EquipmentType enum values
+     toast          = optional success message
+#}
+{% if toast %}
+<script>showToast('{{ toast }}');</script>
+{% endif %}
+
+{% if locations %}
+<div style="display:flex;flex-direction:column;gap:10px;">
+    {% for loc in locations %}
+    <div class="location-card" id="location-card-{{ loc.id }}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+            <div>
+                <div class="location-name">
+                    {{ loc.name }}
+                    {% if loc.is_default %}
+                    <span style="font-size:9px;color:var(--accent);margin-left:6px;">★ Default</span>
+                    {% endif %}
+                </div>
+                <div style="margin-top:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                    <span class="location-type-badge">{{ loc.location_type.value }}</span>
+                    {% if loc.address %}
+                    <span style="font-size:9px;color:var(--text-muted);">{{ loc.address }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0;">
+                {% if not loc.is_default %}
+                <button class="btn btn-sm"
+                        hx-patch="/workout/locations/{{ loc.id }}/default"
+                        hx-target="#location-list-container"
+                        hx-swap="innerHTML"
+                        title="Set as default">★</button>
+                {% endif %}
+                <button class="btn btn-sm"
+                        style="color:var(--red);border-color:rgba(240,64,64,0.3);"
+                        hx-delete="/workout/locations/{{ loc.id }}"
+                        hx-target="#location-list-container"
+                        hx-swap="innerHTML"
+                        hx-confirm="Remove '{{ loc.name }}'?">✕</button>
+            </div>
+        </div>
+
+        {# Equipment at this location #}
+        {% if loc.active_equipment %}
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+            {% for eq in loc.active_equipment %}
+            <span class="equipment-tag" id="equipment-tag-{{ eq.id }}">
+                {{ eq.name }}
+                <button onclick="deleteEquipment({{ eq.id }}, {{ loc.id }})"
+                        style="background:none;border:none;color:var(--text-muted);
+                               cursor:pointer;font-size:9px;padding:0 0 0 4px;">×</button>
+            </span>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">
+            No equipment logged yet.
+        </div>
+        {% endif %}
+
+        {# Add equipment inline form #}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;">
+            <input class="log-input" type="text" id="eq-name-{{ loc.id }}"
+                   placeholder="Equipment name"
+                   style="flex:1;min-width:120px;font-size:11px;padding:6px 10px;
+                          min-height:36px;">
+            <select id="eq-type-{{ loc.id }}"
+                    style="font-family:'DM Mono',monospace;font-size:10px;
+                           padding:6px 8px;border:1px solid var(--border);
+                           background:var(--bg-hover);color:var(--text-primary);
+                           border-radius:5px;outline:none;min-height:36px;">
+                {% for et in equipment_types %}
+                <option value="{{ et.value }}">{{ et.value }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-sm btn-primary"
+                    onclick="addEquipment({{ loc.id }})">+ Add</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div style="text-align:center;padding:24px 16px;color:var(--text-muted);
+            font-size:11px;background:var(--bg-hover);border-radius:8px;
+            border:1px solid var(--border);">
+    No locations yet. Add your gym or home setup above.
+</div>
+{% endif %}

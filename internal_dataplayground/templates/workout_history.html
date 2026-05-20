@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Workout History{% endblock %}
+{% block page_title %}Workout History{% endblock %}
+
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);">{{ total }} session{{ 's' if total != 1 else '' }}</span>
+{% endblock %}
+
+{% block topbar_actions %}
+    <a class="btn" href="/workout">← Workout</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/workout.css">
+{% endblock %}
+
+{% block content %}
+<main class="main-content" style="padding:20px;max-width:720px;">
+
+    {% if sessions %}
+    <div style="background:var(--bg-card);border:1px solid var(--border);
+                border-radius:10px;overflow:hidden;box-shadow:var(--shadow);">
+
+        {% for session in sessions %}
+        <div class="history-session-row"
+             onclick="loadSessionDetail({{ session.id }})">
+
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:600;color:var(--text-primary);
+                            margin-bottom:3px;">
+                    {{ session.session_date.strftime('%A, %B %-d, %Y') }}
+                </div>
+                <div style="font-size:10px;color:var(--text-muted);display:flex;gap:6px;
+                            flex-wrap:wrap;">
+                    {% if session.plan_day %}
+                    <span>{{ session.plan_day.day_name or 'Workout' }}</span>
+                    <span>·</span>
+                    {% endif %}
+                    <span>{{ session.exercise_count }} exercise{{ 's' if session.exercise_count != 1 else '' }}</span>
+                    <span>·</span>
+                    <span>{{ session.working_sets | length }} working set{{ 's' if session.working_sets | length != 1 else '' }}</span>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                <span class="session-stat">{{ session.duration_display }}</span>
+                {% if session.fatigue_rating %}
+                <span class="session-stat fatigue-{{ session.fatigue_rating }}">
+                    {{ session.fatigue_label }}
+                </span>
+                {% endif %}
+                <span style="color:var(--text-muted);font-size:12px;">›</span>
+            </div>
+
+        </div>
+        {% endfor %}
+
+    </div>
+
+    {# ── PAGINATION ── #}
+    {% if total_pages > 1 %}
+    <div style="display:flex;justify-content:center;gap:8px;margin-top:16px;
+                align-items:center;">
+        {% if page > 1 %}
+        <a href="/workout/history?page={{ page - 1 }}" class="btn">← Previous</a>
+        {% endif %}
+
+        <span style="font-size:10px;color:var(--text-muted);">
+            Page {{ page }} of {{ total_pages }}
+        </span>
+
+        {% if page < total_pages %}
+        <a href="/workout/history?page={{ page + 1 }}" class="btn">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <div style="font-size:32px;margin-bottom:12px;opacity:.3;">🏋️</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
+                    color:var(--text-primary);margin-bottom:6px;">
+            No sessions yet
+        </div>
+        <div style="font-size:11px;line-height:1.7;margin-bottom:16px;">
+            Complete your first workout to see it here.
+        </div>
+        <a href="/workout" class="btn btn-primary">Start a Session →</a>
+    </div>
+    {% endif %}
+
+</main>
+
+{# ── SESSION DETAIL DRAWER ── #}
+<div class="detail-overlay" id="session-overlay" onclick="closeSessionDetail()"></div>
+<div class="detail-drawer" id="session-detail-drawer"></div>
+
+<div id="toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/workout.js"></script>
+{% endblock %}

@@ -1,0 +1,14 @@
+{# templates/partials/workout/plan_generate_error.html
+   Returned by POST /workout/plans/generate when AI call fails.
+
+   Context:
+     error = error message string
+#}
+<div style="max-width:520px;margin:40px auto;text-align:center;padding:0 20px;">
+    <div style="padding:20px;background:rgba(240,64,64,0.07);border:1px solid rgba(240,64,64,0.25);
+                border-radius:10px;margin-bottom:20px;">
+        <div style="font-size:20px;margin-bottom:8px;">⚠</div>
+        <div style="font-size:12px;color:var(--red);line-height:1.6;">{{ error }}</div>
+    </div>
+    <a href="/workout/plans" class="btn">← Back to Plans</a>
+</div>

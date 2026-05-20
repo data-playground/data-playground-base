@@ -1,0 +1,12 @@
+{# templates/partials/workout/body_metric_saved.html
+   Returned by POST /workout/body-metrics.
+   Shown inside the weight modal result area.
+
+   Context:
+     metric = BodyMetric ORM object
+#}
+<div style="padding:10px 0;display:flex;align-items:center;gap:8px;
+            font-size:11px;color:var(--green);">
+    <span style="font-size:14px;">✓</span>
+    <span>{{ metric.weight_display }} logged for {{ metric.metric_date.strftime('%B %-d') }}.</span>
+</div>
