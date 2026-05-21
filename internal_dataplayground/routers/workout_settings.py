@@ -229,8 +229,7 @@ async def add_equipment(
     )
     db.add(equip)
     await db.commit()
-    await db.expire_all()  # bust session identity map so re-fetch sees new row
-
+    db.expire_all()
     locations = await _fetch_locations(db)
     return templates.TemplateResponse(
         "partials/workout/location_list.html",
@@ -261,7 +260,7 @@ async def update_equipment(
         equip.notes = str(form.get("notes", "")).strip() or None
 
     await db.commit()
-    await db.expire_all()
+    db.expire_all()
 
     locations = await _fetch_locations(db)
     return templates.TemplateResponse(
@@ -280,7 +279,7 @@ async def delete_equipment(
 
     equip.is_active = False
     await db.commit()
-    await db.expire_all()
+    db.expire_all()
 
     locations = await _fetch_locations(db)
     return templates.TemplateResponse(

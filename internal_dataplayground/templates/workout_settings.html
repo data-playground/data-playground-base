@@ -154,6 +154,12 @@ async function addLocation() {
 }
 
 function _swapHtml(containerId, html) {
+    // If the server returned a full HTML page (error page), bail out
+    if (html.includes('<html') || html.includes('<!DOCTYPE')) {
+        showToast('Server error — check console for details.', true);
+        console.error('Unexpected full-page response:', html.slice(0, 500));
+        return;
+    }
     const container = document.getElementById(containerId);
     container.innerHTML = html;
     // innerHTML suppresses <script> tags -- re-execute them manually
