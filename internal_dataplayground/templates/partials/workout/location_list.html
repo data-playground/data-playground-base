@@ -8,7 +8,7 @@
      toast          = optional success message
 #}
 {% if toast %}
-<script>showToast('{{ toast }}');</script>
+<script>showToast({{ toast | tojson }});</script>
 {% endif %}
 
 {% if locations %}
