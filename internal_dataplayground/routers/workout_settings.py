@@ -15,7 +15,6 @@ Endpoints:
   GET    /workout/exercises                          → Exercise list as JSON (search)
 """
 
-import
 import logging
 from typing import Optional
  
