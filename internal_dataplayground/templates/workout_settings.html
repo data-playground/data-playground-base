@@ -144,13 +144,24 @@ async function addLocation() {
 
     const resp = await fetch('/workout/locations', { method: 'POST', body: fd });
     if (resp.ok) {
-        document.getElementById('location-list-container').innerHTML = await resp.text();
+        _swapHtml('location-list-container', await resp.text());
         document.getElementById('loc-name').value = '';
         document.getElementById('loc-address').value = '';
         document.getElementById('loc-default').checked = false;
     } else {
         showToast('Could not add location.', true);
     }
+}
+
+function _swapHtml(containerId, html) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = html;
+    // innerHTML suppresses <script> tags -- re-execute them manually
+    container.querySelectorAll('script').forEach(old => {
+        const s = document.createElement('script');
+        s.textContent = old.textContent;
+        document.body.appendChild(s).remove();
+    });
 }
 
 async function addEquipment(locationId) {
@@ -167,16 +178,18 @@ async function addEquipment(locationId) {
         method: 'POST', body: fd
     });
     if (resp.ok) {
-        document.getElementById('location-list-container').innerHTML = await resp.text();
+        _swapHtml('location-list-container', await resp.text());
+        nameInput.value = '';
     } else {
-        showToast('Could not add equipment.', true);
+        const detail = await resp.text().catch(() => '');
+        showToast('Could not add equipment. ' + detail, true);
     }
 }
 
 async function deleteEquipment(equipId, locationId) {
     const resp = await fetch(`/workout/equipment/${equipId}`, { method: 'DELETE' });
     if (resp.ok) {
-        document.getElementById('location-list-container').innerHTML = await resp.text();
+        _swapHtml('location-list-container', await resp.text());
     } else {
         showToast('Could not remove equipment.', true);
     }
