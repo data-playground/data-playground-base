@@ -3,17 +3,24 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install only what sentence-transformers needs
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install CPU-only PyTorch first from the PyTorch index
+# This must be separate from the other packages — PyTorch's index
+# only serves torch packages and will fail to find FastAPI etc.
+RUN pip install --no-cache-dir \
+    torch==2.5.1 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Install everything else from PyPI
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 
-# Model will be downloaded here on first startup and cached across restarts
 ENV MODEL_CACHE_DIR=/app/model_cache
 VOLUME ["/app/model_cache"]
 
