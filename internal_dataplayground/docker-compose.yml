@@ -135,7 +135,7 @@ services:
 
   ml-service:
     build:
-      context: ../ml_service
+      context: ./ml_service
       dockerfile: Dockerfile
     container_name: life_os_ml
     restart: always
