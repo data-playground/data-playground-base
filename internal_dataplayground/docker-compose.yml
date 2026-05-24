@@ -85,13 +85,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-      PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
-      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      - AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+      - PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
+      - AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       - ML_SERVICE_URL=http://ml-service:8001
     volumes:
       - ./airflow/dags:/opt/airflow/dags
@@ -118,12 +118,12 @@ services:
       airflow-init:
         condition: service_completed_successfully
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-      PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      - AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+      - PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
       - ML_SERVICE_URL=http://ml-service:8001
     volumes:
       - ./airflow/dags:/opt/airflow/dags
