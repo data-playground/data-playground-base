@@ -14,7 +14,6 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./mariadb_data:/var/lib/mysql
-      # This SQL runs on first boot — creates the Airflow schema
       - ./init-db:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -37,25 +36,26 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/impactful-post-292301-17bfe2bceb2c.json
       - APP_ENV=production
       - ML_SERVICE_URL=http://ml-service:8001
+      - MEDIA_RECOMMEND_AI=false
     volumes:
       - .:/app
 
   airflow-init:
     build:
       context: .
-      dockerfile: Dockerfile.airflow        # ← was: image: apache/airflow:2.9.1
+      dockerfile: Dockerfile.airflow
     container_name: life_os_airflow_init
     depends_on:
       db:
         condition: service_healthy
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      _AIRFLOW_DB_MIGRATE: "true"
-      _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: admin
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_SECRET_KEY}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - _AIRFLOW_DB_MIGRATE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_SECRET_KEY}
     entrypoint: /bin/bash
     command:
       - -c
@@ -74,7 +74,7 @@ services:
   airflow-webserver:
     build:
       context: .
-      dockerfile: Dockerfile.airflow        # ← was: image: apache/airflow:2.9.1
+      dockerfile: Dockerfile.airflow
     container_name: life_os_airflow_web
     restart: always
     depends_on:
@@ -85,13 +85,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
-      - AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      - AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      - AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-      - PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
-      - AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+      - PYTHONPATH=/opt/airflow/dags:/opt/airflow/project
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - ML_SERVICE_URL=http://ml-service:8001
     volumes:
       - ./airflow/dags:/opt/airflow/dags
@@ -109,7 +109,7 @@ services:
   airflow-scheduler:
     build:
       context: .
-      dockerfile: Dockerfile.airflow        # ← was: image: apache/airflow:2.9.1
+      dockerfile: Dockerfile.airflow
     container_name: life_os_airflow_scheduler
     restart: always
     depends_on:
@@ -118,12 +118,12 @@ services:
       airflow-init:
         condition: service_completed_successfully
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
-      - AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      - AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      - AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
-      - PYTHONPATH: /opt/airflow/dags:/opt/airflow/project
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql+pymysql://data_playground:${DB_PASSWORD}@db:3306/airflow
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
+      - PYTHONPATH=/opt/airflow/dags:/opt/airflow/project
       - ML_SERVICE_URL=http://ml-service:8001
     volumes:
       - ./airflow/dags:/opt/airflow/dags
@@ -132,22 +132,20 @@ services:
       - ./${GCP_KEY_FILE}:/opt/airflow/gcp-key.json
       - .:/opt/airflow/project
     command: scheduler
-    
 
   ml-service:
     build:
-      context: ./ml_service
+      context: ../ml_service
       dockerfile: Dockerfile
     container_name: life_os_ml
     restart: always
     ports:
       - "8001:8001"
     volumes:
-      # Persist downloaded model across container restarts (~80MB)
       - ./ml_model_cache:/app/model_cache
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s   # First startup downloads the model — allow extra time
+      start_period: 60s
