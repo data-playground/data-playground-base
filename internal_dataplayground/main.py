@@ -14,6 +14,7 @@ from routers import ci_projects, ci_files, ci_readme
 from routers import habits, journal
 from routers import recipe_extract, recipe_discovery, pantry, recipes   # ← NEW
 from routers import workout, workout_log, workout_plans, workout_settings
+from routers import media, media_search, media_recommend, media_settings
 
 templates = Jinja2Templates(directory="templates")
 
@@ -59,6 +60,11 @@ app.include_router(workout_log.router)
 app.include_router(workout_log.body_metrics_router)   # separate sub-router!
 app.include_router(workout_plans.router)
 app.include_router(workout_settings.router)
+
+app.include_router(media_search.router)      # /media/search/*
+app.include_router(media_recommend.router)   # /media/recommend/*
+app.include_router(media_settings.router)    # /media/settings/*
+app.include_router(media.router)             # /media (catch-all last)
 
 # ── Global 500 handler ─────────────────────────────────────────────────────────
 

@@ -1,0 +1,71 @@
+{# templates/partials/media_card.html
+   Rendered for each item in the media grid.
+   `um` = UserMedia ORM object (with media_item loaded via selectin)
+#}
+<div class="media-card"
+     id="media-card-{{ um.id }}"
+     onclick="openDetail({{ um.id }})"
+     hx-target="#media-card-{{ um.id }}"
+     hx-swap="outerHTML settle:200ms">
+
+    {# Poster #}
+    {% if um.media_item.poster_url %}
+    <img class="media-card-poster"
+         src="{{ um.media_item.poster_url }}"
+         alt="{{ um.media_item.title }}"
+         loading="lazy"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="media-card-poster-placeholder" style="display:none;">
+        {{ um.media_item.media_type.icon }}
+        <span>{{ um.media_item.media_type.label }}</span>
+    </div>
+    {% else %}
+    <div class="media-card-poster-placeholder">
+        {{ um.media_item.media_type.icon }}
+        <span>{{ um.media_item.media_type.label }}</span>
+    </div>
+    {% endif %}
+
+    {# Status badge — always visible #}
+    <span class="media-card-status-badge badge-{{ um.status.value }}">
+        {% if um.status.value == 'want_to' %}Want To
+        {% elif um.status.value == 'in_progress' %}Watching
+        {% elif um.status.value == 'completed' %}✓ Done
+        {% else %}—{% endif %}
+    </span>
+
+    {# Rating — only if rated #}
+    {% if um.user_rating %}
+    <span class="media-card-rating">{{ um.rating_stars }}</span>
+    {% endif %}
+
+    {# Hover overlay #}
+    <div class="media-card-overlay">
+        <div class="media-type-badge">{{ um.media_item.media_type.icon }}</div>
+        <div class="media-card-title">{{ um.media_item.title }}</div>
+        <div class="media-card-meta">
+            {% if um.media_item.release_year %}{{ um.media_item.release_year }}{% endif %}
+            {% if um.media_item.release_year and um.media_item.genre_list %}&nbsp;·&nbsp;{% endif %}
+            {% if um.media_item.genre_list %}{{ um.media_item.genre_list[0] }}{% endif %}
+            {% if um.media_item.runtime_minutes %}&nbsp;·&nbsp;{{ um.media_item.runtime_display }}{% endif %}
+        </div>
+        <div class="media-card-actions" onclick="event.stopPropagation()">
+            {% if um.status.value == 'want_to' %}
+            <button class="card-action-btn primary"
+                    hx-patch="/media/{{ um.id }}/status"
+                    hx-vals='{"status": "in_progress"}'
+                    hx-target="#media-card-{{ um.id }}"
+                    hx-swap="outerHTML">▶ Start</button>
+            {% elif um.status.value == 'in_progress' %}
+            <button class="card-action-btn primary"
+                    hx-patch="/media/{{ um.id }}/status"
+                    hx-vals='{"status": "completed"}'
+                    hx-target="#media-card-{{ um.id }}"
+                    hx-swap="outerHTML">✓ Done</button>
+            {% endif %}
+            <button class="card-action-btn"
+                    onclick="openDetail({{ um.id }})">Detail</button>
+        </div>
+    </div>
+
+</div>

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Recommendations{% endblock %}
+{% block page_title %}Recommendations{% endblock %}
+{% block topbar_actions %}
+    <a href="/media" class="btn">← Library</a>
+    <a href="/media/recommend/history" class="btn">History</a>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/media.css">
+{% endblock %}
+
+{% block content %}
+<div class="recommend-layout">
+
+    {# ── LEFT: Controls ── #}
+    <div class="recommend-left">
+
+        {% if not ml_available %}
+        <div style="padding:10px 12px;background:rgba(240,64,64,0.07);border:1px solid rgba(240,64,64,0.25);border-radius:6px;font-size:10px;color:var(--red);">
+            ⚠ ML service is not responding. Check that the ml-service container is running.
+        </div>
+        {% endif %}
+
+        {% if liked_count == 0 %}
+        <div class="liked-count-warning">
+            ⚠ No rated items with embeddings found.<br>
+            Rate some items 7+ and wait for the nightly embedding job, or trigger
+            <code>life_os_generate_embeddings</code> in Airflow.
+        </div>
+        {% elif liked_count < 5 %}
+        <div class="liked-count-warning">
+            {{ liked_count }} rated item{{ 's' if liked_count != 1 }} found.
+            Recommendations improve with more ratings — aim for 10+.
+        </div>
+        {% else %}
+        <div style="font-size:10px;color:var(--green);">✓ {{ liked_count }} rated items ready</div>
+        {% endif %}
+
+        <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);">Generate Recommendations</div>
+
+        <form id="rec-form">
+
+            <div style="margin-bottom:10px;">
+                <label class="form-label">Media Type</label>
+                <select name="media_type" class="form-select" style="font-size:11px;padding:6px 10px;">
+                    <option value="any">All Types</option>
+                    <option value="movie">Movies</option>
+                    <option value="tv_show">TV Shows</option>
+                    <option value="book">Books</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <label class="form-label">Mood / Craving</label>
+                <input type="text" name="mood" class="form-input" style="font-size:11px;"
+                       placeholder="something light and funny…">
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <label class="form-label">Occasion</label>
+                <input type="text" name="occasion" class="form-input" style="font-size:11px;"
+                       placeholder="Friday night, date night…">
+            </div>
+
+            {% if subscribed_services %}
+            <div style="margin-bottom:14px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:var(--text-secondary);">
+                    <input type="checkbox" name="include_unsubscribed" value="true"
+                           style="accent-color:var(--accent);width:15px;height:15px;">
+                    Include non-subscribed services
+                </label>
+                <div style="font-size:9px;color:var(--text-muted);margin-top:3px;">
+                    Your subscriptions: {{ subscribed_services | map(attribute='name') | join(', ') }}
+                </div>
+            </div>
+            {% else %}
+            <input type="hidden" name="include_unsubscribed" value="true">
+            <div style="font-size:10px;color:var(--text-muted);">
+                <a href="/media/settings" style="color:var(--accent);">Set up streaming services →</a>
+            </div>
+            {% endif %}
+
+            {% if gemini_enabled %}
+            <div style="font-size:9px;color:var(--yellow);margin-bottom:12px;">✦ Gemini explanations enabled</div>
+            {% else %}
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:12px;">ML-only mode (set MEDIA_RECOMMEND_AI=true to enable Gemini)</div>
+            {% endif %}
+
+            <button type="button"
+                    class="btn btn-primary"
+                    style="width:100%;min-height:44px;"
+                    {% if not ml_available or liked_count == 0 %}disabled{% endif %}
+                    hx-post="/media/recommend/generate"
+                    hx-include="#rec-form"
+                    hx-target="#rec-results"
+                    hx-swap="innerHTML"
+                    hx-indicator="#rec-spinner">
+                ✦ Generate
+            </button>
+        </form>
+
+        <div id="rec-spinner" style="display:none;text-align:center;padding:10px;">
+            <div class="spinner"></div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">
+                {% if gemini_enabled %}Running ML + Gemini…{% else %}Running ML…{% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    {# ── RIGHT: Results ── #}
+    <div class="recommend-right">
+        <div id="rec-results">
+            {% if history %}
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px;">Last Session</div>
+            {% set last = history[0] %}
+            {% if last.recommendations %}
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:12px;">
+                    {{ last.generated_at.strftime('%b %d at %H:%M') }}
+                    {% if last.input_mood %} · "{{ last.input_mood }}"{% endif %}
+                    {% if last.used_gemini %}<span class="gemini-badge">✦ Gemini</span>{% endif %}
+                </div>
+                <p style="font-size:11px;color:var(--text-muted);">Generate new recommendations using the form, or <a href="/media/recommend/history" style="color:var(--accent);">view full history →</a></p>
+            {% endif %}
+            {% else %}
+            <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+                <div style="font-size:40px;margin-bottom:14px;opacity:.3;">✦</div>
+                <p style="font-size:12px;">Fill in the form and click Generate to get personalized recommendations.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+<style>
+.spinner { width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+{% endblock %}

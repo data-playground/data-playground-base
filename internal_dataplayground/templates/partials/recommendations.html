@@ -1,0 +1,80 @@
+{# templates/partials/recommendations.html
+   Returned by POST /media/recommend/generate via HTMX.
+   `recommendations` = list of enriched rec dicts
+   `used_gemini`     = bool
+   `mood`            = str or None
+   `occasion`        = str or None
+   `rec_id`          = int (MediaRecommendation.id)
+#}
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+    <span style="font-size:11px;color:var(--text-secondary);">
+        {{ recommendations | length }} recommendation{{ 's' if recommendations | length != 1 }}
+        {% if mood %} for "{{ mood }}"{% endif %}
+    </span>
+    {% if used_gemini %}
+    <span class="gemini-badge">✦ Gemini</span>
+    {% else %}
+    <span class="ml-badge">ML only</span>
+    {% endif %}
+</div>
+
+{% if recommendations %}
+    {% for rec in recommendations %}
+    <div class="rec-card">
+        <div class="rec-card-inner">
+
+            <div class="rec-rank">#{{ loop.index }}</div>
+
+            {# Poster #}
+            {% if rec.media_item.poster_url %}
+            <img class="rec-poster"
+                 src="{{ rec.media_item.poster_url }}"
+                 alt="{{ rec.media_item.title }}"
+                 loading="lazy"
+                 onerror="this.style.display='none'">
+            {% else %}
+            <div class="rec-poster-placeholder">{{ rec.media_item.media_type.icon }}</div>
+            {% endif %}
+
+            <div class="rec-info">
+                <div class="rec-title">{{ rec.media_item.title }}</div>
+                <div class="rec-meta">
+                    <span>{{ rec.media_item.media_type.label }}</span>
+                    {% if rec.media_item.release_year %}<span>{{ rec.media_item.release_year }}</span>{% endif %}
+                    {% if rec.media_item.genre_list %}<span>{{ rec.media_item.genre_list[:2] | join(' · ') }}</span>{% endif %}
+                    {% if rec.media_item.external_rating %}<span>⭐ {{ rec.media_item.external_rating }}</span>{% endif %}
+                    {% if rec.media_item.author %}<span>{{ rec.media_item.author }}</span>{% endif %}
+                </div>
+
+                <div class="rec-score">
+                    {{ (rec.score * 100) | round(1) }}% match
+                </div>
+
+                {% if rec.reasoning %}
+                <div class="rec-reasoning">{{ rec.reasoning }}</div>
+                {% endif %}
+
+                {# Add to list button #}
+                {% if rec.already_tracked %}
+                <span style="font-size:10px;color:var(--green);">✓ Already in your list</span>
+                {% else %}
+                <button class="btn btn-primary btn-sm"
+                        hx-post="/media/search/add"
+                        hx-vals='{"external_id": "{{ rec.media_item.external_id or '' }}", "external_source": "{{ rec.media_item.external_source.value }}", "title": "{{ rec.media_item.title | replace('"', '&quot;') }}"}'
+                        hx-target="#media-grid"
+                        hx-swap="afterbegin"
+                        onclick="showToast('Added to your list')">
+                    ⊕ Add to List
+                </button>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:11px;">
+    <div style="font-size:32px;margin-bottom:12px;opacity:.3;">🤖</div>
+    <p>No recommendations generated.<br>Try broadening the filters or enabling "Include non-subscribed services".</p>
+</div>
+{% endif %}

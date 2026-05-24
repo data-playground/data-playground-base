@@ -1,0 +1,20 @@
+{# templates/partials/streaming_service_list.html
+   Used inside media_settings.html and returned by POST /media/settings/subscriptions.
+   `services` = list of StreamingService ORM objects
+#}
+{% for svc in services %}
+<label class="streaming-toggle-card {% if svc.is_subscribed %}subscribed{% endif %}"
+       for="svc-{{ svc.id }}">
+    {% if svc.logo_url %}
+    <img class="streaming-logo" src="{{ svc.logo_url }}" alt="{{ svc.name }}">
+    {% else %}
+    <div class="streaming-logo" style="display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--bg-hover);">📺</div>
+    {% endif %}
+    <span class="streaming-name">{{ svc.name }}</span>
+    <input type="checkbox"
+           class="streaming-checkbox"
+           id="svc-{{ svc.id }}"
+           name="service_{{ svc.id }}"
+           {% if svc.is_subscribed %}checked{% endif %}>
+</label>
+{% endfor %}

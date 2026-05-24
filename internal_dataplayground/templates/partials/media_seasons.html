@@ -1,0 +1,39 @@
+{# templates/partials/media_seasons.html
+   Returned by POST /media/{id}/seasons/{n} and included in media_detail.html.
+   `um` = UserMedia ORM object (with season_progress loaded via selectin)
+#}
+{% set total_seasons = um.media_item.total_seasons or 1 %}
+{% set progress_map = {} %}
+{% for sp in um.season_progress %}
+    {% set _ = progress_map.update({sp.season_number: sp}) %}
+{% endfor %}
+
+{% for season_num in range(1, total_seasons + 1) %}
+{% set sp = progress_map.get(season_num) %}
+{% set ep_watched = sp.episodes_watched if sp else 0 %}
+{% set ep_total = sp.total_episodes if sp else (um.media_item.total_episodes // total_seasons if um.media_item.total_episodes else None) %}
+{% set pct = ((ep_watched / ep_total * 100) | int) if ep_total else 0 %}
+
+<div class="season-row">
+    <span class="season-label">Season {{ season_num }}</span>
+    <div class="season-progress-bar-wrap">
+        <div class="season-progress-bar" style="width:{{ pct }}%;"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <input type="number"
+               class="season-ep-input"
+               value="{{ ep_watched }}"
+               min="0"
+               {% if ep_total %}max="{{ ep_total }}"{% endif %}
+               hx-post="/media/{{ um.id }}/seasons/{{ season_num }}"
+               hx-trigger="change"
+               hx-include="this"
+               name="episodes_watched"
+               hx-target="#seasons-container-{{ um.id }}"
+               hx-swap="innerHTML">
+        <span class="season-ep-count">
+            {% if ep_total %}/{{ ep_total }}{% else %}ep{% endif %}
+        </span>
+    </div>
+</div>
+{% endfor %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Media Settings{% endblock %}
+{% block page_title %}Media Settings{% endblock %}
+{% block topbar_actions %}
+    <a href="/media" class="btn">← Library</a>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/media.css">
+{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;padding:24px 20px;">
+
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:6px;">Streaming Services</div>
+    <p style="font-size:11px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;">
+        Check the services you subscribe to. Recommendations will default to content available on your subscriptions.
+        You can always choose to include non-subscribed services when generating recommendations.
+    </p>
+
+    <form hx-post="/media/settings/subscriptions"
+          hx-target="#services-list"
+          hx-swap="innerHTML">
+
+        <div class="streaming-settings-grid" id="services-list">
+            {% include "partials/streaming_service_list.html" %}
+        </div>
+
+        <div style="margin-top:20px;display:flex;gap:8px;align-items:center;">
+            <button type="submit" class="btn btn-primary">Save Subscriptions</button>
+            <div id="save-result" style="font-size:10px;color:var(--green);"></div>
+        </div>
+    </form>
+
+    <div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border);">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:8px;">Recommendation AI</div>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.6;">
+            The Gemini explanation layer adds ~2-3 seconds to recommendation generation and uses your Gemini API quota.
+            Toggle it via the <code style="font-size:10px;background:var(--bg-hover);padding:1px 6px;border-radius:3px;">MEDIA_RECOMMEND_AI</code>
+            environment variable in docker-compose.yml:
+        </p>
+        <pre style="margin-top:10px;font-family:'DM Mono',monospace;font-size:10px;background:var(--bg-hover);padding:12px;border-radius:6px;border:1px solid var(--border);color:var(--text-secondary);">environment:
+  - MEDIA_RECOMMEND_AI=true   # Enable Gemini explanations
+  - MEDIA_RECOMMEND_AI=false  # ML-only (faster, no API cost)</pre>
+    </div>
+
+    <div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border);">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:8px;">Embedding Status</div>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.6;">
+            Embeddings are generated nightly by the <code style="font-size:10px;background:var(--bg-hover);padding:1px 6px;border-radius:3px;">life_os_generate_embeddings</code>
+            Airflow DAG. You can also trigger it manually from the Airflow UI at
+            <a href="http://localhost:8080" target="_blank" style="color:var(--accent);">localhost:8080</a>.
+        </p>
+    </div>
+
+</div>
+{% endblock %}

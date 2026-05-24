@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Media Library{% endblock %}
+{% block page_title %}Media{% endblock %}
+
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);">
+        {{ stats.total }} tracked &nbsp;·&nbsp;
+        {{ stats.completed }} completed &nbsp;·&nbsp;
+        {{ stats.in_progress }} in progress
+    </span>
+{% endblock %}
+
+{% block topbar_actions %}
+    <a href="/media/search" class="btn">⊕ Add</a>
+    <a href="/media/recommend" class="btn">✦ Recommend</a>
+    <a href="/media/settings" class="btn">⚙</a>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/media.css">
+{% endblock %}
+
+{% block content %}
+<div class="media-main">
+
+    {# ── FILTER BAR ── #}
+    <div class="media-filter-bar">
+
+        {# Type pills #}
+        <div class="filter-row">
+            <span class="filter-section-label">Type</span>
+            <a href="/media?{{ request.query_params | replace('type_filter=' ~ type_filter, '') | replace('&&', '&') }}"
+               class="filter-pill {% if not type_filter %}active{% endif %}">All</a>
+            <a href="/media?type_filter=movie{% if status_filter %}&status_filter={{ status_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+               class="filter-pill type-movie {% if type_filter == 'movie' %}active{% endif %}">🎬 Movies</a>
+            <a href="/media?type_filter=tv_show{% if status_filter %}&status_filter={{ status_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+               class="filter-pill type-tv {% if type_filter == 'tv_show' %}active{% endif %}">📺 TV Shows</a>
+            <a href="/media?type_filter=book{% if status_filter %}&status_filter={{ status_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+               class="filter-pill type-book {% if type_filter == 'book' %}active{% endif %}">📚 Books</a>
+
+            {# Search #}
+            <form method="get" action="/media" style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+                {% if type_filter %}<input type="hidden" name="type_filter" value="{{ type_filter }}">{% endif %}
+                {% if status_filter %}<input type="hidden" name="status_filter" value="{{ status_filter }}">{% endif %}
+                <input type="text" name="q" value="{{ q }}" placeholder="Search title…" class="media-search-input">
+            </form>
+        </div>
+
+        {# Status + Service pills #}
+        <div class="filter-row">
+            <span class="filter-section-label">Status</span>
+            <a href="/media{% if type_filter %}?type_filter={{ type_filter }}{% endif %}"
+               class="filter-pill {% if not status_filter %}active{% endif %}">All</a>
+            {% for status_val, status_label in [('want_to','Want To'), ('in_progress','Watching'), ('completed','Completed'), ('abandoned','Abandoned')] %}
+            <a href="/media?status_filter={{ status_val }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}"
+               class="filter-pill status-{{ status_val }} {% if status_filter == status_val %}active{% endif %}">{{ status_label }}</a>
+            {% endfor %}
+
+            {% if subscribed_services %}
+            <span class="filter-section-label" style="margin-left:8px;">Streaming</span>
+            {% for svc in subscribed_services %}
+            <a href="/media?service_filter={{ svc.id }}{% if type_filter %}&type_filter={{ type_filter }}{% endif %}{% if status_filter %}&status_filter={{ status_filter }}{% endif %}"
+               class="filter-pill {% if service_filter == svc.id %}active{% endif %}">{{ svc.name }}</a>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+    </div>
+
+    {# ── MEDIA GRID ── #}
+    <div class="media-grid" id="media-grid">
+        {% if user_media_list %}
+            {% for um in user_media_list %}
+                {% include "partials/media_card.html" %}
+            {% endfor %}
+        {% else %}
+        <div class="media-empty">
+            <div class="empty-icon">
+                {% if type_filter == 'movie' %}🎬{% elif type_filter == 'tv_show' %}📺{% elif type_filter == 'book' %}📚{% else %}🎭{% endif %}
+            </div>
+            <p>
+                {% if q %}No results for "{{ q }}".{% elif type_filter or status_filter %}No items match these filters.{% else %}
+                Your library is empty.<br>
+                <a href="/media/search" style="color:var(--accent);">Add your first movie, show, or book →</a>
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{# ── DETAIL DRAWER ── #}
+<div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>
+<div class="detail-drawer" id="detail-drawer">
+    <div id="detail-drawer-content"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+function openDetail(userMediaId) {
+    const drawer = document.getElementById('detail-drawer');
+    const overlay = document.getElementById('detail-overlay');
+    const content = document.getElementById('detail-drawer-content');
+
+    content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted);">Loading…</div>';
+    drawer.classList.add('open');
+    overlay.classList.add('visible');
+
+    htmx.ajax('GET', `/media/${userMediaId}/detail`, {
+        target: '#detail-drawer-content',
+        swap: 'innerHTML'
+    });
+}
+
+function closeDetail() {
+    document.getElementById('detail-drawer').classList.remove('open');
+    document.getElementById('detail-overlay').classList.remove('visible');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeDetail();
+});
+</script>
+{% endblock %}

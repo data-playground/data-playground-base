@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Add Media{% endblock %}
+{% block page_title %}Add Media{% endblock %}
+{% block topbar_actions %}
+    <a href="/media" class="btn">← Library</a>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/media.css">
+{% endblock %}
+
+{% block content %}
+<div class="search-page-layout">
+
+    {# ── LEFT: Search form ── #}
+    <div class="search-left">
+        <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);">Media Type</div>
+
+        <div class="search-type-tabs" id="type-tabs">
+            <button class="search-type-tab active" onclick="setSearchType('movie', this)">🎬 Movies</button>
+            <button class="search-type-tab"        onclick="setSearchType('tv', this)">📺 TV</button>
+            <button class="search-type-tab"        onclick="setSearchType('book', this)">📚 Books</button>
+        </div>
+
+        <input type="hidden" id="search-type-hidden" value="movie">
+
+        <input type="text"
+               id="search-input"
+               class="search-input-large"
+               placeholder="Search title or author…"
+               hx-get="/media/search/query"
+               hx-trigger="keyup changed delay:400ms"
+               hx-include="#search-type-hidden"
+               hx-target="#search-results"
+               hx-swap="innerHTML"
+               name="q"
+               autocomplete="off">
+
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.6;">
+            Search pulls from TMDB (movies &amp; TV) and OpenLibrary (books).
+            Adding an item fetches full details and streaming availability.
+        </div>
+    </div>
+
+    {# ── RIGHT: Results ── #}
+    <div class="search-right">
+        <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px;">Results</div>
+        <div id="search-results">
+            <p style="color:var(--text-muted);font-size:11px;">Start typing to search.</p>
+        </div>
+    </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+function setSearchType(type, btn) {
+    document.getElementById('search-type-hidden').value = type;
+    document.querySelectorAll('.search-type-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Trigger search if there's already a query
+    const q = document.getElementById('search-input').value;
+    if (q.length >= 2) htmx.trigger('#search-input', 'keyup');
+}
+</script>
+{% endblock %}

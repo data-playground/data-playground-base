@@ -44,6 +44,11 @@
             <i class="fas fa-utensils icon"></i>
             <span class="sidebar-text">Recipes</span>
         </a>
+		
+		<a class="nav-item {% if active_module in ('media', 'media_search', 'media_recommend') %}active{% endif %}" href="/media">
+            <i class="fas fa-film icon"></i>
+            <span class="sidebar-text">Media</span>
+        </a>
 
         <a class="nav-item {% if active_module == 'blog' %}active{% endif %}" href="/blog">
             <i class="fas fa-pen-to-square icon"></i>
@@ -106,6 +111,23 @@
         <a class="nav-item {% if active_module == 'pantry' %}active{% endif %}" href="/pantry">
             <span class="icon">🧺</span>
             <span class="sidebar-text">Pantry</span>
+        </a>
+        {% endif %}
+		
+        {# ── Media sub-nav ── #}
+        {% if active_module in ('media', 'media_search', 'media_recommend') %}
+        <div class="nav-label">Media</div>
+        <a class="nav-item {% if active_module == 'media_search' %}active{% endif %}" href="/media/search">
+            <span class="icon">⊕</span>
+            <span class="sidebar-text">Add Media</span>
+        </a>
+        <a class="nav-item {% if active_module == 'media_recommend' %}active{% endif %}" href="/media/recommend">
+            <span class="icon">✦</span>
+            <span class="sidebar-text">Recommendations</span>
+        </a>
+        <a class="nav-item" href="/media/settings">
+            <span class="icon">⚙</span>
+            <span class="sidebar-text">Streaming Services</span>
         </a>
         {% endif %}
 

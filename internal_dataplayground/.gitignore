@@ -6,6 +6,7 @@ impactful-post-292301-17bfe2bceb2c.json
 
 # --- Docker & Database ---
 mariadb_data/
+ml_model_cache/
 *.log
 migrate_jobs.sql
 db_backups/

@@ -1,0 +1,233 @@
+{# templates/partials/media_detail.html
+   Loaded via HTMX GET /media/{id}/detail into the drawer.
+   `um`                  = UserMedia ORM object
+   `streaming_services`  = list of StreamingService objects available for this item
+   `predefined_mood_tags`= list of predefined tag strings
+#}
+
+{# ── POSTER HERO ── #}
+<div class="drawer-poster-hero">
+    {% if um.media_item.poster_url %}
+    <img class="drawer-poster-img"
+         src="{{ um.media_item.poster_url }}"
+         alt="{{ um.media_item.title }}"
+         onerror="this.style.display='none'">
+    {% else %}
+    <div class="drawer-poster-placeholder">{{ um.media_item.media_type.icon }}</div>
+    {% endif %}
+    <div class="drawer-poster-gradient"></div>
+    <div class="drawer-poster-title">{{ um.media_item.title }}</div>
+</div>
+
+{# ── CLOSE BUTTON ── #}
+<div style="position:sticky;top:0;z-index:10;display:flex;justify-content:flex-end;padding:8px 14px;background:var(--bg-card);border-bottom:1px solid var(--border);">
+    <button onclick="closeDetail()"
+            style="background:none;border:1px solid var(--border);color:var(--text-muted);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px;">
+        ✕ Close
+    </button>
+</div>
+
+<div class="drawer-body">
+
+    {# ── META ROW ── #}
+    <div class="drawer-meta-row">
+        <span class="drawer-meta-chip">{{ um.media_item.media_type.label }}</span>
+        {% if um.media_item.release_year %}
+        <span class="drawer-meta-chip">{{ um.media_item.release_year }}</span>
+        {% endif %}
+        {% if um.media_item.runtime_minutes %}
+        <span class="drawer-meta-chip">{{ um.media_item.runtime_display }}</span>
+        {% endif %}
+        {% if um.media_item.total_seasons %}
+        <span class="drawer-meta-chip">{{ um.media_item.total_seasons }} season{{ 's' if um.media_item.total_seasons > 1 }}</span>
+        {% endif %}
+        {% if um.media_item.author %}
+        <span class="drawer-meta-chip">{{ um.media_item.author }}</span>
+        {% endif %}
+        {% if um.media_item.page_count %}
+        <span class="drawer-meta-chip">{{ um.media_item.page_count }} pages</span>
+        {% endif %}
+        {% if um.media_item.external_rating %}
+        <span class="drawer-meta-chip">⭐ {{ um.media_item.external_rating }}/10</span>
+        {% endif %}
+    </div>
+
+    {# Genres #}
+    {% if um.media_item.genre_list %}
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
+        {% for genre in um.media_item.genre_list %}
+        <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:var(--bg-hover);border:1px solid var(--border);color:var(--text-secondary);">{{ genre }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Description #}
+    {% if um.media_item.description %}
+    <p class="drawer-description">{{ um.media_item.description }}</p>
+    {% endif %}
+
+    {# Streaming #}
+    {% if streaming_services %}
+    <div class="drawer-section-label">Available On</div>
+    <div class="streaming-badges">
+        {% for svc in streaming_services %}
+        <span class="streaming-badge {% if svc.is_subscribed %}subscribed{% endif %}">
+            {% if svc.is_subscribed %}✓ {% endif %}{{ svc.name }}
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── STATUS ── #}
+    <div class="drawer-section-label">Status</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        {% for s_val, s_label in [('want_to','Want To'),('in_progress','Watching'),('completed','Completed'),('abandoned','Abandoned')] %}
+        <button class="btn {% if um.status.value == s_val %}btn-primary{% endif %}"
+                hx-patch="/media/{{ um.id }}/status"
+                hx-vals='{"status": "{{ s_val }}"}'
+                hx-target="#media-card-{{ um.id }}"
+                hx-swap="outerHTML">{{ s_label }}</button>
+        {% endfor %}
+    </div>
+
+    {# ── TV SEASON PROGRESS ── #}
+    {% if um.media_item.media_type.value == 'tv_show' and um.media_item.total_seasons %}
+    <div class="drawer-section-label">Season Progress</div>
+    <div id="seasons-container-{{ um.id }}">
+        {% include "partials/media_seasons.html" %}
+    </div>
+    {% endif %}
+
+    {# ── RATING ── #}
+    <div class="drawer-section-label">Your Rating</div>
+    <div id="rating-section-{{ um.id }}">
+        {% include "partials/media_rating.html" %}
+    </div>
+
+    {# ── MOOD TAGS ── #}
+    <div class="drawer-section-label">Mood Tags</div>
+    <div id="mood-tags-{{ um.id }}">
+        <div class="mood-tags-container" id="tag-pills-{{ um.id }}">
+            {% for tag in predefined_mood_tags %}
+            <button type="button"
+                    class="mood-tag {% if tag in (um.tag_list or []) %}selected{% endif %}"
+                    onclick="toggleMoodTag({{ um.id }}, '{{ tag }}', this)">{{ tag }}</button>
+            {% endfor %}
+        </div>
+        {# Custom tag input #}
+        <div style="display:flex;gap:6px;margin-top:6px;">
+            <input type="text" id="custom-tag-input-{{ um.id }}"
+                   class="mood-tag-input" placeholder="Add custom tag…"
+                   onkeydown="if(event.key==='Enter'){addCustomTag({{ um.id }});event.preventDefault();}">
+            <button class="btn btn-sm" onclick="addCustomTag({{ um.id }})">Add</button>
+        </div>
+        {# Hidden custom tags display #}
+        <div id="custom-tags-{{ um.id }}" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">
+            {% for tag in (um.tag_list or []) %}
+                {% if tag not in predefined_mood_tags %}
+                <span class="mood-tag selected" id="custom-tag-{{ um.id }}-{{ loop.index }}">
+                    {{ tag }}
+                    <button type="button" onclick="removeCustomTag({{ um.id }}, '{{ tag }}')"
+                            style="background:none;border:none;cursor:pointer;padding:0 0 0 4px;color:inherit;">✕</button>
+                </span>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── NOTES ── #}
+    <div class="drawer-section-label">Notes</div>
+    <textarea class="form-textarea" rows="3"
+              id="notes-{{ um.id }}"
+              placeholder="Your thoughts…"
+              hx-patch="/media/{{ um.id }}/notes"
+              hx-trigger="change"
+              hx-include="this"
+              name="notes"
+              hx-target="#notes-saved-{{ um.id }}">{{ um.notes or '' }}</textarea>
+    <div id="notes-saved-{{ um.id }}" style="height:16px;"></div>
+
+    {# ── DANGER ZONE ── #}
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid var(--border);">
+        <button class="btn btn-danger btn-sm"
+                hx-delete="/media/{{ um.id }}"
+                hx-target="#media-card-{{ um.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Remove from your list?"
+                onclick="closeDetail()">Remove from list</button>
+    </div>
+
+</div>
+
+<script>
+// ── Mood tag management ────────────────────────────────────────────────────
+
+function _getSelectedTags(umId) {
+    const predefined = Array.from(
+        document.querySelectorAll(`#tag-pills-${umId} .mood-tag.selected`)
+    ).map(el => el.textContent.trim());
+    const custom = Array.from(
+        document.querySelectorAll(`#custom-tags-${umId} .mood-tag.selected`)
+    ).map(el => el.childNodes[0].textContent.trim());
+    return [...predefined, ...custom];
+}
+
+function _saveTags(umId) {
+    const tags = _getSelectedTags(umId);
+    const tagsStr = tags.join(',');
+    fetch(`/media/${umId}/rate`, {
+        method: 'PATCH',
+        body: new URLSearchParams({ mood_tags: tagsStr }),
+    });
+}
+
+function toggleMoodTag(umId, tag, btn) {
+    btn.classList.toggle('selected');
+    _saveTags(umId);
+}
+
+function addCustomTag(umId) {
+    const input = document.getElementById(`custom-tag-input-${umId}`);
+    const tag = input.value.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!tag) return;
+    input.value = '';
+
+    const container = document.getElementById(`custom-tags-${umId}`);
+    const span = document.createElement('span');
+    span.className = 'mood-tag selected';
+    span.innerHTML = `${tag} <button type="button" onclick="removeCustomTag(${umId}, '${tag}')" style="background:none;border:none;cursor:pointer;padding:0 0 0 4px;color:inherit;">✕</button>`;
+    container.appendChild(span);
+    _saveTags(umId);
+}
+
+function removeCustomTag(umId, tag) {
+    const container = document.getElementById(`custom-tags-${umId}`);
+    container.querySelectorAll('.mood-tag').forEach(el => {
+        if (el.childNodes[0].textContent.trim() === tag) el.remove();
+    });
+    _saveTags(umId);
+}
+
+// ── Star rating widget ────────────────────────────────────────────────────
+function setRating(umId, rating) {
+    document.getElementById(`rating-hidden-${umId}`).value = rating;
+    _updateStars(umId, rating);
+    fetch(`/media/${umId}/rate`, {
+        method: 'PATCH',
+        body: new URLSearchParams({ user_rating: rating }),
+    }).then(r => r.text()).then(html => {
+        document.getElementById(`rating-section-${umId}`).innerHTML = html;
+    });
+}
+
+function _updateStars(umId, rating) {
+    document.querySelectorAll(`#star-row-${umId} .star-btn`).forEach((btn, i) => {
+        const starVal = (i + 1) * 2;  // btn 0 = rating 2, btn 1 = rating 4, etc.
+        // We use 5 full-star buttons but each represents 2 rating points
+        // Half-star is handled by the server-side display
+        btn.classList.toggle('filled', i < Math.ceil(rating / 2));
+    });
+    const label = document.getElementById(`rating-label-${umId}`);
+    if (label) label.textContent = `${rating}/10`;
+}
+</script>

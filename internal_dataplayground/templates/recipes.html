@@ -425,7 +425,7 @@
             <label class="favorites-toggle">
                 <input type="checkbox" id="favorites-cb"
                        {% if favorites_only %}checked{% endif %}
-                       onchange="toggleFavorites()">
+                       >
                 <span>Favorites only ♥</span>
             </label>
         </div>
@@ -597,6 +597,11 @@ function showRecipeToast(msg) {
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
+
+// ── INIT ────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('favorites-cb')?.addEventListener('change', toggleFavorites);
+});
 
 // ── FAVORITE BUTTON SWAP (HTMX) ───────────────────────────────────────────────
 // The HTMX swap replaces just the button — update the tooltip and class.

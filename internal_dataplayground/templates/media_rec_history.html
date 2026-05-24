@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Recommendation History{% endblock %}
+{% block page_title %}Rec History{% endblock %}
+{% block topbar_actions %}
+    <a href="/media/recommend" class="btn">← Recommendations</a>
+    <a href="/media" class="btn">Library</a>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/media.css">
+{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;padding:24px 20px;">
+
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:4px;">Recommendation Sessions</div>
+    <p style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">Past recommendation runs, most recent first.</p>
+
+    {% if history %}
+    {% for rec in history %}
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow);">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <div>
+                <span style="font-size:11px;font-weight:500;color:var(--text-primary);">
+                    {{ rec.generated_at.strftime('%B %d, %Y at %H:%M') }}
+                </span>
+                {% if rec.used_gemini %}<span class="gemini-badge" style="margin-left:6px;">✦ Gemini</span>{% else %}<span class="ml-badge" style="margin-left:6px;">ML</span>{% endif %}
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;font-size:10px;color:var(--text-muted);">
+                <span>{{ rec.result_count }} result{{ 's' if rec.result_count != 1 }}</span>
+                <span>·</span>
+                <span>{{ rec.media_type_filter.value }}</span>
+                {% if not rec.include_unsubscribed %}<span>· subscribed only</span>{% endif %}
+            </div>
+        </div>
+
+        {% if rec.input_mood or rec.input_context %}
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px;">
+            {% if rec.input_mood %}"{{ rec.input_mood }}"{% endif %}
+            {% if rec.input_context %} · {{ rec.input_context }}{% endif %}
+        </div>
+        {% endif %}
+
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            {% for r in rec.recommendations %}
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border);min-width:180px;flex:1;max-width:280px;">
+                <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--border-accent);width:20px;flex-shrink:0;">{{ loop.index }}</span>
+                <div style="min-width:0;">
+                    <div style="font-size:11px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.title }}</div>
+                    <div style="font-size:9px;color:var(--text-muted);">{{ (r.score * 100) | round(1) }}% match</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+        <div style="font-size:36px;margin-bottom:12px;opacity:.3;">✦</div>
+        <p style="font-size:12px;">No recommendation sessions yet.<br>
+        <a href="/media/recommend" style="color:var(--accent);">Generate your first recommendations →</a></p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
