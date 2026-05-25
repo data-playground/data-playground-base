@@ -38,7 +38,7 @@
             <button class="btn btn-primary btn-sm"
                     hx-post="/media/search/add"
                     hx-vals='{"external_id": "{{ item.external_id }}", "external_source": "{{ item.external_source }}", "title": "{{ item.title | replace('"', '&quot;') }}"}'
-                    hx-target="#media-grid"
+                    hx-target="#search-results"
                     hx-swap="afterbegin"
                     onclick="showToast('Added {{ item.title | truncate(30) }} to your list')">
                 ⊕ Add to List
