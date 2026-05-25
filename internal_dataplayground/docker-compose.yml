@@ -37,6 +37,9 @@ services:
       - APP_ENV=production
       - ML_SERVICE_URL=http://ml-service:8001
       - MEDIA_RECOMMEND_AI=false
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - GEMINI_API=${GEMINI_API}
+      - CEREBRAS_API=${CEREBRAS_API}
     volumes:
       - .:/app
 
