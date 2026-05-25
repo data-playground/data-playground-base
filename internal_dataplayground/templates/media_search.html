@@ -21,23 +21,24 @@
             <button class="search-type-tab"        onclick="setSearchType('book', this)">📚 Books</button>
         </div>
 
-        <input type="hidden" id="search-type-hidden" value="movie">
+        <input type="hidden" id="search-type-hidden" name="type" value="movie">
 
-        <input type="text"
-               id="search-input"
-               class="search-input-large"
-               placeholder="Search title or author…"
-               hx-get="/media/search/query"
-               hx-trigger="keyup changed delay:400ms"
-               hx-include="#search-type-hidden"
-               hx-target="#search-results"
-               hx-swap="innerHTML"
-               name="q"
-               autocomplete="off">
+        {# Search input — triggers on Enter key only #}
+        <div style="display:flex;gap:6px;">
+            <input type="text"
+                   id="search-input"
+                   name="q"
+                   class="search-input-large"
+                   placeholder="Search title or author…"
+                   autocomplete="off"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();runSearch();}">
+            <button class="btn btn-primary" onclick="runSearch()" style="flex-shrink:0;white-space:nowrap;">
+                Search
+            </button>
+        </div>
 
         <div style="font-size:10px;color:var(--text-muted);line-height:1.6;">
-            Search pulls from TMDB (movies &amp; TV) and OpenLibrary (books).
-            Adding an item fetches full details and streaming availability.
+            Press Enter or click Search. Pulls from TMDB (movies &amp; TV) and OpenLibrary (books).
         </div>
     </div>
 
@@ -45,11 +46,14 @@
     <div class="search-right">
         <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px;">Results</div>
         <div id="search-results">
-            <p style="color:var(--text-muted);font-size:11px;">Start typing to search.</p>
+            <p style="color:var(--text-muted);font-size:11px;">Search for a title to get started.</p>
         </div>
     </div>
 
 </div>
+
+{# Container that receives newly added cards — hidden, just satisfies HTMX target #}
+<div id="added-items-sink" style="display:none;"></div>
 
 <div id="toast"></div>
 
@@ -58,9 +62,25 @@ function setSearchType(type, btn) {
     document.getElementById('search-type-hidden').value = type;
     document.querySelectorAll('.search-type-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    // Trigger search if there's already a query
-    const q = document.getElementById('search-input').value;
-    if (q.length >= 2) htmx.trigger('#search-input', 'keyup');
+}
+
+function runSearch() {
+    const q = document.getElementById('search-input').value.trim();
+    const type = document.getElementById('search-type-hidden').value;
+
+    if (q.length < 2) {
+        document.getElementById('search-results').innerHTML =
+            '<p style="color:var(--text-muted);font-size:11px;">Type at least 2 characters.</p>';
+        return;
+    }
+
+    const resultsDiv = document.getElementById('search-results');
+    resultsDiv.innerHTML = '<p style="color:var(--text-muted);font-size:11px;">Searching…</p>';
+
+    htmx.ajax('GET', `/media/search/query?q=${encodeURIComponent(q)}&type=${type}`, {
+        target: '#search-results',
+        swap: 'innerHTML',
+    });
 }
 </script>
 {% endblock %}
