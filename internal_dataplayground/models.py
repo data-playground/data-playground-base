@@ -2283,6 +2283,7 @@ class MediaItem(Base):
     streaming_fetched_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    seasons_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # ── ML embedding ──────────────────────────────────────────────────────────
     # 384-dim float vector. None means the embedding job hasn't run yet.

@@ -1,0 +1,17 @@
+{# templates/partials/media_drawer_status.html
+   Returned by PATCH /media/{id}/status when called from the detail drawer.
+   Replaces #drawer-status-{id} in place, keeping the drawer in sync.
+   `um` = UserMedia ORM object (freshly committed)
+#}
+<div id="drawer-status-{{ um.id }}">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        {% for s_val, s_label in [('want_to','Want To'),('in_progress','Watching'),('completed','Completed'),('abandoned','Abandoned')] %}
+        <button class="btn {% if um.status.value == s_val %}btn-primary{% endif %}"
+                hx-patch="/media/{{ um.id }}/status"
+                hx-vals='{"status": "{{ s_val }}"}'
+                hx-target="#drawer-status-{{ um.id }}"
+                hx-swap="outerHTML"
+                onclick="refreshCard({{ um.id }})">{{ s_label }}</button>
+        {% endfor %}
+    </div>
+</div>

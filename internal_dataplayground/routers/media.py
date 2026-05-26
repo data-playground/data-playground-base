@@ -1,10 +1,7 @@
 # routers/media.py
 """
 Media Tracker — main board, item CRUD, status and rating management.
-
 Prefix: /media
-All page templates extend base.html.
-All HTMX partial responses return HTML fragments from templates/partials/.
 """
 
 import datetime
@@ -14,13 +11,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import (
     MediaItem, UserMedia, TVSeasonProgress, StreamingService,
-    UserMediaStatus, MediaType, RecommendationMediaType,
+    UserMediaStatus, MediaType, RecommendationMediaType, PREDEFINED_MOOD_TAGS,
 )
 from routers._helpers import html_error
 
@@ -35,17 +32,12 @@ log = logging.getLogger(__name__)
 async def media_board(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    type_filter: Optional[str] = None,      # movie | tv_show | book
-    status_filter: Optional[str] = None,   # want_to | in_progress | completed | abandoned
+    type_filter: Optional[str] = None,
+    status_filter: Optional[str] = None,
     genre_filter: Optional[str] = None,
-    service_filter: Optional[int] = None,  # streaming_services.id
-    q: Optional[str] = None,               # title search
+    service_filter: Optional[int] = None,
+    q: Optional[str] = None,
 ):
-    """
-    Main library view — Netflix-style grid with filter pills at the top.
-    All filters are additive (AND). Empty filter = show all.
-    """
-    # Base query: all user_media with their media_item loaded
     stmt = (
         select(UserMedia)
         .join(MediaItem, UserMedia.media_item_id == MediaItem.id)
@@ -54,20 +46,14 @@ async def media_board(
 
     if type_filter and type_filter in [t.value for t in MediaType]:
         stmt = stmt.where(MediaItem.media_type == type_filter)
-
     if status_filter and status_filter in [s.value for s in UserMediaStatus]:
         stmt = stmt.where(UserMedia.status == status_filter)
-
     if q:
         stmt = stmt.where(MediaItem.title.ilike(f"%{q}%"))
-
-    if genre_filter:
-        stmt = stmt.where(MediaItem.genres.contains(genre_filter))
 
     result = await db.execute(stmt)
     user_media_list = result.scalars().all()
 
-    # Filter by streaming service (post-query, since streaming_provider_ids is JSON)
     if service_filter:
         svc = await db.get(StreamingService, service_filter)
         if svc and svc.tmdb_provider_id:
@@ -77,13 +63,11 @@ async def media_board(
                 if pid in (um.media_item.streaming_available_on or [])
             ]
 
-    # Collect unique genres for filter pills
     all_genres: set[str] = set()
     for um in user_media_list:
         for g in (um.media_item.genre_list or []):
             all_genres.add(g)
 
-    # Subscribed streaming services for the filter bar
     svc_result = await db.execute(
         select(StreamingService)
         .where(StreamingService.is_subscribed == True)
@@ -91,7 +75,6 @@ async def media_board(
     )
     subscribed_services = svc_result.scalars().all()
 
-    # Stats for header
     stats = {
         "total": len(user_media_list),
         "completed": sum(1 for um in user_media_list if um.status == UserMediaStatus.COMPLETED),
@@ -106,7 +89,6 @@ async def media_board(
         "all_genres": sorted(all_genres),
         "subscribed_services": subscribed_services,
         "stats": stats,
-        # Active filters (for highlighting pills)
         "type_filter": type_filter,
         "status_filter": status_filter,
         "genre_filter": genre_filter,
@@ -123,12 +105,10 @@ async def media_detail(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns the detail drawer partial for a tracked item."""
     um = await db.get(UserMedia, user_media_id)
     if not um:
         raise HTTPException(status_code=404, detail="Not found")
 
-    # Load streaming services for this item
     provider_ids = um.media_item.streaming_available_on
     streaming_services = []
     if provider_ids:
@@ -139,7 +119,6 @@ async def media_detail(
         )
         streaming_services = svc_result.scalars().all()
 
-    from models import PREDEFINED_MOOD_TAGS
     return templates.TemplateResponse("partials/media_detail.html", {
         "request": request,
         "um": um,
@@ -155,11 +134,6 @@ async def add_to_list(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Adds a media_item to the user's list.
-    Called from the search results via HTMX — returns an updated card partial.
-    Idempotent: if already tracked, returns the existing record.
-    """
     form = await request.form()
     media_item_id = int(form.get("media_item_id", 0))
     status_raw = form.get("status", "want_to")
@@ -176,7 +150,6 @@ async def add_to_list(
     except ValueError:
         status = UserMediaStatus.WANT_TO
 
-    # Check for existing record
     existing = await db.execute(
         select(UserMedia).where(UserMedia.media_item_id == media_item_id)
     )
@@ -203,8 +176,11 @@ async def update_status(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Updates the status of a tracked item.
-    Returns the updated media card partial.
+    Updates status. Returns different partials depending on context:
+    - If called from the grid card (hx-target=#media-card-N) → returns media_card.html
+    - If called from the detail drawer (hx-target=#drawer-status-N) → returns drawer_status.html
+    The router always returns the drawer status block; the card self-updates
+    via a separate JS refresh call triggered from the drawer.
     """
     form = await request.form()
     status_raw = form.get("status", "")
@@ -218,7 +194,6 @@ async def update_status(
     except ValueError:
         return html_error(request, f"Invalid status: {status_raw}")
 
-    # Auto-set dates
     now = datetime.date.today()
     if um.status == UserMediaStatus.IN_PROGRESS and not um.started_at:
         um.started_at = now
@@ -228,9 +203,17 @@ async def update_status(
     await db.commit()
     await db.refresh(um)
 
-    return templates.TemplateResponse("partials/media_card.html", {
-        "request": request,
-        "um": um,
+    # Check what's being targeted to return the right partial
+    target = request.headers.get("hx-target", "")
+    if f"media-card-{user_media_id}" in target:
+        # Called from grid card quick-action buttons
+        return templates.TemplateResponse("partials/media_card.html", {
+            "request": request, "um": um,
+        })
+
+    # Called from detail drawer — return updated status buttons block
+    return templates.TemplateResponse("partials/media_drawer_status.html", {
+        "request": request, "um": um,
     })
 
 
@@ -242,9 +225,6 @@ async def update_rating(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Sets user_rating and mood_tags. Returns updated detail drawer rating section.
-    """
     form = await request.form()
     rating_raw = form.get("user_rating")
     mood_tags_raw = form.get("mood_tags", "")
@@ -269,8 +249,7 @@ async def update_rating(
     await db.refresh(um)
 
     return templates.TemplateResponse("partials/media_rating.html", {
-        "request": request,
-        "um": um,
+        "request": request, "um": um,
     })
 
 
@@ -282,12 +261,10 @@ async def update_notes(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Updates personal notes. Returns a simple confirmation fragment."""
     form = await request.form()
     um = await db.get(UserMedia, user_media_id)
     if not um:
         return html_error(request, "Not found", status_code=404)
-
     um.notes = form.get("notes") or None
     await db.commit()
     return HTMLResponse('<span style="color:var(--green);font-size:10px;">✓ Saved</span>')
@@ -302,10 +279,6 @@ async def update_season_progress(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Updates episode progress for a specific TV season.
-    Creates the season row if it doesn't exist (sparse tracking).
-    """
     form = await request.form()
     episodes_watched = int(form.get("episodes_watched", 0))
     total_episodes_raw = form.get("total_episodes")
@@ -315,7 +288,6 @@ async def update_season_progress(
     if not um:
         return html_error(request, "Not found", status_code=404)
 
-    # Upsert season progress row
     existing = await db.execute(
         select(TVSeasonProgress)
         .where(TVSeasonProgress.user_media_id == user_media_id)
@@ -340,8 +312,7 @@ async def update_season_progress(
     await db.refresh(um)
 
     return templates.TemplateResponse("partials/media_seasons.html", {
-        "request": request,
-        "um": um,
+        "request": request, "um": um,
     })
 
 
@@ -353,15 +324,9 @@ async def remove_from_list(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Removes an item from the user's list.
-    Keeps the media_item record (it may appear in recommendations).
-    Returns an empty response so HTMX removes the card from the DOM.
-    """
     um = await db.get(UserMedia, user_media_id)
     if not um:
         raise HTTPException(status_code=404, detail="Not found")
-
     await db.delete(um)
     await db.commit()
-    return HTMLResponse("")  # HTMX swap removes the card
+    return HTMLResponse("")

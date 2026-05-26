@@ -1,17 +1,30 @@
 {# templates/partials/media_seasons.html
-   Returned by POST /media/{id}/seasons/{n} and included in media_detail.html.
-   `um` = UserMedia ORM object (with season_progress loaded via selectin)
+   `um` = UserMedia ORM object (with season_progress loaded)
+
+   Episode counts per season come from TVSeasonProgress.total_episodes
+   which is populated when the user first edits a season, or from the
+   TMDB season details stored on the media_item.seasons_data JSON field.
+
+   If total_episodes is unknown for a season, the input shows without a
+   max limit and without a progress bar — user fills it in manually.
 #}
-{% set total_seasons = um.media_item.total_seasons or 1 %}
 {% set progress_map = {} %}
 {% for sp in um.season_progress %}
     {% set _ = progress_map.update({sp.season_number: sp}) %}
 {% endfor %}
 
-{% for season_num in range(1, total_seasons + 1) %}
+{# Try to get per-season episode counts from seasons_data JSON if available #}
+{% set seasons_data = um.media_item.seasons_data or {} %}
+
+{% for season_num in range(1, (um.media_item.total_seasons or 0) + 1) %}
 {% set sp = progress_map.get(season_num) %}
 {% set ep_watched = sp.episodes_watched if sp else 0 %}
-{% set ep_total = sp.total_episodes if sp else (um.media_item.total_episodes // total_seasons if um.media_item.total_episodes else None) %}
+
+{# Per-season episode count priority:
+   1. Already stored in TVSeasonProgress.total_episodes (user-confirmed)
+   2. From seasons_data JSON on the media_item (TMDB per-season data)
+   3. Unknown — show input without max #}
+{% set ep_total = sp.total_episodes if sp and sp.total_episodes else seasons_data.get(season_num | string) %}
 {% set pct = ((ep_watched / ep_total * 100) | int) if ep_total else 0 %}
 
 <div class="season-row">
@@ -27,6 +40,7 @@
                {% if ep_total %}max="{{ ep_total }}"{% endif %}
                hx-post="/media/{{ um.id }}/seasons/{{ season_num }}"
                hx-trigger="change"
+               hx-vals='{"total_episodes": "{{ ep_total or '' }}"}'
                hx-include="this"
                name="episodes_watched"
                hx-target="#seasons-container-{{ um.id }}"

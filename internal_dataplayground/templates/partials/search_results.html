@@ -2,6 +2,11 @@
    Returned by GET /media/search/query via HTMX.
    `results`     = list of normalized result dicts from TMDB/OpenLibrary
    `search_type` = "movie" | "tv" | "book"
+
+   "Add to List" posts to /media/search/add and targets the button's own
+   parent container (#add-btn-{external_id}) so only that button swaps to
+   a "✓ Added" confirmation. No grid target needed — avoids htmx:targetError
+   on the search page where #media-grid doesn't exist.
 #}
 {% if results %}
 {% for item in results %}
@@ -13,7 +18,8 @@
          loading="lazy"
          onerror="this.src=''">
     {% else %}
-    <div class="search-result-poster" style="display:flex;align-items:center;justify-content:center;font-size:24px;">
+    <div class="search-result-poster"
+         style="display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--bg-hover);">
         {% if search_type == 'movie' %}🎬{% elif search_type == 'tv' %}📺{% else %}📚{% endif %}
     </div>
     {% endif %}
@@ -22,27 +28,30 @@
         <div class="search-result-title">{{ item.title }}</div>
         <div class="search-result-meta">
             {% if item.release_year %}{{ item.release_year }}{% endif %}
-            {% if item.release_year and item.genres %}&nbsp;·&nbsp;{% endif %}
-            {% if item.genres %}{{ item.genres | join(' · ') | truncate(40) }}{% endif %}
-            {% if item.external_rating %}&nbsp;·&nbsp;⭐ {{ item.external_rating }}{% endif %}
-            {% if item.author %}&nbsp;·&nbsp;{{ item.author }}{% endif %}
+            {% if item.release_year and item.genres %} · {% endif %}
+            {% if item.genres %}{{ item.genres[:2] | join(' · ') }}{% endif %}
+            {% if item.external_rating %} · ⭐ {{ item.external_rating }}{% endif %}
+            {% if item.author %} · {{ item.author }}{% endif %}
         </div>
         {% if item.description %}
         <div class="search-result-desc">{{ item.description }}</div>
         {% endif %}
 
-        <div style="margin-top:8px;">
+        <div style="margin-top:8px;" id="add-btn-{{ item.external_id | replace('/', '-') }}">
             {% if item.already_tracked %}
             <span style="font-size:10px;color:var(--green);">✓ Already in your list</span>
             {% else %}
             <button class="btn btn-primary btn-sm"
                     hx-post="/media/search/add"
-                    hx-vals='{"external_id": "{{ item.external_id }}", "external_source": "{{ item.external_source }}", "title": "{{ item.title | replace('"', '&quot;') }}"}'
-                    hx-target="#search-results"
-                    hx-swap="afterbegin"
-                    onclick="showToast('Added {{ item.title | truncate(30) }} to your list')">
+                    hx-vals='{"external_id": "{{ item.external_id }}", "external_source": "{{ item.external_source }}", "title": "{{ item.title | replace('"', '') }}"}'
+                    hx-target="#add-btn-{{ item.external_id | replace('/', '-') }}"
+                    hx-swap="innerHTML"
+                    hx-indicator="#add-spinner-{{ item.external_id | replace('/', '-') }}">
                 ⊕ Add to List
             </button>
+            <span id="add-spinner-{{ item.external_id | replace('/', '-') }}"
+                  class="htmx-indicator"
+                  style="font-size:10px;color:var(--text-muted);display:none;">Adding…</span>
             {% endif %}
         </div>
     </div>
