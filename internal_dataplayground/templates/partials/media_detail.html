@@ -1,7 +1,6 @@
 {# templates/partials/media_detail.html
-   Loaded via HTMX GET /media/{id}/detail into the drawer.
    `um`                  = UserMedia ORM object
-   `streaming_services`  = list of StreamingService objects available for this item
+   `streaming_services`  = list of StreamingService objects
    `predefined_mood_tags`= list of predefined tag strings
 #}
 
@@ -80,14 +79,18 @@
 
     {# ── STATUS ── #}
     <div class="drawer-section-label">Status</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        {% for s_val, s_label in [('want_to','Want To'),('in_progress','Watching'),('completed','Completed'),('abandoned','Abandoned')] %}
-        <button class="btn {% if um.status.value == s_val %}btn-primary{% endif %}"
-                hx-patch="/media/{{ um.id }}/status"
-                hx-vals='{"status": "{{ s_val }}"}'
-                hx-target="#media-card-{{ um.id }}"
-                hx-swap="outerHTML">{{ s_label }}</button>
-        {% endfor %}
+    {# Wrap in a div that HTMX will update so the drawer reflects changes immediately #}
+    <div id="drawer-status-{{ um.id }}">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            {% for s_val, s_label in [('want_to','Want To'),('in_progress','Watching'),('completed','Completed'),('abandoned','Abandoned')] %}
+            <button class="btn {% if um.status.value == s_val %}btn-primary{% endif %}"
+                    hx-patch="/media/{{ um.id }}/status"
+                    hx-vals='{"status": "{{ s_val }}"}'
+                    hx-target="#drawer-status-{{ um.id }}"
+                    hx-swap="outerHTML"
+                    onclick="refreshCard({{ um.id }})">{{ s_label }}</button>
+            {% endfor %}
+        </div>
     </div>
 
     {# ── TV SEASON PROGRESS ── #}
@@ -114,18 +117,16 @@
                     onclick="toggleMoodTag({{ um.id }}, '{{ tag }}', this)">{{ tag }}</button>
             {% endfor %}
         </div>
-        {# Custom tag input #}
         <div style="display:flex;gap:6px;margin-top:6px;">
             <input type="text" id="custom-tag-input-{{ um.id }}"
                    class="mood-tag-input" placeholder="Add custom tag…"
                    onkeydown="if(event.key==='Enter'){addCustomTag({{ um.id }});event.preventDefault();}">
             <button class="btn btn-sm" onclick="addCustomTag({{ um.id }})">Add</button>
         </div>
-        {# Hidden custom tags display #}
         <div id="custom-tags-{{ um.id }}" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">
             {% for tag in (um.tag_list or []) %}
                 {% if tag not in predefined_mood_tags %}
-                <span class="mood-tag selected" id="custom-tag-{{ um.id }}-{{ loop.index }}">
+                <span class="mood-tag selected">
                     {{ tag }}
                     <button type="button" onclick="removeCustomTag({{ um.id }}, '{{ tag }}')"
                             style="background:none;border:none;cursor:pointer;padding:0 0 0 4px;color:inherit;">✕</button>
@@ -160,7 +161,16 @@
 </div>
 
 <script>
-// ── Mood tag management ────────────────────────────────────────────────────
+// Refresh the grid card after a status change in the drawer
+function refreshCard(umId) {
+    // Small delay to let the PATCH complete first
+    setTimeout(() => {
+        htmx.ajax('GET', `/media/${umId}/detail`, {
+            target: '#detail-drawer-content',
+            swap: 'innerHTML'
+        });
+    }, 300);
+}
 
 function _getSelectedTags(umId) {
     const predefined = Array.from(
@@ -174,10 +184,9 @@ function _getSelectedTags(umId) {
 
 function _saveTags(umId) {
     const tags = _getSelectedTags(umId);
-    const tagsStr = tags.join(',');
     fetch(`/media/${umId}/rate`, {
         method: 'PATCH',
-        body: new URLSearchParams({ mood_tags: tagsStr }),
+        body: new URLSearchParams({ mood_tags: tags.join(',') }),
     });
 }
 
@@ -191,7 +200,6 @@ function addCustomTag(umId) {
     const tag = input.value.trim().toLowerCase().replace(/\s+/g, '-');
     if (!tag) return;
     input.value = '';
-
     const container = document.getElementById(`custom-tags-${umId}`);
     const span = document.createElement('span');
     span.className = 'mood-tag selected';
@@ -201,33 +209,18 @@ function addCustomTag(umId) {
 }
 
 function removeCustomTag(umId, tag) {
-    const container = document.getElementById(`custom-tags-${umId}`);
-    container.querySelectorAll('.mood-tag').forEach(el => {
+    document.querySelectorAll(`#custom-tags-${umId} .mood-tag`).forEach(el => {
         if (el.childNodes[0].textContent.trim() === tag) el.remove();
     });
     _saveTags(umId);
 }
 
-// ── Star rating widget ────────────────────────────────────────────────────
 function setRating(umId, rating) {
-    document.getElementById(`rating-hidden-${umId}`).value = rating;
-    _updateStars(umId, rating);
     fetch(`/media/${umId}/rate`, {
         method: 'PATCH',
         body: new URLSearchParams({ user_rating: rating }),
     }).then(r => r.text()).then(html => {
         document.getElementById(`rating-section-${umId}`).innerHTML = html;
     });
-}
-
-function _updateStars(umId, rating) {
-    document.querySelectorAll(`#star-row-${umId} .star-btn`).forEach((btn, i) => {
-        const starVal = (i + 1) * 2;  // btn 0 = rating 2, btn 1 = rating 4, etc.
-        // We use 5 full-star buttons but each represents 2 rating points
-        // Half-star is handled by the server-side display
-        btn.classList.toggle('filled', i < Math.ceil(rating / 2));
-    });
-    const label = document.getElementById(`rating-label-${umId}`);
-    if (label) label.textContent = `${rating}/10`;
 }
 </script>
