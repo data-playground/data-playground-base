@@ -34,7 +34,7 @@ _genre_cache: dict[str, dict[int, str]] = {}
 
 
 def _get_api_key() -> str:
-    return get_key("TMDB_API_KEY")
+    return get_key("TMDB-API-Key")
 
 
 def _build_poster_url(poster_path: Optional[str]) -> Optional[str]:
