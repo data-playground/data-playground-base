@@ -31,27 +31,23 @@ log = logging.getLogger(__name__)
 OL_BASE = "https://openlibrary.org"
 OL_COVER_BASE = "https://covers.openlibrary.org/b/id"
 
+# OpenLibrary blocks generic user agents — identify your app clearly
+_OL_HEADERS = {
+    "User-Agent": "LifeOS-PersonalTracker/1.0 (personal self-hosted app; github.com/personal)"
+}
+
 
 def _build_cover_url(cover_id: Optional[int], size: str = "M") -> Optional[str]:
-    """
-    Constructs an OpenLibrary cover image URL.
-    size: "S" (small), "M" (medium), "L" (large)
-    """
     if not cover_id:
         return None
     return f"{OL_COVER_BASE}/{cover_id}-{size}.jpg"
 
 
 def _clean_subjects(subjects: list) -> list[str]:
-    """
-    Cleans and deduplicates OpenLibrary subjects list.
-    Takes up to 5 unique, title-cased subjects with reasonable length.
-    """
     seen = set()
     result = []
     for s in subjects:
         s_clean = str(s).strip().title()
-        # Skip excessively long subjects (OpenLibrary has some very specific ones)
         if len(s_clean) > 40 or s_clean.lower() in seen:
             continue
         seen.add(s_clean.lower())
@@ -62,17 +58,6 @@ def _clean_subjects(subjects: list) -> list[str]:
 
 
 async def search_books(query: str, author: str = "", limit: int = 10) -> list[dict]:
-    """
-    Searches OpenLibrary for books matching the query.
-
-    Args:
-        query:  Title or general search query.
-        author: Optional author name to narrow results.
-        limit:  Max results to return (default 10).
-
-    Returns:
-        List of normalized book dicts ready for media_items insertion.
-    """
     params = {
         "q": query,
         "fields": "key,title,author_name,first_publish_year,subject,"
@@ -82,7 +67,7 @@ async def search_books(query: str, author: str = "", limit: int = 10) -> list[di
     if author:
         params["author"] = author
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=15.0, headers=_OL_HEADERS) as client:
         resp = await client.get(f"{OL_BASE}/search.json", params=params)
         resp.raise_for_status()
         data = resp.json()
@@ -105,13 +90,13 @@ async def search_books(query: str, author: str = "", limit: int = 10) -> list[di
             rating = None
 
         results.append({
-            "external_id":     work_key,  # e.g. "/works/OL45883W"
+            "external_id":     work_key,
             "external_source": "openlibrary",
             "title":           item.get("title", "Unknown"),
             "media_type":      "book",
             "genres":          subjects,
             "release_year":    item.get("first_publish_year") or None,
-            "description":     None,  # Not in search results — fetched via get_book_details
+            "description":     None,
             "poster_url":      _build_cover_url(item.get("cover_i")),
             "external_rating": rating,
             "author":          author_str,
@@ -121,33 +106,23 @@ async def search_books(query: str, author: str = "", limit: int = 10) -> list[di
 
 
 async def get_book_details(work_key: str) -> dict:
-    """
-    Fetches full book details from OpenLibrary including description.
-
-    Args:
-        work_key: OpenLibrary work key, e.g. "/works/OL45883W"
-
-    Returns:
-        Normalized book dict for media_item record creation.
-    """
-    # Strip leading slash if present
     key = work_key.lstrip("/")
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=15.0, headers=_OL_HEADERS) as client:
         resp = await client.get(f"{OL_BASE}/{key}.json")
         if resp.status_code == 404:
-            return {"external_id": work_key, "external_source": "openlibrary",
-                    "title": "Unknown", "media_type": "book"}
+            return {
+                "external_id": work_key, "external_source": "openlibrary",
+                "title": "Unknown", "media_type": "book",
+            }
         resp.raise_for_status()
         data = resp.json()
 
-    # Description can be a string or a {"value": str} dict
     raw_desc = data.get("description", "")
     if isinstance(raw_desc, dict):
         description = raw_desc.get("value", "")
     else:
         description = str(raw_desc)
-    description = description[:2000] if description else None  # Cap length
+    description = description[:2000] if description else None
 
     subjects = _clean_subjects(data.get("subjects", []))
 
@@ -162,15 +137,8 @@ async def get_book_details(work_key: str) -> dict:
 
 
 async def get_author_name(author_key: str) -> Optional[str]:
-    """
-    Fetches an author's name from OpenLibrary.
-    Used when we have an author key but not a name.
-
-    Args:
-        author_key: OpenLibrary author key, e.g. "/authors/OL34184A"
-    """
     key = author_key.lstrip("/")
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, headers=_OL_HEADERS) as client:
         resp = await client.get(f"{OL_BASE}/{key}.json")
         if resp.status_code != 200:
             return None
