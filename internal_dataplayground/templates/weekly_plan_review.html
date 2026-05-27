@@ -128,14 +128,15 @@
                             name="day_{{ day.day_number }}_{{ meal_key }}_recipe_id">
                         <option value="">— not linked —</option>
                         {% for recipe in recipes %}
-                        {# Auto-select if recipe title appears in suggestion #}
-                        <option value="{{ recipe.id }}"
-                            {% if recipe.title | lower in suggestion | lower %}
-                            selected
-                            {% endif %}>
-                            {{ recipe.title }}
-                        </option>
-                        {% endfor %}
+						{# Exact match only: suggestion must start with the recipe title #}
+						{% set title_lower      = recipe.title | lower %}
+						{% set suggestion_lower = suggestion | lower %}
+						{% set is_match = suggestion_lower[:title_lower | length] == title_lower %}
+						<option value="{{ recipe.id }}"
+								{% if is_match %}selected{% endif %}>
+							{{ recipe.title }}
+						</option>
+						{% endfor %}
                     </select>
                 </div>
                 {% endif %}

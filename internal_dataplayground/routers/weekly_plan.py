@@ -602,12 +602,31 @@ async def shopping_list_view(
                 grouped[cat] = []
             grouped[cat].append(item)
 
+    need_items   = []
+    pantry_items = []
+    need_grouped = {}  # {category: [item, ...]}
+
+    if shopping_list:
+        for item in shopping_list.items:
+            if item.get("in_pantry"):
+                pantry_items.append(item)
+            else:
+                cat = item.get("category", "other")
+                if cat not in need_grouped:
+                    need_grouped[cat] = []
+                need_grouped[cat].append(item)
+        # Sort categories alphabetically
+        need_grouped = dict(sorted(need_grouped.items()))
+
     return templates.TemplateResponse("shopping_list.html", {
-        "request": request,
-        "active_module": "plan",
-        "plan": plan,
+        "request":      request,
+        "plan":         plan,
         "shopping_list": shopping_list,
-        "grouped": grouped,
+        "need_grouped": need_grouped,   # {category: [items to buy]}
+        "pantry_items": pantry_items,   # [items already in pantry]
+        "total":        len(shopping_list.items) if shopping_list else 0,
+        "to_buy":       len(need_items) + sum(len(v) for v in need_grouped.values()),
+        "in_pantry":    len(pantry_items),
     })
  
 async def _sync_plan_status(db: AsyncSession) -> None:

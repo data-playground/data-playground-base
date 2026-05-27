@@ -65,9 +65,9 @@
         </p>
     </div>
 {% else %}
-    {% set total      = shopping_list.items | length %}
-    {% set in_pantry  = shopping_list.items | selectattr('in_pantry','equalto',true) | list | length %}
-    {% set to_buy     = total - in_pantry %}
+	{% set total     = total %}
+	{% set in_pantry = in_pantry %}
+	{% set to_buy    = to_buy %}
     <div class="sl-stats">
         <div class="sl-stat">
             <div class="sl-stat-val">{{ to_buy }}</div>
@@ -84,10 +84,7 @@
     </div>
 
     {# Items to buy grouped by category #}
-    {% set need_items = shopping_list.items | rejectattr('in_pantry','equalto',true) | list %}
-    {% set categories = need_items | map(attribute='category') | unique | list %}
-    {% for cat in categories %}
-        {% set cat_items = need_items | selectattr('category','equalto',cat) | list %}
+    {% for cat, cat_items in need_grouped.items() %}
         {% if cat_items %}
         <div class="sl-cat">
             <div class="sl-cat-head">
@@ -111,7 +108,6 @@
     {% endfor %}
 
     {# Already in pantry #}
-    {% set pantry_items = shopping_list.items | selectattr('in_pantry','equalto',true) | list %}
     {% if pantry_items %}
     <div class="sl-cat pantry-section">
         <div class="sl-cat-head">
