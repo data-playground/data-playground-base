@@ -310,6 +310,23 @@ async def save_entry(
     await db.commit()
     await db.refresh(entry)
 
+    try:
+        from sqlalchemy import select as _select
+        from models import WeeklyPlanDay as _WPD, WeeklyPlan as _WP, WeeklyPlanStatus as _WPS
+        plan_day_result = await db.execute(
+            _select(_WPD)
+            .join(_WP, _WPD.weekly_plan_id == _WP.id)
+            .where(_WPD.plan_date == today)
+            .where(_WP.status.in_([_WPS.CONFIRMED, _WPS.ACTIVE]))
+            .limit(1)
+        )
+        plan_day = plan_day_result.scalar_one_or_none()
+        if plan_day and not plan_day.journal_entry_id:
+            plan_day.journal_entry_id = entry.id
+            await db.commit()
+    except Exception:
+        pass  # Don't fail the journal save if this linking fails
+
     return templates.TemplateResponse("partials/journal_entry_saved.html", {
         "request": request,
         "entry": entry,

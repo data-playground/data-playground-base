@@ -69,6 +69,11 @@
             <i class="fas fa-code icon"></i>
             <span class="sidebar-text">Code Intel</span>
         </a>
+		
+		<a class="nav-item {% if active_module in ('plan', 'intent') %}active{% endif %}" href="/plan">
+			<i class="fas fa-calendar-week icon"></i>
+			<span class="sidebar-text">Weekly Plan</span>
+		</a>
 
         {# ── Journal sub-nav ── #}
         {% if active_module in ('journal', 'journal_synthesis') %}
@@ -162,6 +167,18 @@
             <span class="sidebar-text">Settings</span>
         </a>
         {% endif %}
+		
+		{% if active_module in ('plan', 'intent') %}
+		<div class="nav-label">Planning</div>
+		<a class="nav-item {% if active_module == 'intent' %}active{% endif %}" href="/intent">
+			<span class="icon">⚙</span>
+			<span class="sidebar-text">My Goals & Intent</span>
+		</a>
+		<a class="nav-item" href="/plan/new">
+			<span class="icon">⊕</span>
+			<span class="sidebar-text">Plan This Week</span>
+		</a>
+		{% endif %}
 
     </nav>
 

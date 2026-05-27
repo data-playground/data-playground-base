@@ -165,6 +165,32 @@ def task_collect_data(**context):
             log.info("Habit data collected: %d habits, %.1f%% completion", len(habit_rows), habits_completion_rate)
     except Exception as exc:
         log.info("Habit data skipped (Phase 2 not yet built): %s", exc)
+        
+
+    # ── WEEKLY PLAN ADHERENCE ────────────────────────────────────────────────────
+    plan_adherence = {}
+    try:
+        plan_row = fetch_one(
+            """SELECT meal_adherence_pct, workout_adherence_pct,
+                      meals_planned, meals_followed,
+                      workouts_planned, workouts_completed
+               FROM weekly_plans
+               WHERE week_start_date = %s""",
+            (week_start.isoformat(),)
+        )
+        if plan_row:
+            plan_adherence = dict(plan_row)
+            data_sources.append("weekly_plans")
+            log.info(
+                "Plan adherence: meals %d%%, workouts %d%%",
+                plan_row.get("meal_adherence_pct", 0),
+                plan_row.get("workout_adherence_pct", 0),
+            )
+    except Exception as exc:
+        log.info("Weekly plan adherence skipped: %s", exc)
+
+    # Add to structured_data:
+    # structured_data["plan_adherence"] = plan_adherence
 
     # ── WORKOUT DATA (Phase 4) ────────────────────────────────────────────────
     try:
@@ -238,6 +264,7 @@ def task_collect_data(**context):
         "workout_count": workout_data.get("count", 0),
         "workout_data": workout_data,
         "data_sources": data_sources,
+        "plan_adherence": plan_adherence,
     }
 
     log.info(
@@ -318,6 +345,20 @@ HABITS:
 {workout_section}
 
 Generate a synthesis for this week."""
+
+    adherence = structured_data.get("plan_adherence", {})
+    if adherence:
+        meal_pct = adherence.get("meal_adherence_pct") or adherence.get(
+            "meals_followed", 0
+        ) / max(adherence.get("meals_planned", 1), 1) * 100
+        workout_pct = adherence.get("workout_adherence_pct") or adherence.get(
+            "workouts_completed", 0
+        ) / max(adherence.get("workouts_planned", 1), 1) * 100
+        prompt += f"""
+## Weekly Plan Adherence
+- Meal plan followed: {meal_pct:.0f}% ({adherence.get('meals_followed', '?')}/{adherence.get('meals_planned', '?')} meals)
+- Workouts completed: {workout_pct:.0f}% ({adherence.get('workouts_completed', '?')}/{adherence.get('workouts_planned', '?')} sessions)
+"""
 
     # ── AI PROVIDER SELECTION ──────────────────────────────────────────────────
     try:
