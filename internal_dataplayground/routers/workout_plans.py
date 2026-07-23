@@ -13,21 +13,30 @@ Endpoints:
 
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Optional
 
+from database import get_db  #, get_key
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, desc, func, and_, text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from database import get_db, get_key
 from models import (
-    Exercise, ExerciseEquipmentType, MuscleGroup, PlanOrigin, WeightUnit,
-    WorkoutGoal, WorkoutLocation, WorkoutPlan, WorkoutPlanDay,
-    WorkoutPlanExercise, WorkoutSession, WorkoutSet,
+    Exercise,
+    ExerciseEquipmentType,
+    MuscleGroup,
+    PlanOrigin,
+    WeightUnit,
+    WorkoutGoal,
+    WorkoutLocation,
+    WorkoutPlan,
+    WorkoutPlanDay,
+    WorkoutPlanExercise,
+    WorkoutSession,
+    WorkoutSet,
 )
+from sqlalchemy import and_, desc, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout/plans", tags=["Workout"])
@@ -258,7 +267,7 @@ def _call_gemini_for_plan(
 ) -> str:
     """Calls Gemini 2.5 Flash for plan generation. Sync wrapper for use in async context."""
     import requests as req
-    api_key = get_key("Gemini-API")
+    api_key = os.environ.get("GEMINI_API")
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
         f"models/gemini-2.5-flash:generateContent?key={api_key}"

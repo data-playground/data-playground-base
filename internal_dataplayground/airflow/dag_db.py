@@ -5,13 +5,16 @@ Airflow tasks are synchronous — we use the sync SQLAlchemy engine here.
 The async engine lives only in FastAPI (database.py).
 """
 import json
+
+# from gcp_secrets import get_key
+import os
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from gcp_secrets import get_key
+from sqlalchemy.orm import Session, sessionmaker
 
 
 def get_sync_engine():
-    mdb_json = json.loads(get_key("MariaDB"))
+    mdb_json = json.loads(os.environ.get("MARIA_DB"))
     url = f"mysql+pymysql://data_playground:{mdb_json['password']}@db:3306/jobs"
     return create_engine(url, pool_pre_ping=True)
 
@@ -33,7 +36,7 @@ import pymysql.cursors
 
 
 def get_connection() -> pymysql.connections.Connection:
-    mdb_json = json.loads(get_key("MariaDB"))
+    mdb_json = json.loads(os.environ.get("MARIA_DB"))
     return pymysql.connect(
         host="db",
         user="data_playground",

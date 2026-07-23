@@ -1,23 +1,22 @@
-from logging.config import fileConfig
-
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
-from alembic import context
-
 import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
+import json
+import os
 
 # 1. Import your FastAPI models and secret fetcher
 import sys
-import os
-import json
+from logging.config import fileConfig
+
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+from sqlalchemy.ext.asyncio import create_async_engine
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from database import get_key
+# from database import get_key
 
 # 2. Point Alembic to your Base metadata
 from models import Base
+
 target_metadata = Base.metadata
 
 # this is the Alembic Config object, which provides
@@ -26,7 +25,7 @@ config = context.config
 
 # 3. Dynamically build the DB URL using your GCP Secret logic!
 # Assuming your secret is named "db_password" - adjust if necessary
-mdb_json = json.loads(get_key("MariaDB"))
+mdb_json = json.loads(os.environ.get("MariaDB"))
 db_url = f"mysql+asyncmy://data_playground:{mdb_json['password']}@db:3306/jobs"
 config.set_main_option("sqlalchemy.url", db_url)
 

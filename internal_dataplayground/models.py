@@ -1966,7 +1966,9 @@ class WorkoutSession(Base):
     plan: Mapped[Optional["WorkoutPlan"]] = relationship(
         "WorkoutPlan", back_populates="sessions"
     )
-    plan_day: Mapped[Optional["WorkoutPlanDay"]] = relationship("WorkoutPlanDay")
+    plan_day: Mapped[Optional["WorkoutPlanDay"]] = relationship(
+        "WorkoutPlanDay", lazy="selectin"
+    )
     location: Mapped[Optional["WorkoutLocation"]] = relationship(
         "WorkoutLocation", back_populates="sessions"
     )

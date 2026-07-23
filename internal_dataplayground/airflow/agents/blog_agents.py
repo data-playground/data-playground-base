@@ -82,7 +82,9 @@ Target per 5-idea batch: 1 existing_asset, 2 new_build, 2 tutorial.
 
 import json
 import logging
+import os
 import time
+
 import requests
 
 log = logging.getLogger(__name__)
@@ -103,16 +105,16 @@ LARGE_FILE_THRESHOLD_TOKENS = 40_000   # ~160K characters
 # ── KEY HELPERS ───────────────────────────────────────────────────────────────
 
 def _gemini_key() -> str:
-    from gcp_secrets import get_key
-    return get_key("Gemini-API")
+    # from gcp_secrets import get_key
+    return os.environ.get("GEMINI_API")
 
 def _groq_key() -> str:
-    from gcp_secrets import get_key
-    return get_key("Groq-API")
+    # from gcp_secrets import get_key
+    return os.environ.get("GROQ_API")
 
 def _cerebras_key() -> str:
-    from gcp_secrets import get_key
-    return get_key("Cerebras-API")
+    # from gcp_secrets import get_key
+    return os.environ.get("CEREBRAS_API")
 
 
 # ── PROVIDER CALL HELPERS ─────────────────────────────────────────────────────
@@ -213,8 +215,9 @@ _CEREBRAS_INTER_REQUEST_SLEEP = 65  # seconds — slightly over 1 full minute wi
 def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
     log.info("_cerebras() v2 — retry loop active, backoff=%s", _CEREBRAS_BACKOFF)
 
-    from cerebras.cloud.sdk import Cerebras, RateLimitError, APIStatusError
     import time
+
+    from cerebras.cloud.sdk import APIStatusError, Cerebras, RateLimitError
 
     client = Cerebras(api_key=_cerebras_key(), max_retries=0).with_raw_response
     last_exc = None
@@ -345,8 +348,8 @@ def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
         # requests.HTTPError: After all retries are exhausted.
         # RuntimeError:       If Cerebras is unreachable after all retries.
     # """
-    # from gcp_secrets import get_key
-    # cerebras_key = get_key("Cerebras-API")
+    # # from gcp_secrets import get_key
+    # cerebras_key = os.environ.get("CEREBRAS_API")
 
     # url = "https://api.cerebras.ai/v1/chat/completions"
     # headers = {

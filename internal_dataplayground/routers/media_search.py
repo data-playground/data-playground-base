@@ -179,6 +179,12 @@ async def add_from_search(
         await db.commit()
         await db.refresh(item)
 
+    if not item.poster_url:
+        fallback_poster = form.get("poster_url", "").strip()
+        if fallback_poster:
+            item.poster_url = fallback_poster
+            await db.commit()
+        
     # ── Create user_media (idempotent) ────────────────────────────────────────
     existing_um = await db.execute(
         select(UserMedia).where(UserMedia.media_item_id == item.id)

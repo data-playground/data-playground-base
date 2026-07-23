@@ -50,7 +50,9 @@ When adding Playwright:
 
 import json
 import logging
+import os
 import re
+
 import requests
 
 log = logging.getLogger(__name__)
@@ -59,8 +61,8 @@ log = logging.getLogger(__name__)
 # ── KEY HELPERS ───────────────────────────────────────────────────────────────
 
 def _gemini_key() -> str:
-    from gcp_secrets import get_key
-    return get_key("Gemini-API")
+    # from gcp_secrets import get_key
+    return os.environ.get("GEMINI_API")
 
 
 def _gemini_flash(system: str, prompt: str) -> str:

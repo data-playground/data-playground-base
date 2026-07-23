@@ -11,18 +11,19 @@ import csv
 import io
 import json
 import logging
+import os
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from google import genai
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
+from database import get_db  #, get_key
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from google import genai
+from models import Account, Category, Transaction
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db, get_key
-from models import Account, Category, Transaction
 from routers._helpers import html_error
 
 log = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ templates = Jinja2Templates(directory="templates")
 
 
 def _get_client():
-    return genai.Client(api_key=get_key("Gemini-API"))
+    return genai.Client(api_key=os.environ.get("GEMINI_API"))
 
 
 async def _get_active_categories(db: AsyncSession) -> list[str]:

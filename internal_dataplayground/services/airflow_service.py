@@ -14,9 +14,11 @@ Manager on every call — no caching, so a rotated secret takes effect immediate
 
 import base64
 import logging
+import os
+
 import httpx
 
-from gcp_secrets import get_key
+# from gcp_secrets import get_key
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ AIRFLOW_USER = "admin"
 
 def _airflow_headers() -> dict:
     """Build Basic-auth headers using the Airflow admin password from GCP."""
-    password = get_key("Airflow-Admin-Password")
+    password = os.environ.get("AIRFLOW_SECRET_KEY")
     token = base64.b64encode(f"{AIRFLOW_USER}:{password}".encode()).decode()
     return {
         "Authorization": f"Basic {token}",

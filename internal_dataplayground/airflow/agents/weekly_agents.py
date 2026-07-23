@@ -8,14 +8,15 @@ agent_plan_workouts: Distributes workout days across a week from intent + active
 
 import json
 import logging
+import os
 from datetime import date, timedelta
 
 log = logging.getLogger(__name__)
 
 
 def _gemini_key() -> str:
-    from gcp_secrets import get_key
-    return get_key("Gemini-API")
+    # from gcp_secrets import get_key
+    return os.environ.get("GEMINI_API")
 
 
 def _gemini_flash_json(system: str, prompt: str, schema: dict) -> str:

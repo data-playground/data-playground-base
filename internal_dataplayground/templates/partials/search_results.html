@@ -43,7 +43,7 @@
             {% else %}
             <button class="btn btn-primary btn-sm"
                     hx-post="/media/search/add"
-                    hx-vals='{"external_id": "{{ item.external_id }}", "external_source": "{{ item.external_source }}", "title": "{{ item.title | replace('"', '') }}"}'
+                    hx-vals='{"external_id": "{{ item.external_id }}", "external_source": "{{ item.external_source }}", "title": "{{ item.title | replace('"', '') }}", "poster_url": "{{ item.poster_url or '' }}"}'
                     hx-target="#add-btn-{{ item.external_id | replace('/', '-') }}"
                     hx-swap="innerHTML"
                     hx-indicator="#add-spinner-{{ item.external_id | replace('/', '-') }}">

@@ -21,9 +21,12 @@ Key design decisions:
 
 
 import logging
+import os
 from typing import Optional
+
 import httpx
-from gcp_secrets import get_key
+
+# from gcp_secrets import get_key
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +37,7 @@ _genre_cache: dict[str, dict[int, str]] = {}
 
 
 def _get_api_key() -> str:
-    return get_key("TMDB-API-Key")
+    return os.environ.get("TMDB_API_KEY")
 
 
 def _build_poster_url(poster_path: Optional[str]) -> Optional[str]:

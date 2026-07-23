@@ -11,9 +11,12 @@ Required GCP Secret: "Github-Key"
 
 import base64
 import logging
+import os
 from typing import Optional
+
 import httpx
-from database import get_key
+
+# from database import get_key
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +24,7 @@ GITHUB_API = "https://api.github.com"
 
 
 def _get_headers() -> dict:
-    token = get_key("Github-Key")
+    token = os.environ.get("GITHUB_API")
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",

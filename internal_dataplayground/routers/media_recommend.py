@@ -26,21 +26,23 @@ import logging
 import os
 from typing import Optional
 
+from database import get_db
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, and_
+from models import (
+    MediaItem,
+    MediaRecommendation,
+    RecommendationMediaType,
+    StreamingService,
+    UserMedia,
+    UserMediaStatus,
+)
+from services.ml_service_client import build_query_vector, find_similar, health_check
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
-from models import (
-    MediaItem, UserMedia, StreamingService, MediaRecommendation,
-    UserMediaStatus, RecommendationMediaType,
-)
 from routers._helpers import html_error
-from services.ml_service_client import (
-    build_query_vector, find_similar, health_check
-)
 
 router = APIRouter(prefix="/media/recommend", tags=["Media Recommendations"])
 templates = Jinja2Templates(directory="templates")
@@ -346,7 +348,7 @@ async def _gemini_explain(
     Gemini does NOT see embeddings or raw vectors — just titles and metadata.
     """
     import requests as req
-    from gcp_secrets import get_key
+    # from gcp_secrets import get_key
 
     # Build context
     liked_lines = "\n".join(
@@ -390,7 +392,7 @@ Respond ONLY with a JSON array, no markdown:
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={get_key('Gemini-API')}"
+        f"models/gemini-2.5-flash:generateContent?key={os.environ.get('GEMINI_API')}"
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -400,7 +402,8 @@ Respond ONLY with a JSON array, no markdown:
     resp.raise_for_status()
     raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
-    import re, json as _json
+    import json as _json
+    import re
     cleaned = re.sub(r"```(?:json)?", "", raw).strip().strip("`")
     selections = _json.loads(cleaned)
 
