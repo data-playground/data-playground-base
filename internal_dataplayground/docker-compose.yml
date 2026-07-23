@@ -40,6 +40,12 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - GEMINI_API=${GEMINI_API}
       - CEREBRAS_API=${CEREBRAS_API}
+      - GITHUB_API=${GITHUB_API}
+      - GITHUB_MODELS=${GITHUB_API}
+      - GROQ_API=${GROQ_API}
+      - PYTHON_ANYWHERE=${PYTHON_ANYWHERE}
+      - YOUTUBE_API=${YOUTUBE_API}
+      - MARIA_DB=${MARIA_DB}
     volumes:
       - .:/app
 
@@ -96,6 +102,15 @@ services:
       - PYTHONPATH=/opt/airflow/dags:/opt/airflow/project
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - ML_SERVICE_URL=http://ml-service:8001
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - GEMINI_API=${GEMINI_API}
+      - CEREBRAS_API=${CEREBRAS_API}
+      - GITHUB_API=${GITHUB_API}
+      - GITHUB_MODELS=${GITHUB_API}
+      - GROQ_API=${GROQ_API}
+      - PYTHON_ANYWHERE=${PYTHON_ANYWHERE}
+      - YOUTUBE_API=${YOUTUBE_API}
+      - MARIA_DB=${MARIA_DB}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -128,6 +143,15 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-key.json
       - PYTHONPATH=/opt/airflow/dags:/opt/airflow/project
       - ML_SERVICE_URL=http://ml-service:8001
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - GEMINI_API=${GEMINI_API}
+      - CEREBRAS_API=${CEREBRAS_API}
+      - GITHUB_API=${GITHUB_API}
+      - GITHUB_MODELS=${GITHUB_API}
+      - GROQ_API=${GROQ_API}
+      - PYTHON_ANYWHERE=${PYTHON_ANYWHERE}
+      - YOUTUBE_API=${YOUTUBE_API}
+      - MARIA_DB=${MARIA_DB}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
