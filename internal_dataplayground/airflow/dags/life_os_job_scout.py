@@ -104,6 +104,8 @@ def task_search_and_scrape(**context):
     for idx, job in enumerate(new_jobs):
         if idx > 0:
             time.sleep(DETAIL_FETCH_DELAY_SEC)
+        if idx % 10:
+            log.info(f"{idx} out of {len(new_jobs)} scraped")
         description, salary = get_job_details(job["job_link"])
         job["description"] = description
         job["salary"] = salary
