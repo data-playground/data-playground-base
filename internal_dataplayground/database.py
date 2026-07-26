@@ -28,7 +28,7 @@ async_session = None
 async def init_db():
     global engine, async_session
     # Assuming your secret name is "db_password"
-    mdb_json = json.loads(get_key("MariaDB"))
+    mdb_json = json.loads(os.environ("MARIA_DB"))
     
     db_host = "db" if settings.app_env == "production" else "localhost"
 
