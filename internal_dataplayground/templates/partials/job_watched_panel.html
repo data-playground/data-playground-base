@@ -1,0 +1,54 @@
+{# templates/partials/job_watched_panel.html
+   Returned by every watchlist mutation endpoint (add/update/delete).
+   `watched`    = list of WatchedCompany ORM objects
+   `candidates` = list of dicts: company_name, posting_count, avg_fit_score, max_fit_score
+#}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;">
+    {% if watched %}
+        {% for company in watched %}
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;
+                    background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;">
+            <span style="flex:1;min-width:120px;font-size:11px;font-weight:500;color:var(--text-primary);
+                         {% if not company.is_active %}opacity:0.5;{% endif %}">
+                {{ company.company_name }}
+            </span>
+
+            {% for badge in company.source_badges %}
+            <span class="badge badge-accent">{{ badge }}</span>
+            {% endfor %}
+            {% if not company.source_badges %}
+            <span class="badge badge-yellow">no slug yet</span>
+            {% endif %}
+
+            <input class="form-input" type="text" name="greenhouse_slug"
+                   style="width:140px;font-size:10px;padding:4px 8px;"
+                   placeholder="greenhouse slug" value="{{ company.greenhouse_slug or '' }}"
+                   hx-patch="/jobs/config/watched/{{ company.id }}"
+                   hx-trigger="change" hx-target="#watched-panel" hx-swap="innerHTML">
+
+            <input class="form-input" type="text" name="lever_slug"
+                   style="width:120px;font-size:10px;padding:4px 8px;"
+                   placeholder="lever slug" value="{{ company.lever_slug or '' }}"
+                   hx-patch="/jobs/config/watched/{{ company.id }}"
+                   hx-trigger="change" hx-target="#watched-panel" hx-swap="innerHTML">
+
+            <button class="btn btn-sm btn-danger"
+                    hx-delete="/jobs/config/watched/{{ company.id }}"
+                    hx-target="#watched-panel" hx-swap="innerHTML"
+                    hx-confirm="Remove {{ company.company_name }} from the watchlist?">
+                Remove
+            </button>
+        </div>
+        {% endfor %}
+    {% else %}
+    <p style="font-size:11px;color:var(--text-muted);">No companies on the watchlist yet.</p>
+    {% endif %}
+</div>
+
+<div style="border-top:1px solid var(--border);padding-top:14px;">
+    <div style="font-size:9px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;
+                color:var(--text-muted);margin-bottom:10px;">
+        Candidates — strong LinkedIn performers not yet followed
+    </div>
+    {% include "partials/job_candidate_list.html" %}
+</div>

@@ -46,6 +46,8 @@ class Job(Base):
     job_search: Mapped[str] = mapped_column(String(255), nullable=True)
     search_date: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today)
 
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="linkedin")
+    external_ref: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # ✅ Relationship — lets you do job.application_logs anywhere in Python
     # without writing a JOIN manually
@@ -103,6 +105,70 @@ class ApplicationLog(Base):
 
     # Back-reference to the parent Job
     job: Mapped["Job"] = relationship("Job", back_populates="application_logs")
+
+
+class JobSearchKeyword(Base):
+    """
+    Replaces the hardcoded DEFAULT_SEARCHES list in life_os_job_scout.py.
+    The DAG reads active keywords straight from this table via dag_db raw
+    SQL — editing the list here (through the Jobs > Config page) takes
+    effect on the next scheduled run, no deploy required.
+    """
+    __tablename__ = "job_search_keywords"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    keyword: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow, nullable=False,
+    )
+
+
+class WatchedCompany(Base):
+    """
+    The curated Greenhouse/Lever company watchlist that job_ats_agents.py
+    reads from. Populated manually or via the "candidate companies" panel
+    on the Jobs > Config page, which surfaces companies whose LinkedIn
+    postings keep scoring high but aren't followed yet.
+
+    greenhouse_slug / lever_slug are the board tokens from the company's
+    public job board URL (e.g. boards.greenhouse.io/{slug} or
+    jobs.lever.co/{slug}) — there's no directory to look these up
+    automatically, they have to be found and entered once per company.
+    """
+    __tablename__ = "watched_companies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    greenhouse_slug: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lever_slug: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    source_note: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    added_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow, nullable=False,
+    )
+
+    @property
+    def has_ats_source(self) -> bool:
+        return bool(self.greenhouse_slug or self.lever_slug)
+
+    @property
+    def source_badges(self) -> list[str]:
+        badges = []
+        if self.greenhouse_slug:
+            badges.append("Greenhouse")
+        if self.lever_slug:
+            badges.append("Lever")
+        return badges
 
 
 # Pydantic model for API responses

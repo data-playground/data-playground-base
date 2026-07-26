@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Life OS — Job Scout Config{% endblock %}
+{% block page_title %}Job Scout — Config{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/jobs">← Back to Jobs</a>
+{% endblock %}
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:20px;">
+
+    <!-- SEARCH KEYWORDS -->
+    <div class="panel">
+        <div class="panel-title">LinkedIn Search Keywords</div>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
+            The Job Scout DAG runs each of these as a separate LinkedIn search on its
+            schedule. Changes here take effect on the next scheduled run — no deploy needed.
+        </p>
+
+        <form hx-post="/jobs/config/keywords" hx-target="#keyword-list" hx-swap="innerHTML"
+              hx-on::after-request="this.reset()"
+              style="display:flex;gap:8px;margin-bottom:14px;">
+            <input class="form-input" type="text" name="keyword"
+                   placeholder="e.g. Staff Data Engineer" style="flex:1;">
+            <button class="btn btn-primary" type="submit">+ Add Keyword</button>
+        </form>
+
+        <div id="keyword-list">
+            {% include "partials/job_keyword_list.html" %}
+        </div>
+    </div>
+
+    <!-- ATS WATCHLIST + CANDIDATES -->
+    <div class="panel">
+        <div class="panel-title">Greenhouse / Lever Company Watchlist</div>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
+            Companies here get checked directly against their official job board API —
+            no scraping, no rate-limit risk. Find each company's board slug from their
+            careers page URL (<code>boards.greenhouse.io/&lt;slug&gt;</code> or
+            <code>jobs.lever.co/&lt;slug&gt;</code>).
+        </p>
+
+        <form hx-post="/jobs/config/watched" hx-target="#watched-panel" hx-swap="innerHTML"
+              hx-on::after-request="this.reset()"
+              style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <input class="form-input" type="text" name="company_name" required
+                   placeholder="Company name" style="flex:1;min-width:160px;">
+            <input class="form-input" type="text" name="greenhouse_slug"
+                   placeholder="Greenhouse slug (optional)" style="width:180px;">
+            <input class="form-input" type="text" name="lever_slug"
+                   placeholder="Lever slug (optional)" style="width:160px;">
+            <button class="btn btn-primary" type="submit">+ Add Company</button>
+        </form>
+
+        <div id="watched-panel">
+            {% include "partials/job_watched_panel.html" %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

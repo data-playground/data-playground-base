@@ -8,7 +8,8 @@ from fastapi.templating import Jinja2Templates
 from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from routers import jobs, ats, staging, dashboard, blog, explorer
+from routers import ats, staging, dashboard, blog, explorer
+from routers import jobs, job_config
 from routers import finance_summary, finance_ledger, finance_upload, finance_settings
 from routers import ci_projects, ci_files, ci_readme
 from routers import habits, journal
@@ -38,6 +39,7 @@ app.include_router(finance_summary.router)
 
 # ── Other modules ──────────────────────────────────────────────────────────────
 app.include_router(jobs.router)
+app.include_router(job_config.router)
 app.include_router(ats.router)
 app.include_router(staging.router)
 app.include_router(blog.router)

@@ -1,0 +1,30 @@
+{# templates/partials/job_candidate_list.html
+   Returned standalone by GET /jobs/config/candidates, and included inside
+   job_watched_panel.html after any watchlist mutation.
+   `candidates` = list of dicts: company_name, posting_count, avg_fit_score, max_fit_score
+#}
+{% if candidates %}
+<div id="candidate-list" style="display:flex;flex-direction:column;gap:6px;">
+    {% for c in candidates %}
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
+                background:var(--bg-card);border:1px solid var(--border);border-radius:6px;">
+        <span style="flex:1;font-size:11px;color:var(--text-primary);">{{ c.company_name }}</span>
+        <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">{{ c.posting_count }} postings</span>
+        <span class="badge {% if c.avg_fit_score >= 90 %}badge-green{% else %}badge-yellow{% endif %}">
+            avg fit {{ c.avg_fit_score }}
+        </span>
+        <form hx-post="/jobs/config/watched" hx-target="#watched-panel" hx-swap="innerHTML" style="display:inline;">
+            <input type="hidden" name="company_name" value="{{ c.company_name }}">
+            <input type="hidden" name="source_note"
+                   value="{{ c.posting_count }} postings, avg fit {{ c.avg_fit_score }} — promoted from LinkedIn scrape">
+            <button class="btn btn-sm btn-primary" type="submit">+ Add to Watchlist</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p style="font-size:11px;color:var(--text-muted);">
+    No standout companies yet — this list fills in once a company shows up more than
+    once in your LinkedIn scrape with a consistently strong fit score.
+</p>
+{% endif %}

@@ -1,0 +1,33 @@
+{# templates/partials/job_keyword_list.html
+   Returned by the keyword add/toggle/delete endpoints and included on initial page load.
+   `keywords` = list of JobSearchKeyword ORM objects
+#}
+{% if keywords %}
+<div style="display:flex;flex-direction:column;gap:6px;">
+    {% for kw in keywords %}
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
+                background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;">
+        <span style="flex:1;font-size:11px;color:var(--text-primary);
+                     {% if not kw.is_active %}opacity:0.5;text-decoration:line-through;{% endif %}">
+            {{ kw.keyword }}
+        </span>
+        <span class="badge {% if kw.is_active %}badge-accent{% else %}badge-muted{% endif %}">
+            {{ 'active' if kw.is_active else 'paused' }}
+        </span>
+        <button class="btn btn-sm"
+                hx-patch="/jobs/config/keywords/{{ kw.id }}/toggle"
+                hx-target="#keyword-list" hx-swap="innerHTML">
+            {{ 'Pause' if kw.is_active else 'Resume' }}
+        </button>
+        <button class="btn btn-sm btn-danger"
+                hx-delete="/jobs/config/keywords/{{ kw.id }}"
+                hx-target="#keyword-list" hx-swap="innerHTML"
+                hx-confirm="Remove '{{ kw.keyword }}' from the search list?">
+            Remove
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p style="font-size:11px;color:var(--text-muted);">No search keywords yet — add one above.</p>
+{% endif %}
