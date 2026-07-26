@@ -25,7 +25,7 @@ config = context.config
 
 # 3. Dynamically build the DB URL using your GCP Secret logic!
 # Assuming your secret is named "db_password" - adjust if necessary
-mdb_json = json.loads(os.environ.get("MariaDB"))
+mdb_json = json.loads(os.environ.get("MARIA_DB"))
 db_url = f"mysql+asyncmy://data_playground:{mdb_json['password']}@db:3306/jobs"
 config.set_main_option("sqlalchemy.url", db_url)
 
