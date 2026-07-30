@@ -1,19 +1,27 @@
 {# templates/partials/habit_card.html
    Returned by POST /habits/log and DELETE /habits/log (HTMX outerHTML swap).
-   Also iterated directly in habits.html for the initial page render.
+   Also included directly from habits.html's {% for view in habit_views %}
+   loop for the initial page render.
 
    After each toggle, hx-on::after-request fires a second HTMX request
    to GET /habits/progress, which refreshes only the progress bar without
    reloading the full page.
 
-   Context:
-     habit        = Habit ORM object
-     today_logged = bool — whether this habit is logged today
-     streak       = int — current streak count
-     today        = datetime.date
-#}
-{# templates/partials/habit_card.html
-   Context: habit, today_logged (bool), streak (int), today (date)
+   Required context — both `view` and `habit` must be supplied SEPARATELY,
+   they are not interchangeable:
+     view  = dict/object with `.today_logged` (bool) and `.streak` (int) —
+             referenced in this template as view.today_logged / view.streak
+     habit = Habit ORM object — referenced directly as habit.id, habit.color,
+             habit.icon, habit.name (NOT via view.habit.*)
+     today = datetime.date
+
+   habits.html satisfies this via `{% set habit = view.habit %}` right
+   before including this partial, inside a loop where `view` is already the
+   loop variable. Router call sites must pass both keys explicitly, e.g.
+   {"request": request, "view": view, "habit": habit, "today": today} —
+   spreading a view dict with **view instead previously caused a 500
+   (view undefined) once the router's context stopped including a literal
+   `view` key; see the habits-domain migration ticket for the incident.
 #}
 <div class="habit-card {% if view.today_logged %}completed{% endif %}"
      id="habit-card-{{ habit.id }}"

@@ -25,7 +25,7 @@ from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import JobSearchKeyword, WatchedCompany, Job
+from models import JobSearchKeyword, WatchedCompany, Job, JobScoutRunLog
 from routers._helpers import html_error
 
 router = APIRouter(prefix="/jobs/config", tags=["Job Config"])
@@ -36,18 +36,52 @@ CANDIDATE_MIN_POSTINGS = 2
 CANDIDATE_MIN_AVG_FIT = 80
 
 
+async def _get_health_summary(db: AsyncSession) -> list[dict]:
+    """
+    Latest run per DAG from job_scout_run_log, written by life_os_job_scout.py,
+    life_os_job_scout_ats.py (and read again by life_os_daily_digest.py in
+    Airflow via job_scout_health.py — same table, two different read paths,
+    since the FastAPI container can't share Airflow's dag_db/pymysql setup).
+    """
+    latest_subq = (
+        select(
+            JobScoutRunLog.dag_id,
+            func.max(JobScoutRunLog.run_at).label("max_run_at"),
+        )
+        .group_by(JobScoutRunLog.dag_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(JobScoutRunLog).join(
+            latest_subq,
+            (JobScoutRunLog.dag_id == latest_subq.c.dag_id)
+            & (JobScoutRunLog.run_at == latest_subq.c.max_run_at),
+        )
+    )
+    return [
+        {
+            "dag_id": r.dag_id, "run_at": r.run_at, "items_found": r.items_found,
+            "new_items": r.new_items, "items_loaded": r.items_loaded,
+            "status": r.status, "message": r.message,
+        }
+        for r in result.scalars().all()
+    ]
+
+
 @router.get("", response_class=HTMLResponse)
 async def config_page(request: Request, db: AsyncSession = Depends(get_db)):
     keywords_result = await db.execute(select(JobSearchKeyword).order_by(JobSearchKeyword.keyword))
     watched_result = await db.execute(select(WatchedCompany).order_by(WatchedCompany.company_name))
     candidates = await _get_candidate_companies(db)
+    health = await _get_health_summary(db)
 
     return templates.TemplateResponse("job_config.html", {
         "request": request,
-        "active_module": "jobs",
+        "active_module": "jobs_settings",
         "keywords": keywords_result.scalars().all(),
         "watched": watched_result.scalars().all(),
         "candidates": candidates,
+        "health": health,
     })
 
 
@@ -208,4 +242,30 @@ async def _render_watched_panel(request: Request, db: AsyncSession) -> HTMLRespo
         "request": request,
         "watched": watched_result.scalars().all(),
         "candidates": candidates,
+    })
+
+
+# ── SLUG AUTO-DETECTION ───────────────────────────────────────────────────────
+
+@router.post("/watched/detect", response_class=HTMLResponse)
+async def detect_slugs(request: Request):
+    """
+    Best-effort guess at a company's Greenhouse/Lever slug from its name —
+    saves the "open their careers page, find the URL, copy the token" step
+    for the common case where the slug is just the company name. Always
+    shown as a suggestion to confirm, never auto-saved — a generic guess can
+    occasionally land on an unrelated company with a similar name.
+    """
+    from services.ats_slug_service import guess_ats_slugs
+
+    form = await request.form()
+    company_name = str(form.get("company_name", "")).strip()
+    if not company_name:
+        return HTMLResponse(
+            '<span style="font-size:10px;color:var(--red);">Enter a company name first.</span>'
+        )
+
+    guesses = await guess_ats_slugs(company_name)
+    return templates.TemplateResponse("partials/job_slug_guess.html", {
+        "request": request, "guesses": guesses,
     })

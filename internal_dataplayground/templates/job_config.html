@@ -7,6 +7,31 @@
 {% block content %}
 <div style="max-width:1100px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:20px;">
 
+    <!-- SCRAPE HEALTH -->
+    <div class="panel">
+        <div class="panel-title">Scrape Health</div>
+        {% if health %}
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            {% for h in health %}
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:6px;
+                        background:{% if h.status == 'warning' %}rgba(232,160,32,0.08){% else %}var(--bg-hover){% endif %};
+                        border-left:3px solid {% if h.status == 'warning' %}var(--yellow){% else %}var(--accent){% endif %};">
+                <span style="font-size:11px;font-weight:600;color:var(--text-primary);min-width:180px;">{{ h.dag_id }}</span>
+                <span style="font-size:10px;color:var(--text-muted);">
+                    last run {{ h.run_at.strftime('%b %-d, %H:%M') }} —
+                    {{ h.items_found }} found · {{ h.new_items }} new · {{ h.items_loaded }} loaded
+                </span>
+                {% if h.message %}
+                <span style="font-size:10px;color:var(--yellow);margin-left:auto;">⚠ {{ h.message }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:11px;color:var(--text-muted);">No runs logged yet — check back after the DAGs have run at least once.</p>
+        {% endif %}
+    </div>
+
     <!-- SEARCH KEYWORDS -->
     <div class="panel">
         <div class="panel-title">LinkedIn Search Keywords</div>
@@ -33,14 +58,12 @@
         <div class="panel-title">Greenhouse / Lever Company Watchlist</div>
         <p style="font-size:11px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
             Companies here get checked directly against their official job board API —
-            no scraping, no rate-limit risk. Find each company's board slug from their
-            careers page URL (<code>boards.greenhouse.io/&lt;slug&gt;</code> or
-            <code>jobs.lever.co/&lt;slug&gt;</code>).
+            no scraping, no rate-limit risk.
         </p>
 
-        <form hx-post="/jobs/config/watched" hx-target="#watched-panel" hx-swap="innerHTML"
-              hx-on::after-request="this.reset()"
-              style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <form id="add-company-form" hx-post="/jobs/config/watched" hx-target="#watched-panel" hx-swap="innerHTML"
+              hx-on::after-request="this.reset(); document.getElementById('slug-guess-result').innerHTML='';"
+              style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
             <input class="form-input" type="text" name="company_name" required
                    placeholder="Company name" style="flex:1;min-width:160px;">
             <input class="form-input" type="text" name="greenhouse_slug"
@@ -49,6 +72,16 @@
                    placeholder="Lever slug (optional)" style="width:160px;">
             <button class="btn btn-primary" type="submit">+ Add Company</button>
         </form>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <button type="button" class="btn btn-sm"
+                    hx-post="/jobs/config/watched/detect"
+                    hx-include="#add-company-form [name='company_name']"
+                    hx-target="#slug-guess-result" hx-swap="innerHTML">
+                🔍 Auto-detect slugs
+            </button>
+            <div id="slug-guess-result" style="flex:1;"></div>
+        </div>
 
         <div id="watched-panel">
             {% include "partials/job_watched_panel.html" %}

@@ -12,7 +12,8 @@ from routers import ats, staging, dashboard, blog, explorer
 from routers import jobs, job_config
 from routers import finance_summary, finance_ledger, finance_upload, finance_settings
 from routers import ci_projects, ci_files, ci_readme
-from routers import habits, journal
+from routers import journal
+from domains.habits.routers import habits
 from routers import recipe_extract, recipe_discovery, pantry, recipes   # ← NEW
 from routers import workout, workout_log, workout_plans, workout_settings
 from routers import media, media_search, media_recommend, media_settings
@@ -29,6 +30,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+# NOTE: the more specific mount must be registered before the general
+# "/static" mount below — Starlette matches Mount routes in registration
+# order, so registering "/static" first would greedily intercept every
+# "/static/habits/*" request and 404 it against the wrong directory.
+app.mount("/static/habits", StaticFiles(directory="domains/habits/static"), name="habits_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Finance (specific prefixes before catch-all /finance summary) ──────────────

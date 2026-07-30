@@ -4,7 +4,7 @@
 {% block topbar_actions %}
     <a class="btn" href="/habits">← Back to Habits</a>
 {% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="/static/css/habits.css">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/habits/css/habits.css">{% endblock %}
 
 {% block content %}
 <main class="main-content">
@@ -94,11 +94,24 @@
 
 <script>
 // ── INLINE EDIT TOGGLE ─────────────────────────────────────────────────────
+/**
+ * Shows/hides the inline edit form for one habit row in the settings list.
+ * Purely a client-side visibility toggle — no network request. The fields
+ * inside are pre-populated server-side by habit_settings_row.html each time
+ * that row is rendered.
+ * @param {number} habitId - id of the habit whose edit fields to toggle.
+ */
 function toggleEditFields(habitId) {
     const el = document.getElementById(`edit-fields-${habitId}`);
     el.classList.toggle('open');
 }
 
+/**
+ * Saves the inline edit form's current values for one habit via
+ * PATCH /habits/{habitId}, then swaps the returned row HTML in place.
+ * Requires a non-empty name; shows an error toast and aborts otherwise.
+ * @param {number} habitId - id of the habit being edited.
+ */
 async function saveHabitEdit(habitId) {
     const name = document.getElementById(`edit-name-${habitId}`).value.trim();
     const desc = document.getElementById(`edit-desc-${habitId}`).value.trim();
@@ -123,6 +136,15 @@ async function saveHabitEdit(habitId) {
 // ── HEATMAP ───────────────────────────────────────────────────────────────
 const _heatmapLoaded = new Set();
 
+/**
+ * Expands/collapses a habit's activity heatmap section, lazily fetching
+ * and rendering it on first expand only (tracked via `_heatmapLoaded` so
+ * re-toggling open/closed doesn't re-fetch).
+ * @param {number} habitId - id of the habit whose heatmap to toggle.
+ * @param {string} color - hex color to use for "logged" cells if rendering.
+ * @param {HTMLElement} btn - the clicked button (currently unused, kept for
+ *   call-site symmetry with the other inline onclick handlers).
+ */
 function toggleHeatmap(habitId, color, btn) {
     const section = document.getElementById(`heatmap-${habitId}`);
     const isOpen = section.classList.toggle('open');
@@ -132,6 +154,13 @@ function toggleHeatmap(habitId, color, btn) {
     }
 }
 
+/**
+ * Fetches 365 days of activity data from GET /habits/heatmap/{habitId} and
+ * renders it into that habit's heatmap-wrap element via buildHeatmapSvg().
+ * Shows an inline error message instead of throwing if the fetch fails.
+ * @param {number} habitId - id of the habit to render a heatmap for.
+ * @param {string} color - hex color passed through to buildHeatmapSvg().
+ */
 async function renderHeatmap(habitId, color) {
     const wrap = document.getElementById(`heatmap-wrap-${habitId}`);
     try {
@@ -144,8 +173,18 @@ async function renderHeatmap(habitId, color) {
     }
 }
 
+/**
+ * Builds a GitHub-style contribution heatmap as an inline SVG: 53
+ * columns (weeks) x 7 rows (days), covering the trailing 365 days.
+ * 53 rather than 52 because 365 days doesn't divide evenly into whole
+ * weeks — the extra column absorbs the partial week at the start of
+ * the window so every day in `data` gets a cell. Cell = 11px + 2px gap.
+ * @param {Array<{date: string, count: number}>} data - one entry per day,
+ *   oldest first, as returned by GET /habits/heatmap/{habit_id}.
+ * @param {string} color - hex color used for cells with count > 0.
+ * @returns {SVGSVGElement} the assembled, ready-to-append heatmap SVG.
+ */
 function buildHeatmapSvg(data, color) {
-    // 52 columns (weeks) × 7 rows (days). Cell = 11px + 2px gap.
     const CELL = 11;
     const GAP  = 2;
     const COLS = 53;
@@ -272,6 +311,13 @@ document.addEventListener('dragover', e => {
     document.getElementById('save-order-bar').classList.add('visible');
 });
 
+/**
+ * Persists the current on-screen habit ordering (after a drag-and-drop
+ * reorder) via PATCH /habits/reorder, sending each row's current DOM
+ * position as its new sort_order. Reads directly from the DOM rather than
+ * tracking order in JS state, so it's always sending exactly what the user
+ * currently sees. Hides the "Save Order" bar again on success.
+ */
 async function saveOrder() {
     const rows = document.querySelectorAll('#habit-list-container .habit-settings-row');
     const payload = [...rows].map((row, idx) => ({
@@ -293,6 +339,15 @@ async function saveOrder() {
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────
+/**
+ * Shows a brief, auto-dismissing toast notification.
+ * Assumes a shared `#toast` element exists somewhere on the page (expected
+ * to live in base.html, which is outside this domain's scope) — if it's
+ * absent, this silently no-ops rather than throwing.
+ * @param {string} msg - message text to display.
+ * @param {boolean} [isError=false] - true renders it in the error style
+ *   (adds the `error` CSS class) instead of the default success style.
+ */
 function showToast(msg, isError = false) {
     const t = document.getElementById('toast');
     if (!t) return;

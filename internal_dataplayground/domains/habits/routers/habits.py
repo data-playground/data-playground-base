@@ -31,18 +31,17 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, delete, text, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import Habit, HabitLog, HabitSettings
+from domains.habits.models import Habit, HabitLog, HabitSettings
+from core.templating import templates
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/habits", tags=["Habits"])
-templates = Jinja2Templates(directory="templates")
 
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -254,6 +253,16 @@ async def log_habit(request: Request, db: AsyncSession = Depends(get_db)):
         await db.rollback()
         # Already logged — that's fine, treat as success
 
+    # Re-fetch: both commit() and rollback() can expire `habit`'s attributes
+    # (rollback always does; commit does too unless the session explicitly
+    # sets expire_on_commit=False). Accessing an expired ORM object's
+    # attributes without an explicit awaited reload raises "greenlet_spawn
+    # has not been called" under async SQLAlchemy, so refresh it via an
+    # awaited call before _build_habit_view touches habit.id below.
+    habit = await db.get(Habit, habit_id)
+    if not habit:
+        raise HTTPException(status_code=404, detail=f"Habit {habit_id} not found")
+
     grace_period = await _get_grace_period(db)
     today = datetime.date.today()
     today_logged_ids = await _get_today_logged_ids(db, today)
@@ -261,7 +270,7 @@ async def log_habit(request: Request, db: AsyncSession = Depends(get_db)):
 
     return templates.TemplateResponse(
         "partials/habit_card.html",
-        {"request": request, **view, "today": today},
+        {"request": request, "view": view, "habit": habit, "today": today},
     )
 
 
@@ -293,6 +302,12 @@ async def unlog_habit(request: Request, db: AsyncSession = Depends(get_db)):
     )
     await db.commit()
 
+    # Re-fetch: commit() can expire `habit`'s attributes depending on
+    # session configuration — see log_habit() for the full explanation.
+    habit = await db.get(Habit, habit_id)
+    if not habit:
+        raise HTTPException(status_code=404, detail=f"Habit {habit_id} not found")
+
     grace_period = await _get_grace_period(db)
     today = datetime.date.today()
     today_logged_ids = await _get_today_logged_ids(db, today)
@@ -300,7 +315,7 @@ async def unlog_habit(request: Request, db: AsyncSession = Depends(get_db)):
 
     return templates.TemplateResponse(
         "partials/habit_card.html",
-        {"request": request, **view, "today": today},
+        {"request": request, "view": view, "habit": habit, "today": today},
     )
 
 @router.get("/progress", response_class=HTMLResponse)

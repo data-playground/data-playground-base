@@ -67,6 +67,21 @@ def task_fetch_ats_jobs(**context):
     new_jobs = [j for j in all_jobs if (j["source"], j["external_ref"]) not in existing_keys]
     log.info("%d postings found across watched companies, %d are new", len(all_jobs), len(new_jobs))
 
+    # Cross-source dedup: skip anything that's the same role already sitting
+    # in linkedin_jobs from the LinkedIn DAG (same company + near-identical title).
+    from agents.job_dedup import filter_cross_source_duplicates, RECENCY_WINDOW_DAYS
+    cutoff = (datetime.utcnow() - timedelta(days=RECENCY_WINDOW_DAYS)).strftime("%Y-%m-%d")
+    recent_rows = fetch_all(
+        "SELECT company_name, job_title, source FROM linkedin_jobs WHERE search_date >= %s",
+        (cutoff,),
+    )
+    new_jobs, skipped_dupes = filter_cross_source_duplicates(new_jobs, recent_rows)
+    if skipped_dupes:
+        log.info("Skipped %d likely cross-source duplicates (already on LinkedIn)", skipped_dupes)
+
+    context["ti"].xcom_push(key="items_attempted", value=len(companies))
+    context["ti"].xcom_push(key="items_found", value=len(all_jobs))
+
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
     for job in new_jobs:
         job["search_date"] = today_str
@@ -161,6 +176,26 @@ def task_load_to_mysql(**context):
     log.info("Inserted %d ATS jobs into linkedin_jobs", len(statements))
 
 
+def task_log_run(**context):
+    from agents.job_scout_health import log_run
+
+    items_attempted = context["ti"].xcom_pull(key="items_attempted", task_ids="fetch_ats_jobs") or 0
+    items_found = context["ti"].xcom_pull(key="items_found", task_ids="fetch_ats_jobs") or 0
+    fetched = context["ti"].xcom_pull(key="ats_jobs", task_ids="fetch_ats_jobs") or []
+    enriched = context["ti"].xcom_pull(key="enriched_jobs", task_ids="score_jobs") or []
+
+    try:
+        log_run(
+            dag_id="life_os_job_scout_ats",
+            items_attempted=items_attempted,
+            items_found=items_found,
+            new_items=len(fetched),
+            items_loaded=len(enriched),
+        )
+    except Exception as exc:
+        log.error("Failed to write job_scout_run_log: %s", exc)
+
+
 with DAG(
     dag_id="life_os_job_scout_ats",
     default_args=default_args,
@@ -185,5 +220,8 @@ and inserts into `linkedin_jobs` alongside the LinkedIn-sourced rows.
     fetch = PythonOperator(task_id="fetch_ats_jobs", python_callable=task_fetch_ats_jobs)
     score = PythonOperator(task_id="score_jobs",      python_callable=task_score_jobs)
     load  = PythonOperator(task_id="load_to_mysql",   python_callable=task_load_to_mysql)
+    log_run_task = PythonOperator(
+        task_id="log_run", python_callable=task_log_run, trigger_rule="all_done",
+    )
 
-    fetch >> score >> load
+    fetch >> score >> load >> log_run_task

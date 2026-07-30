@@ -96,6 +96,21 @@ def task_search_and_scrape(**context):
     new_jobs = [j for j in all_jobs if j["job_id"] not in existing_ids]
     log.info("%d unique jobs found across all searches, %d are new", len(all_jobs), len(new_jobs))
 
+    # Cross-source dedup: skip anything that's the same role already sitting
+    # in linkedin_jobs from the ATS DAG (same company + near-identical title).
+    from agents.job_dedup import filter_cross_source_duplicates, RECENCY_WINDOW_DAYS
+    cutoff = (datetime.utcnow() - timedelta(days=RECENCY_WINDOW_DAYS)).strftime("%Y-%m-%d")
+    recent_rows = fetch_all(
+        "SELECT company_name, job_title, source FROM linkedin_jobs WHERE search_date >= %s",
+        (cutoff,),
+    )
+    new_jobs, skipped_dupes = filter_cross_source_duplicates(new_jobs, recent_rows)
+    if skipped_dupes:
+        log.info("Skipped %d likely cross-source duplicates (already on an ATS board)", skipped_dupes)
+
+    context["ti"].xcom_push(key="items_attempted", value=len(searches))
+    context["ti"].xcom_push(key="items_found", value=len(all_jobs))
+
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
     for job in new_jobs:
         job["post_date"] = clean_date(job.get("post_date"))
@@ -104,8 +119,6 @@ def task_search_and_scrape(**context):
     for idx, job in enumerate(new_jobs):
         if idx > 0:
             time.sleep(DETAIL_FETCH_DELAY_SEC)
-        if idx % 10:
-            log.info(f"{idx} out of {len(new_jobs)} scraped")
         description, salary = get_job_details(job["job_link"])
         job["description"] = description
         job["salary"] = salary
@@ -213,6 +226,32 @@ def task_load_to_mysql(**context):
     log.info("Inserted %d jobs into linkedin_jobs", len(statements))
 
 
+def task_log_run(**context):
+    """
+    Writes this run's outcome to job_scout_run_log regardless of whether
+    upstream tasks succeeded (trigger_rule="all_done" below) — a scrape
+    that fails outright is exactly the kind of thing the health check
+    should catch, not skip over.
+    """
+    from agents.job_scout_health import log_run
+
+    items_attempted = context["ti"].xcom_pull(key="items_attempted", task_ids="search_and_scrape") or 0
+    items_found = context["ti"].xcom_pull(key="items_found", task_ids="search_and_scrape") or 0
+    scraped = context["ti"].xcom_pull(key="scraped_jobs", task_ids="search_and_scrape") or []
+    enriched = context["ti"].xcom_pull(key="enriched_jobs", task_ids="score_jobs") or []
+
+    try:
+        log_run(
+            dag_id="life_os_job_scout",
+            items_attempted=items_attempted,
+            items_found=items_found,
+            new_items=len(scraped),
+            items_loaded=len(enriched),
+        )
+    except Exception as exc:
+        log.error("Failed to write job_scout_run_log: %s", exc)
+
+
 with DAG(
     dag_id="life_os_job_scout",
     default_args=default_args,
@@ -239,5 +278,8 @@ automatically since it reads from that same table.
     scrape = PythonOperator(task_id="search_and_scrape", python_callable=task_search_and_scrape)
     score  = PythonOperator(task_id="score_jobs",        python_callable=task_score_jobs)
     load   = PythonOperator(task_id="load_to_mysql",     python_callable=task_load_to_mysql)
+    log_run_task = PythonOperator(
+        task_id="log_run", python_callable=task_log_run, trigger_rule="all_done",
+    )
 
-    scrape >> score >> load
+    scrape >> score >> load >> log_run_task

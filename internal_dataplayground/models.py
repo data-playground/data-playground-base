@@ -2,13 +2,14 @@ import datetime
 import enum
 from typing import Optional
 from sqlalchemy import BigInteger, String, Boolean, Date, Text, Integer, Enum, ForeignKey, DateTime, Numeric
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pydantic import BaseModel
 from decimal import Decimal
 
-# The shared Base class for all tables
-class Base(DeclarativeBase):
-    pass
+# The shared Base class for all tables now lives in core/base_model.py.
+# Re-exported here (temporary — see domains/habits pilot roadmap) so every
+# other file still doing `from models import Base` keeps working unchanged.
+from core.base_model import Base
 
 # --- JOBS MODULE ---
 class ApplicationStatus(enum.Enum):
@@ -897,149 +898,12 @@ class FolderReadmeCreate(BaseModel):
     github_path: Optional[str] = None
 
 # ── HABIT TRACKER MODULE ─────────────────────────────────────────────────────
-# Append these classes to the bottom of models.py
-# Also add the following imports at the top of models.py if not already present:
-#   from sqlalchemy import ... Boolean, Date, Integer, String (already present)
-
-class HabitSettings(Base):
-    """
-    Single-row global configuration for the Habit Tracker.
-    Always query with LIMIT 1 — only one row ever exists.
-    """
-    __tablename__ = "habit_settings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
-    # Number of missed days still allowed within a streak window.
-    # 0 = strict consecutive days. 1 = one skipped day is forgiven (default).
-    # The streak calculation walks backwards from yesterday and skips up to
-    # grace_period_days missed days before breaking the streak.
-    grace_period_days: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, nullable=False
-    )
-    updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow,
-        onupdate=datetime.datetime.utcnow, nullable=False
-    )
-
-
-class Habit(Base):
-    """
-    A single trackable behaviour the user wants to build.
-    Supports icon (emoji) and color (hex) for visual identity on the check-in
-    card. sort_order is user-controlled via drag-and-drop in the settings page.
-    """
-    __tablename__ = "habits"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-
-    # emoji character, e.g. '💧' '🏃' '📚'
-    icon: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-
-    # hex color string, e.g. '#7c6fff' — used for card accent and dot color
-    color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)
-
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    # User-controlled display order. Lower = appears first (among incomplete habits).
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, nullable=False
-    )
-    updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow,
-        onupdate=datetime.datetime.utcnow, nullable=False
-    )
-
-    # One log per day per habit — cascade delete so removing a habit removes its history.
-    logs: Mapped[list["HabitLog"]] = relationship(
-        "HabitLog",
-        back_populates="habit",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-
-    @property
-    def color_or_default(self) -> str:
-        """Returns the habit color or the CSS accent variable as fallback."""
-        return self.color or "#7c6fff"
-
-
-class HabitLog(Base):
-    """
-    One row per habit per calendar day. The unique constraint on
-    (habit_id, logged_date) is enforced at the DB level — the router
-    treats INSERT conflicts as idempotent (already logged = success).
-    """
-    __tablename__ = "habit_logs"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-
-    habit_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("habits.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    # The calendar date this log represents — not the insert timestamp.
-    logged_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-
-    # Optional quick note for that day, e.g. "ran 5k", "only 6 hours"
-    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, nullable=False
-    )
-
-    habit: Mapped["Habit"] = relationship("Habit", back_populates="logs")
-
-
-# ── Pydantic schemas ──────────────────────────────────────────────────────────
-
-class HabitCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    color: Optional[str] = None
-
-
-class HabitUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    color: Optional[str] = None
-    sort_order: Optional[int] = None
-    is_active: Optional[bool] = None
-
-
-class HabitResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    icon: Optional[str]
-    color: Optional[str]
-    is_active: bool
-    sort_order: int
-
-    class Config:
-        from_attributes = True
-
-
-class HabitLogResponse(BaseModel):
-    id: int
-    habit_id: int
-    logged_date: datetime.date
-    notes: Optional[str]
-
-    class Config:
-        from_attributes = True
-
+# Moved to domains/habits/models.py as part of the domains-folder pilot
+# migration. Re-exported here so any other file still doing
+# `from models import Habit` (etc.) keeps working unchanged.
+# TODO: remove after all cross-references are updated
+from domains.habits.models import Habit, HabitLog, HabitSettings
+from domains.habits.models import HabitCreate, HabitUpdate, HabitResponse, HabitLogResponse
 
 # ── JOURNAL MODULE ────────────────────────────────────────────────────────────
 # Append these classes to the bottom of models.py
