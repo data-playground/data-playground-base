@@ -1,15 +1,27 @@
 import datetime
 import enum
-from typing import Optional
-from sqlalchemy import BigInteger, String, Boolean, Date, Text, Integer, Enum, ForeignKey, DateTime, Numeric
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pydantic import BaseModel
 from decimal import Decimal
+from typing import Optional
 
 # The shared Base class for all tables now lives in core/base_model.py.
 # Re-exported here (temporary — see domains/habits pilot roadmap) so every
 # other file still doing `from models import Base` keeps working unchanged.
 from core.base_model import Base
+from pydantic import BaseModel
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 
 # --- JOBS MODULE ---
 class ApplicationStatus(enum.Enum):
@@ -171,6 +183,26 @@ class WatchedCompany(Base):
             badges.append("Lever")
         return badges
 
+class JobScoutRunLog(Base):
+    """
+    One row per DAG run for either Job Scout DAG (LinkedIn or ATS). Written
+    by airflow/agents/job_scout_health.log_run(); read here (via SQLAlchemy)
+    for the Settings page panel, and separately by the digest DAG in
+    Airflow (via dag_db, since that container doesn't share this ORM).
+    """
+    __tablename__ = "job_scout_run_log"
+ 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dag_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    run_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, nullable=False
+    )
+    items_attempted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    items_found: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    new_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    items_loaded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
+    message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 # Pydantic model for API responses
 class JobResponse(BaseModel):
@@ -843,6 +875,7 @@ class FolderReadme(Base):
 
 from pydantic import BaseModel
 
+
 class CodeProjectCreate(BaseModel):
     project_name: str
     github_repo: str
@@ -902,9 +935,6 @@ class FolderReadmeCreate(BaseModel):
 # migration. Re-exported here so any other file still doing
 # `from models import Habit` (etc.) keeps working unchanged.
 # TODO: remove after all cross-references are updated
-from domains.habits.models import Habit, HabitLog, HabitSettings
-from domains.habits.models import HabitCreate, HabitUpdate, HabitResponse, HabitLogResponse
-
 # ── JOURNAL MODULE ────────────────────────────────────────────────────────────
 # Append these classes to the bottom of models.py
 #
@@ -912,14 +942,32 @@ from domains.habits.models import HabitCreate, HabitUpdate, HabitResponse, Habit
 #   content, gratitude, and challenges fields are NEVER sent to external AI.
 #   Weekly synthesis is generated from mood_score and energy_score ONLY.
 #   Violating this constraint is a critical privacy bug.
-
 import datetime
 from decimal import Decimal
 from typing import Optional
 
+from domains.habits.models import (
+    Habit,
+    HabitCreate,
+    HabitLog,
+    HabitLogResponse,
+    HabitResponse,
+    HabitSettings,
+    HabitUpdate,
+)
 from sqlalchemy import (
-    BigInteger, String, Boolean, Date, Text, Integer, Enum,
-    ForeignKey, DateTime, Numeric, SmallInteger, JSON  # ← add SmallInteger, JSON
+    JSON,
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,  # ← add SmallInteger, JSON
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -1057,18 +1105,26 @@ class WeeklySynthesis(Base):
 #     not in models — models stay pure data definitions.
 
 
+import datetime
 import enum
 from decimal import Decimal
 from typing import Optional
-import datetime
 
+from pydantic import BaseModel
 from sqlalchemy import (
-    Boolean, Date, DateTime, Enum, ForeignKey, Integer,
-    Numeric, SmallInteger, String, Text, UniqueConstraint,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pydantic import BaseModel
-
 
 # ── ENUMS ─────────────────────────────────────────────────────────────────────
 
@@ -1190,7 +1246,8 @@ class RecipeTag(Base):
 # Association table for the Recipe ↔ RecipeTag many-to-many.
 # Defined as a plain Table (not a mapped class) because it carries
 # no extra columns — just the two foreign keys.
-from sqlalchemy import Table, Column
+from sqlalchemy import Column, Table
+
 recipe_tags_junction = Table(
     "recipe_tags_junction",
     Base.metadata,
@@ -1618,10 +1675,22 @@ class WeightUnit(enum.Enum):
 # ── MODELS ────────────────────────────────────────────────────────────────────
 
 from sqlalchemy import (
-    BigInteger, Boolean, Date, DateTime, Enum, ForeignKey,
-    Integer, JSON, Numeric, SmallInteger, String, Text, UniqueConstraint,
+    JSON,
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 # Base is imported from wherever it's defined in models.py
 
 
@@ -2060,12 +2129,22 @@ import math
 from decimal import Decimal
 from typing import Optional
 
+from pydantic import BaseModel
 from sqlalchemy import (
-    BigInteger, Boolean, Date, DateTime, Enum, ForeignKey,
-    Integer, JSON, Numeric, SmallInteger, String, Text,
+    JSON,
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pydantic import BaseModel
 
 # Base imported from wherever it's defined in models.py
 
@@ -2502,6 +2581,7 @@ class StreamingServiceResponse(BaseModel):
 # ── WEEKLY PLANNING MODULE ────────────────────────────────────────────────────
 
 import enum
+
 
 class FitnessGoal(enum.Enum):
     WEIGHT_LOSS    = "weight_loss"
