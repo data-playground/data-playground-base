@@ -146,6 +146,16 @@
 
 /* ── HABIT SETTINGS LIST ── */
 .habit-settings-list { display:flex; flex-direction:column; gap:6px; }
+
+/* Wrapper around one habit's row + edit-fields + heatmap-section — the
+   draggable unit and HTMX swap target (see habit_settings_row.html for why
+   this exists: dragging/swapping just .habit-settings-row used to leave its
+   edit-fields/heatmap siblings behind at the old DOM position). No gap set
+   here — row/edit-fields/heatmap rely on their own padding/margin-top for
+   spacing, same visual spacing as before minus the list's 6px gap that used
+   to additionally apply whenever edit-fields or heatmap were open. */
+.habit-settings-item { display:flex; flex-direction:column; }
+
 .habit-settings-row {
     display:flex;
     align-items:center;

@@ -126,7 +126,7 @@ async function saveHabitEdit(habitId) {
     const resp = await fetch(`/habits/${habitId}`, { method: 'PATCH', body: fd });
     if (resp.ok) {
         const html = await resp.text();
-        document.getElementById(`settings-row-${habitId}`).outerHTML = html;
+        document.getElementById(`habit-item-${habitId}`).outerHTML = html;
         showToast('Habit updated.');
     } else {
         showToast('Update failed.', true);
@@ -278,30 +278,34 @@ function buildHeatmapSvg(data, color) {
 }
 
 // ── DRAG AND DROP REORDER ─────────────────────────────────────────────────
+// Operates on .habit-settings-item (the wrapper around row + edit-fields +
+// heatmap-section), NOT .habit-settings-row — dragging just the row used to
+// leave its edit-fields/heatmap sections behind at the old position, since
+// they were flat siblings rather than nested inside the dragged element.
 let _draggedEl = null;
 
 document.addEventListener('dragstart', e => {
-    const row = e.target.closest('.habit-settings-row');
-    if (!row) return;
-    _draggedEl = row;
-    row.style.opacity = '0.4';
+    const item = e.target.closest('.habit-settings-item');
+    if (!item) return;
+    _draggedEl = item;
+    item.style.opacity = '0.4';
     e.dataTransfer.effectAllowed = 'move';
 });
 
 document.addEventListener('dragend', e => {
-    const row = e.target.closest('.habit-settings-row');
-    if (row) row.style.opacity = '';
+    const item = e.target.closest('.habit-settings-item');
+    if (item) item.style.opacity = '';
     _draggedEl = null;
 });
 
 document.addEventListener('dragover', e => {
     e.preventDefault();
-    const target = e.target.closest('.habit-settings-row');
+    const target = e.target.closest('.habit-settings-item');
     if (!target || target === _draggedEl) return;
     const list = document.getElementById('habit-list-container');
-    const rows = [...list.querySelectorAll('.habit-settings-row')];
-    const targetIdx = rows.indexOf(target);
-    const draggedIdx = rows.indexOf(_draggedEl);
+    const items = [...list.querySelectorAll('.habit-settings-item')];
+    const targetIdx = items.indexOf(target);
+    const draggedIdx = items.indexOf(_draggedEl);
     if (draggedIdx < targetIdx) {
         target.after(_draggedEl);
     } else {
@@ -313,15 +317,15 @@ document.addEventListener('dragover', e => {
 
 /**
  * Persists the current on-screen habit ordering (after a drag-and-drop
- * reorder) via PATCH /habits/reorder, sending each row's current DOM
+ * reorder) via PATCH /habits/reorder, sending each item's current DOM
  * position as its new sort_order. Reads directly from the DOM rather than
  * tracking order in JS state, so it's always sending exactly what the user
  * currently sees. Hides the "Save Order" bar again on success.
  */
 async function saveOrder() {
-    const rows = document.querySelectorAll('#habit-list-container .habit-settings-row');
-    const payload = [...rows].map((row, idx) => ({
-        id: parseInt(row.dataset.habitId),
+    const items = document.querySelectorAll('#habit-list-container .habit-settings-item');
+    const payload = [...items].map((item, idx) => ({
+        id: parseInt(item.dataset.habitId),
         sort_order: idx,
     }));
     const resp = await fetch('/habits/reorder', {
