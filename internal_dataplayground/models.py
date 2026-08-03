@@ -1,5 +1,6 @@
 import datetime
 import enum
+import math
 from decimal import Decimal
 from typing import Optional
 
@@ -9,19 +10,24 @@ from typing import Optional
 from core.base_model import Base
 from pydantic import BaseModel
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
+    Column,
     Date,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
     Numeric,
+    SmallInteger,
     String,
+    Table,
     Text,
+    UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # --- JOBS MODULE ---
 class ApplicationStatus(enum.Enum):
@@ -594,26 +600,7 @@ class WeeklySynthesis(Base):
 #     not in models — models stay pure data definitions.
 
 
-import datetime
-import enum
-from decimal import Decimal
-from typing import Optional
 
-from pydantic import BaseModel
-from sqlalchemy import (
-    Boolean,
-    Date,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    Numeric,
-    SmallInteger,
-    String,
-    Text,
-    UniqueConstraint,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # ── ENUMS ─────────────────────────────────────────────────────────────────────
 
@@ -735,7 +722,6 @@ class RecipeTag(Base):
 # Association table for the Recipe ↔ RecipeTag many-to-many.
 # Defined as a plain Table (not a mapped class) because it carries
 # no extra columns — just the two foreign keys.
-from sqlalchemy import Column, Table
 
 recipe_tags_junction = Table(
     "recipe_tags_junction",
@@ -1074,10 +1060,7 @@ WORKOUT TRACKER MODULE — append these classes to the bottom of models.py
 Imports to add at the top of models.py if not already present:
   from sqlalchemy import SmallInteger, Numeric, JSON  (Numeric + JSON likely already imported)
 """
-import datetime
-import enum
-from decimal import Decimal
-from typing import Optional
+
 
 # ── ENUMS ─────────────────────────────────────────────────────────────────────
 
@@ -1163,22 +1146,6 @@ class WeightUnit(enum.Enum):
 
 # ── MODELS ────────────────────────────────────────────────────────────────────
 
-from sqlalchemy import (
-    JSON,
-    BigInteger,
-    Boolean,
-    Date,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    Numeric,
-    SmallInteger,
-    String,
-    Text,
-    UniqueConstraint,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # Base is imported from wherever it's defined in models.py
 
@@ -1611,29 +1578,6 @@ PREDEFINED MOOD TAGS:
   Custom tags can be added alongside predefined ones — all stored as
   a JSON string array in mood_tags.
 """
-
-import datetime
-import enum
-import math
-from decimal import Decimal
-from typing import Optional
-
-from pydantic import BaseModel
-from sqlalchemy import (
-    JSON,
-    BigInteger,
-    Boolean,
-    Date,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Integer,
-    Numeric,
-    SmallInteger,
-    String,
-    Text,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # Base imported from wherever it's defined in models.py
 
@@ -2068,9 +2012,6 @@ class StreamingServiceResponse(BaseModel):
         from_attributes = True
 
 # ── WEEKLY PLANNING MODULE ────────────────────────────────────────────────────
-
-import enum
-
 
 class FitnessGoal(enum.Enum):
     WEIGHT_LOSS    = "weight_loss"
