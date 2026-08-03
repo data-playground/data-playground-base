@@ -89,12 +89,15 @@
     </div>
     {% endif %}
 
-    {# Folder README panel — persists independently of project README #}
+    {# Folder README panel — persists independently of project README.
+       `folder_readme` is a FolderReadme ORM row (or None), passed in
+       separately from `project` since a project can hold one persisted
+       README per folder rather than a single project-wide slot. #}
     <div class="folder-readme-panel" id="folder-readme-panel"
-         {% if project.folder_readme_md %}style="display:block;"{% endif %}>
+         {% if folder_readme and folder_readme.readme_md %}style="display:block;"{% endif %}>
         <div class="folder-readme-header">
             <span class="folder-readme-title-text" id="folder-readme-label">
-                📄 {% if project.folder_readme_path %}README for /{{ project.folder_readme_path.split('/')[-1] }}{% else %}Folder README{% endif %}
+                📄 {% if folder_readme %}README for /{{ folder_readme.folder_path.split('/')[-1] }}{% else %}Folder README{% endif %}
             </span>
             <div style="display:flex;gap:6px;align-items:center;">
                 <button class="btn btn-sm" onclick="copyFolderReadme()">⊕ Copy</button>
@@ -105,14 +108,14 @@
         </div>
         <div class="folder-readme-warning">
             Scoped to the selected folder — does <strong>not</strong> overwrite your project README unless you click "Save as Project README".
-            {% if project.folder_readme_generated_at %}
+            {% if folder_readme and folder_readme.readme_generated_at %}
             <span style="color:var(--text-muted);margin-left:6px;">
-                Generated {{ project.folder_readme_generated_at.strftime('%b %d, %H:%M') }}
+                Generated {{ folder_readme.readme_generated_at.strftime('%b %d, %H:%M') }}
             </span>
             {% endif %}
         </div>
         <div class="folder-readme-body">
-            <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ project.folder_readme_md or '' }}</textarea>
+            <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ folder_readme.readme_md if folder_readme else '' }}</textarea>
         </div>
     </div>
 </div>

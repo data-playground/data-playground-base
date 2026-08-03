@@ -17,18 +17,21 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import CodeFile, CodeProject
+from domains.code_intel.models import CodeFile, CodeProject
 from services.github_service import list_repo_files
+from core.templating import templates
+from domains.code_intel.routers.ci_readme import (
+    _get_folder_readme,
+    _get_latest_folder_readme,
+)
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/code-intel", tags=["Code Intelligence"])
-templates = Jinja2Templates(directory="templates")
 
 
 @router.get("", response_class=HTMLResponse)
@@ -108,10 +111,23 @@ async def sync_files_from_github(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Pulls the file tree from GitHub and upserts CodeFile rows.
+    """Pull the file tree from GitHub and upsert CodeFile rows.
+
     Returns the project_detail partial so the tree renders immediately
-    after sync without losing panel context.
+    after sync without losing panel context (selection state, the
+    README Writer card, etc. are rebuilt fresh from this partial).
+
+    Args:
+        project_id: CodeProject to sync files for.
+        request: Current request, forwarded to the template response.
+        db: Async DB session (injected).
+
+    Returns:
+        The re-rendered ``partials/project_detail.html`` fragment, either
+        with a GitHub error or a toast summarizing how many files were added.
+
+    Raises:
+        HTTPException: 404 if the project doesn't exist.
     """
     project = await db.get(CodeProject, project_id)
     if not project:
@@ -128,6 +144,7 @@ async def sync_files_from_github(
             {
                 "request": request,
                 "project": project,
+                "folder_readme": await _get_latest_folder_readme(db, project_id),
                 "error": f"GitHub API error: {exc}",
             },
         )
@@ -160,6 +177,7 @@ async def sync_files_from_github(
         {
             "request": request,
             "project": project,
+            "folder_readme": await _get_latest_folder_readme(db, project_id),
             "toast": f"Synced. {new_count} new file(s) added, {len(existing_paths)} already tracked.",
         },
     )
@@ -171,12 +189,31 @@ async def project_detail(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    """Render the project detail panel (file tree + README Writer + agent cards).
+
+    Args:
+        project_id: CodeProject to render.
+        request: Current request, forwarded to the template response.
+        db: Async DB session (injected).
+
+    Returns:
+        The ``partials/project_detail.html`` fragment, pre-populated with
+        the most recently generated folder README (if any) so it survives
+        a panel reload instead of appearing to disappear.
+
+    Raises:
+        HTTPException: 404 if the project doesn't exist.
+    """
     project = await db.get(CodeProject, project_id)
     if not project:
         raise HTTPException(status_code=404)
     return templates.TemplateResponse(
         "partials/project_detail.html",
-        {"request": request, "project": project},
+        {
+            "request": request,
+            "project": project,
+            "folder_readme": await _get_latest_folder_readme(db, project_id),
+        },
     )
 
 
@@ -222,13 +259,31 @@ async def get_file_statuses(
 @router.get("/projects/{project_id}/status")
 async def project_status(
     project_id: int,
+    folder_path: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Polling endpoint used by the frontend after triggering a batch Airflow job.
-    Returns file counts, last_updated timestamp, folder README state, and
-    README status badge value. All optional attributes use getattr() with
-    fallbacks so the endpoint never 500s on partially migrated projects.
+    """Polling endpoint used after triggering a batch Airflow job.
+
+    Returns file counts, a ``last_updated`` timestamp for detecting when
+    narrate/comment/improve batches have finished, and (when ``folder_path``
+    is supplied) whether that folder's README has been generated more
+    recently than the current file state — the signal the frontend's
+    "poll until folder README is ready" flow waits on.
+
+    Args:
+        project_id: CodeProject to report status for.
+        folder_path: Optional. Which folder's README completion to check.
+            Omit when polling for a project-wide narrate/comment/improve
+            batch rather than a folder-scoped README generation.
+        db: Async DB session (injected).
+
+    Returns:
+        A dict of counts plus ``folder_readme_updated`` (bool),
+        ``folder_readme_path`` (echoes the input, for the frontend's
+        convenience), and the project's README status badge value.
+
+    Raises:
+        HTTPException: 404 if the project doesn't exist.
     """
     result = await db.execute(
         text("""
@@ -248,8 +303,11 @@ async def project_status(
     if not project:
         raise HTTPException(status_code=404)
 
-    folder_readme_generated_at = getattr(project, "folder_readme_generated_at", None)
-    folder_readme_path = getattr(project, "folder_readme_path", None)
+    folder_readme_generated_at = None
+    if folder_path:
+        folder_readme = await _get_folder_readme(db, project_id, folder_path)
+        if folder_readme:
+            folder_readme_generated_at = folder_readme.readme_generated_at
 
     folder_readme_updated = False
     if folder_readme_generated_at and row["last_updated"]:
@@ -265,6 +323,6 @@ async def project_status(
         "improved": row["improved"] or 0,
         "last_updated": str(row["last_updated"]) if row["last_updated"] else None,
         "folder_readme_updated": folder_readme_updated,
-        "folder_readme_path": folder_readme_path,
+        "folder_readme_path": folder_path,
         "readme_status": project.readme_status.value if project else "none",
     }

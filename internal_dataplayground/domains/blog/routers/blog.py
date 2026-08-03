@@ -22,21 +22,20 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from database import get_db
-from models import (
-    BlogIdea, BlogIdeaStatus, BlogProjectType,
-    CodeFile, CodeProject, DIFFICULTY_LEVELS,
+from domains.blog.models import (
+    BlogIdea, BlogIdeaStatus, BlogProjectType, DIFFICULTY_LEVELS,
 )
+from domains.code_intel.models import CodeFile, CodeProject
 from services.airflow_service import trigger_airflow
+from core.templating import templates
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/blog", tags=["Blog"])
-templates = Jinja2Templates(directory="templates")
 
 SCOUT_DAG     = "life_os_blog_scout"
 CREATOR_DAG   = "life_os_blog_creator"

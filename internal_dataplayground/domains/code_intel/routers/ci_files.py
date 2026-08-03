@@ -20,11 +20,10 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import CodeFile, CodeProject, CommentedStatus, ImprovementStatus
+from domains.code_intel.models import CodeFile, CodeProject, CommentedStatus, ImprovementStatus
 from services.airflow_service import trigger_airflow
 from services.github_service import pull_file_content, push_file_content
 from airflow.agents.blog_agents import (
@@ -32,11 +31,11 @@ from airflow.agents.blog_agents import (
     agent_code_commenter,
     agent_code_improver,
 )
+from core.templating import templates
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/code-intel", tags=["Code Intelligence"])
-templates = Jinja2Templates(directory="templates")
 
 # ── DAG identifiers ────────────────────────────────────────────────────────────
 CODE_NARRATE_DAG = "life_os_code_narrate"
@@ -187,12 +186,42 @@ async def improve_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    """Generate a Code Improver report for a single file.
+
+    Runs the improve agent inline (not via Airflow) against the file's
+    currently pulled ``raw_code`` and stores the resulting report on
+    ``improvement_notes``. Never rewrites or applies the suggested changes
+    — this is a review report only.
+
+    Args:
+        file_id: Primary key of the ``CodeFile`` row to analyze.
+        request: Current request, forwarded to the template response.
+        db: Async DB session (injected).
+
+    Returns:
+        The re-rendered ``partials/code_file_detail.html`` HTML fragment
+        with the new improvement report and a success toast.
+
+    Raises:
+        HTTPException: 404 if the file doesn't exist or has no code pulled
+            yet; 500 if the Code Improver agent call itself fails.
+
+    Note:
+        ``agent_code_improver`` returns a ``(content, remaining_tokens)``
+        tuple — ``remaining_tokens`` is quota-monitoring metadata for the
+        Cerebras free-tier limits (see blog_agents.py's ``_cerebras``
+        docstring) and isn't used by this inline, single-file endpoint.
+        Only ``content`` is persisted; assigning the raw tuple to the
+        ``Text``-typed ``improvement_notes`` column would fail at
+        ``db.commit()`` since DBAPI drivers can't bind a tuple as a scalar
+        parameter.
+    """
     code_file = await db.get(CodeFile, file_id)
     if not code_file or not code_file.raw_code:
         raise HTTPException(status_code=404, detail="File not found or no code pulled.")
 
     try:
-        notes = agent_code_improver(
+        notes, _remaining_tokens = agent_code_improver(
             code_content=code_file.raw_code,
             file_name=code_file.file_name,
             narration=code_file.narration or "",

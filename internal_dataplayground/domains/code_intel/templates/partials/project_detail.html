@@ -155,7 +155,8 @@
 {# Root container — flex column so tree + agents stack vertically #}
 <div style="height:100%;display:flex;flex-direction:column;position:relative;"
      data-toast="{{ toast or '' }}"
-     data-project-id="{{ project.id }}">
+     data-project-id="{{ project.id }}"
+     data-initial-folder-readme-path="{{ folder_readme.folder_path if folder_readme else '' }}">
 
     {# ══════════════════════════════════════════════════════════════════════
        ZONE 1 — TREE PANEL
@@ -306,11 +307,15 @@
             </div>
             {% endif %}
 
+            {# `folder_readme` is a FolderReadme ORM row (or None), passed in
+               separately from `project` since a project can hold one
+               persisted README per folder rather than a single project-wide
+               slot — see routers/ci_readme.py's _get_latest_folder_readme(). #}
             <div class="folder-readme-panel" id="folder-readme-panel"
-                 {% if project.folder_readme_md %}style="display:block;"{% endif %}>
+                 {% if folder_readme and folder_readme.readme_md %}style="display:block;"{% endif %}>
                 <div class="folder-readme-header">
                     <span class="folder-readme-title-text" id="folder-readme-label">
-                        📄 {% if project.folder_readme_path %}README for /{{ project.folder_readme_path.split('/')[-1] }}{% else %}Folder README{% endif %}
+                        📄 {% if folder_readme %}README for /{{ folder_readme.folder_path.split('/')[-1] }}{% else %}Folder README{% endif %}
                     </span>
                     <div style="display:flex;gap:6px;align-items:center;">
                         <button class="btn btn-sm" onclick="copyFolderReadme()">⊕ Copy</button>
@@ -321,12 +326,12 @@
                 </div>
                 <div class="folder-readme-warning">
                     Scoped to the selected folder — does <strong>not</strong> overwrite your project README unless you click "Save as Project README".
-                    {% if project.folder_readme_generated_at %}
-                    <span style="color:var(--text-muted);margin-left:6px;">Generated {{ project.folder_readme_generated_at.strftime('%b %d, %H:%M') }}</span>
+                    {% if folder_readme and folder_readme.readme_generated_at %}
+                    <span style="color:var(--text-muted);margin-left:6px;">Generated {{ folder_readme.readme_generated_at.strftime('%b %d, %H:%M') }}</span>
                     {% endif %}
                 </div>
                 <div class="folder-readme-body">
-                    <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ project.folder_readme_md or '' }}</textarea>
+                    <textarea class="readme-editor" id="folder-readme-content" style="min-height:220px;">{{ folder_readme.readme_md if folder_readme else '' }}</textarea>
                 </div>
             </div>
         </div>
@@ -519,7 +524,13 @@ function selectAllVisible() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 let selectedFileIds = new Set();
-let selectedFolderPath = null;
+// Seeded from the most recently generated FolderReadme (if any) so that
+// "Save as Project README" and the folder-readme status poll work right
+// after a panel reload, without requiring the user to re-select the folder
+// in the tree first. See routers/ci_projects.py's project_detail /
+// sync_files_from_github and routers/ci_readme.py's _get_latest_folder_readme().
+let selectedFolderPath = document.querySelector('[data-initial-folder-readme-path]')
+    ?.dataset.initialFolderReadmePath || null;
 
 function onFileCb(fileId) {
     const cb = document.getElementById(`cb-${fileId}`);
@@ -857,18 +868,33 @@ let _pollingForFolderReadme = false;
 const POLL_INTERVAL_MS = 8000;
 const POLL_MAX = 45;
 
-function startPolling() {
+// Builds the /status URL, including folder_path when we're polling for a
+// folder-scoped README (so the backend can find the right FolderReadme row
+// instead of a project-wide one — see routers/ci_projects.py's project_status()).
+function statusPollUrl() {
+    const base = `/code-intel/projects/${window._projectId}/status`;
+    if (_pollingForFolderReadme && selectedFolderPath) {
+        return `${base}?folder_path=${encodeURIComponent(selectedFolderPath)}`;
+    }
+    return base;
+}
+
+function startPolling(forFolderReadme = false) {
     if (_pollTimer) return;
-    _pollCount = 0; _lastUpdated = null; _pollingForFolderReadme = false;
+    // NOTE: forFolderReadme is a parameter (not a bare reset to false) so that
+    // startPollingForFolderReadme() calling this doesn't immediately clobber
+    // the flag it just set — that was a pre-existing bug where the
+    // "folder README ready" toast could never fire, since _pollingForFolderReadme
+    // was unconditionally reset to false on every startPolling() call.
+    _pollCount = 0; _lastUpdated = null; _pollingForFolderReadme = forFolderReadme;
     document.getElementById('poll-indicator')?.classList.add('active');
-    fetch(`/code-intel/projects/${window._projectId}/status`)
+    fetch(statusPollUrl())
         .then(r => r.json()).then(d => { _lastUpdated = d.last_updated; }).catch(() => {});
     _pollTimer = setInterval(checkStatus, POLL_INTERVAL_MS);
 }
 
 function startPollingForFolderReadme() {
-    _pollingForFolderReadme = true;
-    startPolling();
+    startPolling(true);
 }
 
 async function checkStatus() {
@@ -886,7 +912,7 @@ async function checkStatus() {
     if (label) label.textContent = `Airflow running… (${_pollCount * POLL_INTERVAL_MS / 1000}s)`;
 
     try {
-        const resp = await fetch(`/code-intel/projects/${window._projectId}/status`);
+        const resp = await fetch(statusPollUrl());
         if (!resp.ok) return;
         const data = await resp.json();
 
@@ -901,11 +927,16 @@ async function checkStatus() {
                 showToast(`Done! ${data.narrated}/${data.total} files narrated.`);
             }
             if (folderReadmeChanged) {
-                const readmeResp = await fetch(`/code-intel/projects/${window._projectId}/folder-readme`);
-                if (readmeResp.ok) {
-                    const d = await readmeResp.json();
-                    showFolderReadme(d.content, d.folder_path || selectedFolderPath || '');
-                    showToast('Folder README ready ✓');
+                const readyFolderPath = data.folder_readme_path || selectedFolderPath || '';
+                if (readyFolderPath) {
+                    const readmeResp = await fetch(
+                        `/code-intel/projects/${window._projectId}/folder-readme?folder_path=${encodeURIComponent(readyFolderPath)}`
+                    );
+                    if (readmeResp.ok) {
+                        const d = await readmeResp.json();
+                        showFolderReadme(d.content, d.folder_path || readyFolderPath);
+                        showToast('Folder README ready ✓');
+                    }
                 }
                 _pollingForFolderReadme = false;
             }

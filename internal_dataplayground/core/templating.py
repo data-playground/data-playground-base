@@ -16,4 +16,6 @@ templates = Jinja2Templates(directory="templates")
 templates.env.loader = ChoiceLoader([
     FileSystemLoader("templates"),
     FileSystemLoader("domains/habits/templates"),
+    FileSystemLoader("domains/blog/templates"),
+    FileSystemLoader("domains/code_intel/templates"),
 ])
