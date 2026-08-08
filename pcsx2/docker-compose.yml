@@ -1,0 +1,16 @@
+services:
+  pcsx2:
+    image: lscr.io/linuxserver/pcsx2:latest
+    container_name: pcsx2
+    security_opt:
+      - seccomp:unconfined # Required for GUI app compatibility in Docker
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York # Adjust to your timezone
+    volumes:
+      - /home/main-server/Github/data-playground-base/internal_dataplayground:/config # Replace with your actual folder path
+    ports:
+      - 3000:3000 # HTTP port
+      - 3001:3001 # HTTPS port
+    restart: unless-stopped
