@@ -9,7 +9,7 @@ services:
       - PGID=1000
       - TZ=America/New_York # Adjust to your timezone
     volumes:
-      - /home/main-server/Github/data-playground-base/internal_dataplayground:/config # Replace with your actual folder path
+      - /home/main-server/Github/data-playground-base/pcsx2:/config # Replace with your actual folder path
     ports:
       - 3000:3000 # HTTP port
       - 3001:3001 # HTTPS port
