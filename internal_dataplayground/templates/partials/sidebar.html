@@ -24,7 +24,7 @@
             <span class="sidebar-text">Journal</span>
         </a>
 
-        <a class="nav-item {% if active_module == 'jobs' %}active{% endif %}" href="/jobs">
+        <a class="nav-item {% if active_module in ('jobs', 'jobs_settings') %}active{% endif %}" href="/jobs">
             <i class="fas fa-briefcase icon"></i>
             <span class="sidebar-text">Job Tracker</span>
         </a>
@@ -147,20 +147,17 @@
         {% endif %}
 
         {# ── Jobs sub-nav ── #}
-        {% if active_module == 'jobs' %}
+        {% if active_module in ('jobs', 'jobs_settings') %}
         <div class="nav-label">Pipeline</div>
-        <a class="nav-item" href="#" onclick="openStagingPanel(); return false;">
+        <a class="nav-item" href="/jobs?open_staging=1"
+           onclick="if (typeof openStagingPanel === 'function') { openStagingPanel(); return false; }">
             <span class="icon">⊕</span>
             <span class="sidebar-text">Add Job Link</span>
         </a>
-        <a class="nav-item {% if active_module == 'jobs' %}active{% endif %}" href="/jobs/config">
+        <a class="nav-item {% if active_module == 'jobs_settings' %}active{% endif %}" href="/jobs/config">
             <span class="icon">⚙</span>
             <span class="sidebar-text">Settings</span>
 		</a>
-        <a class="nav-item" href="#">
-            <span class="icon">◑</span>
-            <span class="sidebar-text">Dashboard</span>
-        </a>
         {% endif %}
 
         {# ── Habits sub-nav ── #}

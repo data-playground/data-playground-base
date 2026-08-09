@@ -499,6 +499,18 @@
 
         renderStatusDropdown();
         applyAllFilters();
+
+        // Deep link from the sidebar's "Add Job Link" item when clicked from
+        // any OTHER page (see partials/sidebar.html) — that link's onclick
+        // only calls openStagingPanel() directly when already on /jobs;
+        // everywhere else it falls through to a real navigation here with
+        // this query param, and this page opens the panel on arrival.
+        if (new URLSearchParams(window.location.search).get('open_staging') === '1') {
+            openStagingPanel();
+            // Strip the param so a later refresh of this same page doesn't
+            // keep re-opening the panel every time.
+            window.history.replaceState({}, '', window.location.pathname);
+        }
     });
 </script>
 {% endblock %}
