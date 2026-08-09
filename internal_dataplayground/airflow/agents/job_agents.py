@@ -18,6 +18,7 @@ line with the DAG/FastAPI boundary rule in CONTRIBUTING.md.
 """
 import json
 import logging
+import re
 import urllib.parse
 from collections import defaultdict
 from itertools import zip_longest
@@ -133,6 +134,81 @@ def get_job_details(job_link: str) -> tuple[str | None, str | None]:
     return description, salary
 
 
+def get_full_job_posting(job_link: str) -> dict:
+    """
+    Fetches a LinkedIn job's detail page and extracts everything needed to
+    promote a StagingJob straight into linkedin_jobs — title, company,
+    location, description, and salary — in a single page fetch.
+
+    Used by the Staging Promoter DAG (life_os_staging_promoter.py), which
+    unlike the scheduled Job Scout DAG never ran a search and so has no
+    search-result-card data to seed job_title/company_name/location from;
+    it starts from nothing but the URL the user pasted in.
+
+    CAUTION — UNVERIFIED SELECTORS: the title/company/location CSS
+    selectors below are a best-effort guess at LinkedIn's public job page
+    markup, written without the ability to fetch a live linkedin.com page
+    from the environment this was developed in (no outbound network access
+    to that domain there). The description/salary selectors are reused
+    as-is from get_job_details() above, which IS already confirmed working
+    in production. Spot-check job_title/company_name/location against a
+    handful of real postings before relying on this for anything other
+    than description/salary — if they come back None for every job, this
+    is the first place to look, the same way the module docstring already
+    says to check search_linkedin_jobs()'s card selectors first if searches
+    return zero results.
+
+    Returns a dict with keys job_title, company_name, location,
+    description, salary — any of which may be None if not found on the
+    page, or all None if the fetch failed outright.
+    """
+    result: dict = {
+        "job_title": None, "company_name": None, "location": None,
+        "description": None, "salary": None,
+    }
+    try:
+        resp = requests.get(job_link, headers=_HEADERS, timeout=20)
+        resp.raise_for_status()
+    except Exception as exc:
+        log.warning("Failed to fetch job posting page %s: %s", job_link, exc)
+        return result
+
+    soup = BeautifulSoup(resp.content, "html.parser")
+
+    # NOTE: unverified — see caution above.
+    title_el = soup.find("h1", class_="top-card-layout__title") or soup.find("h1")
+    if title_el:
+        result["job_title"] = title_el.get_text(strip=True)
+
+    # NOTE: unverified — see caution above.
+    company_el = (
+        soup.find("a", class_="topcard__org-name-link")
+        or soup.find("span", class_="topcard__flavor")
+    )
+    if company_el:
+        result["company_name"] = company_el.get_text(strip=True)
+
+    # NOTE: unverified — see caution above.
+    location_el = soup.find("span", class_="topcard__flavor--bullet")
+    if location_el:
+        result["location"] = location_el.get_text(strip=True)
+
+    # Same selectors as get_job_details() — already confirmed working.
+    desc_el = soup.find("div", class_="show-more-less-html__markup")
+    if desc_el:
+        result["description"] = desc_el.get_text(separator="\n", strip=True)
+
+    salary_el = soup.find("div", class_="salary compensation__salary")
+    if salary_el:
+        result["salary"] = salary_el.text.strip()
+    else:
+        snippet_el = soup.find("span", class_="salary-snippet")
+        if snippet_el:
+            result["salary"] = snippet_el.text.strip()
+
+    return result
+
+
 def deduplicate_jobs(raw_jobs: list[dict]) -> list[dict]:
     """Dedupes by job_id, keeping the first occurrence (order-preserving)."""
     seen_ids = set()
@@ -149,6 +225,29 @@ def clean_date(value: str | None) -> str | None:
     if not value:
         return None
     return value[:10]
+
+
+_JOB_ID_FROM_URL_RE = re.compile(r"/jobs/view/(\d+)")
+
+
+def extract_linkedin_job_id(job_link: str) -> str | None:
+    """
+    Pulls the numeric LinkedIn job id out of a job posting URL, e.g.
+    "https://www.linkedin.com/jobs/view/4123456789/" -> "4123456789".
+
+    Used by the Staging Promoter DAG so a job promoted from a manually
+    pasted URL dedupes correctly against linkedin_jobs.job_id / external_ref
+    if the scheduled Job Scout DAG later finds the same posting via search —
+    both write the same identifier, so the existing job_id-based dedup in
+    life_os_job_scout.py and the (source, external_ref) uniqueness this
+    migration adds to the Job model both catch it as the same row.
+
+    Returns None if the URL doesn't match the expected /jobs/view/<id>
+    pattern (e.g. a shortened or malformed link slipped past the staging
+    form's "must contain linkedin.com/jobs" check).
+    """
+    match = _JOB_ID_FROM_URL_RE.search(job_link)
+    return match.group(1) if match else None
 
 
 # ── BATCH CHUNKING ────────────────────────────────────────────────────────────
