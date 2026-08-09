@@ -29,6 +29,7 @@
             <a class="job-title-link"
                href="{{ job.job_link }}"
                target="_blank"
+               rel="noopener noreferrer"
                title="{{ job.job_link }}">
                 {{ job.job_title or (job.job_link[:55] ~ '…') }}
             </a>

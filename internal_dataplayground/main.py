@@ -8,13 +8,13 @@ from fastapi.templating import Jinja2Templates
 from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from routers import ats, staging, dashboard, explorer
-from routers import jobs, job_config
+from routers import dashboard, explorer
 from routers import finance_summary, finance_ledger, finance_upload, finance_settings
 from routers import journal
 from domains.habits.routers import habits
 from domains.blog.routers import blog
 from domains.code_intel.routers import ci_projects, ci_files, ci_readme
+from domains.jobs.routers import jobs, ats, staging, job_config
 from routers import recipe_extract, recipe_discovery, pantry, recipes   # ← NEW
 from routers import workout, workout_log, workout_plans, workout_settings
 from routers import media, media_search, media_recommend, media_settings
@@ -37,6 +37,7 @@ app = FastAPI(lifespan=lifespan)
 # "/static/habits/*" request and 404 it against the wrong directory.
 app.mount("/static/habits", StaticFiles(directory="domains/habits/static"), name="habits_static")
 app.mount("/static/blog", StaticFiles(directory="domains/blog/static"), name="blog_static")
+app.mount("/static/jobs", StaticFiles(directory="domains/jobs/static"), name="jobs_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Finance (specific prefixes before catch-all /finance summary) ──────────────

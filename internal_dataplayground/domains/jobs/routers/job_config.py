@@ -1,4 +1,4 @@
-# routers/job_config.py
+# domains/jobs/routers/job_config.py
 """
 Job Scout configuration — search keywords + ATS company watchlist.
 
@@ -20,16 +20,16 @@ import datetime
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import JobSearchKeyword, WatchedCompany, Job, JobScoutRunLog
+from domains.jobs.models import JobSearchKeyword, WatchedCompany, Job, JobScoutRunLog
 from routers._helpers import html_error
 
+from core.templating import templates
+
 router = APIRouter(prefix="/jobs/config", tags=["Job Config"])
-templates = Jinja2Templates(directory="templates")
 
 # Minimum signal required before a company is surfaced as a watchlist candidate.
 CANDIDATE_MIN_POSTINGS = 2

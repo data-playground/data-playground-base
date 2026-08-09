@@ -10,7 +10,7 @@
         </span>
     </td>
     <td class="stage-link">
-        <a href="{{ job.job_link }}" target="_blank" class="job-title-link" title="{{ job.job_link }}">
+        <a href="{{ job.job_link }}" target="_blank" rel="noopener noreferrer" class="job-title-link" title="{{ job.job_link }}">
             {{ job.job_title or job.job_link | truncate(60) }}
         </a>
         {% if job.company_name %}

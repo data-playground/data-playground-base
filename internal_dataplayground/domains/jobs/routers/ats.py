@@ -1,14 +1,16 @@
-# routers/ats.py
+# domains/jobs/routers/ats.py
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from database import get_db
-from models import ApplicationLog, ApplicationLogCreate, ApplicationLogResponse, ApplicationStatus, Job
+from domains.jobs.models import (
+    ApplicationLog, ApplicationLogCreate, ApplicationLogResponse, ApplicationStatus, Job,
+)
+
+from core.templating import templates
 
 router = APIRouter(prefix="/ats", tags=["ATS"])
-templates = Jinja2Templates(directory="templates")
 
 
 @router.post("/log", response_class=HTMLResponse)
@@ -45,8 +47,13 @@ async def create_application_log(
     await db.commit()
 
     # Return the refreshed button fragment so HTMX swaps it in
-    # The new active status is passed so Jinja2 highlights the right button
-    current = status.name.lower()
+    # The new active status is passed so Jinja2 highlights the right button.
+    # NOTE: must match status.name's casing exactly ("APPLIED", not
+    # "applied") — ats_buttons.html compares `current == 'APPLIED'` etc.
+    # (Bug fix: this used to be status.name.lower(), which silently never
+    # matched and meant the just-logged status never got its highlight
+    # class until the page was fully reloaded.)
+    current = status.name
 
     return templates.TemplateResponse(
         "partials/ats_buttons.html",

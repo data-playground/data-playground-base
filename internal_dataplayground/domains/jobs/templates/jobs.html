@@ -15,8 +15,8 @@
 	<button class="filter-pill" id="adv-toggle" onclick="toggleAdvancedFilters(this)">⚙ Filters</button>
 {% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/jobs.css">
-<link rel="stylesheet" href="/static/css/jobs_enhancements.css"> 
+<link rel="stylesheet" href="/static/jobs/css/jobs.css">
+<link rel="stylesheet" href="/static/jobs/css/jobs_enhancements.css"> 
 {% endblock %}
 {% block content %}
 
@@ -75,13 +75,21 @@
                     <input class="add-job-input" id="add-job-search" name="job_search"
                         placeholder="Label (e.g. Senior DE)" style="width:160px;flex:none;">
                     <button class="add-job-btn" id="stage-submit-btn" onclick="submitStageForm()">+ Queue Job</button>
+                    <button class="add-job-btn" type="button" id="stage-process-btn"
+                        style="background:transparent;border:1px solid var(--border);color:var(--text-secondary);"
+                        hx-post="/jobs/stage/process"
+                        hx-target="#staging-form-feedback"
+                        hx-swap="innerHTML"
+                        title="Process everything currently queued right now, instead of waiting for the daily run">
+                        ⚡ Process Now
+                    </button>
                 </div>
                 <div id="staging-form-feedback"></div>
 
                 <!-- Queue — auto-polls every 10s while panel is open -->
                 <div id="staging-queue-container"
                     hx-get="/jobs/stage"
-                    hx-trigger="load, every 10s"
+                    hx-trigger="load, every 10s [document.getElementById('staging-body').classList.contains('open')]"
                     hx-target="#staging-queue-container"
                     hx-swap="innerHTML">
                     <p class="staging-empty">Loading queue…</p>
@@ -108,7 +116,7 @@
                 data-job-id="{{ job.ID }}"
                 data-score="{{ job.fit_score }}"
                 data-remote="{{ job.remote | lower }}"
-                data-status="{{ job.latest_status | upper | replace(' ', '_') if job.latest_status else 'NONE' }}"
+                data-status="{{ job.latest_status_key or 'NONE' }}"
                 data-company="{{ job.company_name | lower if job.company_name else '' }}"
                 data-postdate="{{ job.search_date.strftime('%Y-%m-%d') if job.search_date else '' }}"
             >
@@ -131,7 +139,7 @@
                 </td>
                 <td class="ats-cell">
                     <div class="ats-buttons" id="ats-{{ job.ID }}" hx-target="#ats-{{ job.ID }}" hx-swap="outerHTML settle:300ms">
-                        {% set current = job.latest_status | upper | replace(' ', '_') if job.latest_status else '' %}
+                        {% set current = job.latest_status_key or '' %}
                         <button class="ats-btn {% if current == 'APPLIED' %}status-applied{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"APPLIED"}' onclick="showToast('Marked as Applied')">Applied</button>
                         <button class="ats-btn {% if current == 'PHONE_SCREEN' %}status-phone_screen{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"PHONE_SCREEN"}' onclick="showToast('Marked as Phone Screen')">Phone</button>
                         <button class="ats-btn {% if current == 'INTERVIEWING' %}status-interviewing{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"INTERVIEWING"}' onclick="showToast('Marked as Interviewing')">Interview</button>
@@ -152,7 +160,7 @@
         ═══════════════════════════════════════════════════════════ -->
         <div id="jobs-mobile-list">
             {% for job in jobs %}
-            {% set current = job.latest_status | upper | replace(' ', '_') if job.latest_status else 'NONE' %}
+            {% set current = job.latest_status_key or 'NONE' %}
             <div class="job-card-mobile"
                 data-job-id="{{ job.ID }}"
                 data-score="{{ job.fit_score }}"
@@ -177,7 +185,7 @@
                         <div class="job-card-mobile-company">{{ job.company_name or '—' }}</div>
                     </div>
                     {% if job.job_link %}
-                    <a href="{{ job.job_link }}" target="_blank" class="job-card-mobile-apply">Apply →</a>
+                    <a href="{{ job.job_link }}" target="_blank" rel="noopener noreferrer" class="job-card-mobile-apply">Apply →</a>
                     {% endif %}
                 </div>
 
@@ -241,9 +249,7 @@
 
     </main>
 
-<div id="toast"></div>
-
-<script src="/static/js/jobs_enhancements.js"></script>
+<script src="/static/jobs/js/jobs_enhancements.js"></script>
 
 <script>
     // THEME
@@ -418,9 +424,9 @@
         }
     }
 
-    // TOAST
-    let toastTimer;
-    function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
+    // TOAST — uses the shared #toast / showToast() from base.js (GOVERNANCE.md §3.2).
+    // No local re-implementation here anymore; every onclick="showToast(...)"
+    // call already present in this page's markup resolves to that shared function.
 
     // HTMX: sync ATS status on row after swap
 	document.body.addEventListener('htmx:afterSwap', function(evt) {

@@ -1,0 +1,9 @@
+{# templates/partials/staging_process_feedback.html
+   Returned by POST /jobs/stage/process — swapped into #staging-form-feedback.
+   `run_id` = Airflow dag_run_id string
+   `pending_count` = how many staging_jobs rows were PENDING at trigger time
+#}
+<p class="stage-success">
+    ✓ Processing triggered ({{ pending_count }} job{{ 's' if pending_count != 1 else '' }} queued,
+    run <code>{{ run_id }}</code>) — the queue below will update automatically once it's done.
+</p>
