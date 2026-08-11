@@ -110,6 +110,14 @@ class Job(Base):
 
     fit_score: Mapped[int] = mapped_column(Integer, default=0)
     job_search: Mapped[str] = mapped_column(String(255), nullable=True)
+    # "First discovered" at insert time, but ALSO refreshed to today by
+    # every scraper (life_os_job_scout.py, life_os_job_scout_ats.py,
+    # life_os_staging_promoter.py) whenever it re-encounters a job_id /
+    # external_ref that's already in this table, instead of the old
+    # behavior of silently skipping it and leaving this frozen at whatever
+    # date it first appeared. This is what the "hide applied" + date-range
+    # filters on /jobs actually mean now: "still showing up in scrapes
+    # within this window", not just "first seen within this window".
     search_date: Mapped[datetime.date] = mapped_column(Date, default=datetime.date.today)
 
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="linkedin")

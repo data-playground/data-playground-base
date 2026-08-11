@@ -38,7 +38,7 @@ default_args = {
 
 
 def task_fetch_ats_jobs(**context):
-    from dag_db import fetch_all
+    from dag_db import fetch_all, execute_many
     from agents.job_ats_agents import fetch_all_watched_companies
 
     conf = context["dag_run"].conf or {}
@@ -65,7 +65,27 @@ def task_fetch_ats_jobs(**context):
     existing_keys = {(row["source"], row["external_ref"]) for row in existing}
 
     new_jobs = [j for j in all_jobs if (j["source"], j["external_ref"]) not in existing_keys]
-    log.info("%d postings found across watched companies, %d are new", len(all_jobs), len(new_jobs))
+    rescanned = [j for j in all_jobs if (j["source"], j["external_ref"]) in existing_keys]
+    log.info(
+        "%d postings found across watched companies, %d are new, %d are re-scans of existing rows",
+        len(all_jobs), len(new_jobs), len(rescanned),
+    )
+
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # Postings still open today — refresh search_date instead of leaving it
+    # frozen at first-seen. One UPDATE per (source, external_ref) since
+    # there's no single-column key to batch on the way the LinkedIn DAG's
+    # job_id lets it (external_ref alone isn't unique across sources).
+    if rescanned:
+        execute_many([
+            (
+                "UPDATE linkedin_jobs SET search_date = %s WHERE source = %s AND external_ref = %s",
+                (today_str, j["source"], j["external_ref"]),
+            )
+            for j in rescanned
+        ])
+        log.info("Refreshed search_date for %d re-scanned ATS postings", len(rescanned))
 
     # Cross-source dedup: skip anything that's the same role already sitting
     # in linkedin_jobs from the LinkedIn DAG (same company + near-identical title).
@@ -82,7 +102,6 @@ def task_fetch_ats_jobs(**context):
     context["ti"].xcom_push(key="items_attempted", value=len(companies))
     context["ti"].xcom_push(key="items_found", value=len(all_jobs))
 
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
     for job in new_jobs:
         job["search_date"] = today_str
 

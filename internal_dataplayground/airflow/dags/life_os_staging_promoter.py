@@ -208,7 +208,11 @@ def task_load(**context):
 
     today_str = datetime.utcnow().strftime("%Y-%m-%d")
     statements = []
-    staging_updates = []
+    # Mixed UPDATE statements against BOTH linkedin_jobs (search_date
+    # refresh, only for the already-present branch) and staging_jobs
+    # (status -> DONE, every job) — execute_many doesn't care which table
+    # each statement targets, so these run together in one batch.
+    db_updates = []
     loaded = 0
 
     for job in enriched:
@@ -221,8 +225,15 @@ def task_load(**context):
         if already_present:
             log.info(
                 "Staging job %s: posting already in linkedin_jobs (job_id/external_ref match) — "
-                "skipping insert, marking DONE", job["staging_id"],
+                "skipping insert, refreshing search_date, marking DONE", job["staging_id"],
             )
+            # Same "still open" signal as the two scheduled scout DAGs —
+            # a manually-pasted link matching an existing row means this
+            # posting was just confirmed to still exist today too.
+            db_updates.append((
+                "UPDATE linkedin_jobs SET search_date = %s WHERE job_id = %s OR external_ref = %s",
+                (today_str, linkedin_id, job["job_id"]),
+            ))
         else:
             row = (
                 int(linkedin_id) if linkedin_id else None,
@@ -246,7 +257,7 @@ def task_load(**context):
             statements.append((insert_sql, row))
             loaded += 1
 
-        staging_updates.append((
+        db_updates.append((
             "UPDATE staging_jobs SET status = 'DONE', job_id = %s, job_title = %s, "
             "company_name = %s, location = %s, salary = %s, description = %s, updated_at = %s "
             "WHERE id = %s",
@@ -259,7 +270,7 @@ def task_load(**context):
 
     if statements:
         execute_many(statements)
-    execute_many(staging_updates)
+    execute_many(db_updates)
 
     context["ti"].xcom_push(key="items_loaded", value=loaded)
     log.info("Staging promotion complete: %d/%d staged jobs inserted into linkedin_jobs", loaded, len(enriched))

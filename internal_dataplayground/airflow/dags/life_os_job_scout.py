@@ -58,7 +58,7 @@ default_args = {
 
 
 def task_search_and_scrape(**context):
-    from dag_db import fetch_all
+    from dag_db import fetch_all, execute_many
     from agents.job_agents import (
         search_linkedin_jobs, get_job_details, deduplicate_jobs,
         clean_date, DETAIL_FETCH_DELAY_SEC,
@@ -81,7 +81,7 @@ def task_search_and_scrape(**context):
 
     existing_rows = fetch_all("SELECT DISTINCT job_id FROM linkedin_jobs")
     existing_ids = {str(row["job_id"]) for row in existing_rows if row["job_id"] is not None}
-    log.info("%d job_ids already in linkedin_jobs — these will be skipped", len(existing_ids))
+    log.info("%d job_ids already in linkedin_jobs", len(existing_ids))
 
     all_jobs = []
     for query in searches:
@@ -94,7 +94,25 @@ def task_search_and_scrape(**context):
 
     all_jobs = deduplicate_jobs(all_jobs)
     new_jobs = [j for j in all_jobs if j["job_id"] not in existing_ids]
-    log.info("%d unique jobs found across all searches, %d are new", len(all_jobs), len(new_jobs))
+    rescanned_ids = [j["job_id"] for j in all_jobs if j["job_id"] in existing_ids]
+    log.info(
+        "%d unique jobs found across all searches, %d are new, %d are re-scans of existing rows",
+        len(all_jobs), len(new_jobs), len(rescanned_ids),
+    )
+
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # Existing jobs found again today are still open — refresh search_date
+    # instead of the old behavior of silently skipping them and leaving
+    # that column frozen at whenever the job was first discovered. Batched
+    # into one statement rather than one UPDATE per row.
+    if rescanned_ids:
+        placeholders = ", ".join(["%s"] * len(rescanned_ids))
+        execute_many([(
+            f"UPDATE linkedin_jobs SET search_date = %s WHERE job_id IN ({placeholders})",
+            (today_str, *rescanned_ids),
+        )])
+        log.info("Refreshed search_date for %d re-scanned jobs", len(rescanned_ids))
 
     # Cross-source dedup: skip anything that's the same role already sitting
     # in linkedin_jobs from the ATS DAG (same company + near-identical title).
@@ -111,7 +129,6 @@ def task_search_and_scrape(**context):
     context["ti"].xcom_push(key="items_attempted", value=len(searches))
     context["ti"].xcom_push(key="items_found", value=len(all_jobs))
 
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
     for job in new_jobs:
         job["post_date"] = clean_date(job.get("post_date"))
         job["search_date"] = today_str
