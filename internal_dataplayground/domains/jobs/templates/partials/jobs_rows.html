@@ -1,0 +1,28 @@
+{# templates/partials/jobs_rows.html
+   Returned by GET /jobs/rows.
+   `jobs` = list of Job ORM objects for this batch (already filtered + paginated)
+   `next_cursor` = opaque "fitscore_id" cursor for the next page, or None if this is the last page
+   `loaded_count` = number of jobs in THIS batch
+   `total_count` = total rows matching the current filters (independent of pagination)
+
+   Wrapped in <template> tags rather than raw markup: browsers strip stray
+   <tr> elements parsed outside a <table>/<tbody> context (a real HTML5
+   parsing rule, not a bug) — <template> content is inert and bypasses
+   that, so jobs.html's JS can safely pull .content out of each template
+   and append/insert it into the real table/list.
+#}
+<template id="rows-batch-desktop">
+{% for job in jobs %}
+{% include "partials/_job_row_desktop.html" %}
+{% endfor %}
+</template>
+<template id="rows-batch-mobile">
+{% for job in jobs %}
+{% include "partials/_job_row_mobile.html" %}
+{% endfor %}
+</template>
+<span id="rows-batch-meta"
+      data-next-cursor="{{ next_cursor or '' }}"
+      data-loaded-count="{{ loaded_count }}"
+      data-total-count="{{ total_count }}"
+      style="display:none;"></span>

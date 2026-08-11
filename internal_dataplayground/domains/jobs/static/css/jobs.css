@@ -97,6 +97,13 @@
 .empty-state .empty-icon { font-size:32px; margin-bottom:12px; }
 .empty-state p { font-size:12px; }
 
+/* Toggled by JS after a filter/load-more fetch returns zero rows (or back
+   off once it returns some) — see fetchJobs() in jobs.html. Using a class
+   on the wrapper rather than inline styles on #jobs-table/#jobs-mobile-list
+   individually so it doesn't fight with mobile.css's own display rules for
+   toggling between the desktop table and mobile card list. */
+#jobs-list-wrapper.is-empty { display:none; }
+
 #toast { position:fixed; bottom:20px; right:20px; padding:9px 16px; background:var(--bg-card); border:1px solid var(--border); border-left:3px solid var(--score-high); border-radius:6px; font-size:11px; color:var(--text-primary); box-shadow:var(--shadow); opacity:0; transform:translateY(6px); transition:all 0.2s ease; pointer-events:none; z-index:999; }
 #toast.show { opacity:1; transform:translateY(0); }
 

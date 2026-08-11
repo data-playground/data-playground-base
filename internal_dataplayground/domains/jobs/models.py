@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -67,6 +68,29 @@ class Job(Base):
         # migration postmortem (§4.4), it's possible this already exists
         # in production without ever having been declared here.
         UniqueConstraint("source", "external_ref", name="uq_linkedin_jobs_source_external_ref"),
+
+        # Added alongside the server-side filtering/pagination rework of
+        # GET /jobs and GET /jobs/rows (see jobs.py): every job list query
+        # now filters and orders by fit_score, and the keyset-pagination
+        # cursor specifically orders by (fit_score DESC, ID DESC) — a
+        # composite index in that same order lets the DB satisfy filtering,
+        # ordering, and "give me everything after this cursor" in one index
+        # scan instead of a full table scan, which matters a lot more now
+        # that this runs on every filter change and every "Load More" click
+        # instead of once per full page load.
+        Index("ix_linkedin_jobs_fit_score_id", "fit_score", "ID"),
+        # Used by the date-range filter (search_date >= / <= ...).
+        Index("ix_linkedin_jobs_search_date", "search_date"),
+
+        # ⚠ BEFORE APPLYING TO THE REAL DATABASE: these are net-new indexes,
+        # not previously declared anywhere (per the habits-migration
+        # postmortem's §4.4 playbook, confirm with `SHOW INDEX FROM
+        # linkedin_jobs` that they genuinely don't already exist under a
+        # different name first) — apply via Alembic/ALTER TABLE, same as
+        # the UniqueConstraint above. Building an index on a live,
+        # multi-thousand-row table takes a moment and can briefly lock
+        # writes depending on your MariaDB version/settings — fine to run
+        # any time, just don't expect it to be instant.
     )
 
     ID: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

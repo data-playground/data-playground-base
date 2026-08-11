@@ -365,23 +365,29 @@
         initColumnSort();
         initKeyboardNav();
         addShortcutHint();
-
-        // Re-apply tinting after filter runs
-        const origApply = window.applyAllFilters;
-        if (typeof origApply === 'function') {
-            window.applyAllFilters = function () {
-                origApply();
-                applyStatusTinting();
-                // Reset focused row after filter
-                focusedRowIdx = -1;
-                document.querySelectorAll('#jobs-table tbody tr').forEach(r =>
-                    r.classList.remove('row-focused')
-                );
-            };
-        }
     });
 
     // Expose for HTMX re-tinting after ATS updates
     window._reapplyStatusTinting = applyStatusTinting;
+
+    // Expose for jobs.html's fetchJobs() to call after a filter change or
+    // Load More — focusedRowIdx lives in this file's closure, so it can't
+    // be reset directly from outside; this is the same pattern as
+    // window._reapplyStatusTinting above. Only resets on a REPLACE (filters
+    // changed), not on an append (Load More) — the previously-focused row
+    // is still valid and still in the DOM in that case.
+    window._resetKeyboardFocus = function () {
+        focusedRowIdx = -1;
+        document.querySelectorAll('#jobs-table tbody tr').forEach(r =>
+            r.classList.remove('row-focused')
+        );
+    };
+
+    // Expose for jobs.html's fetchJobs() to call after inserting new rows
+    // (filter change or Load More) — keeps the table consistent with
+    // whatever column sort is currently active instead of silently
+    // reverting to server order (fit_score DESC) while the header still
+    // shows a sort arrow pointing at a different column.
+    window._reapplySort = sortTable;
 
 })();

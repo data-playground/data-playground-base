@@ -1,0 +1,44 @@
+{# templates/partials/_job_row_desktop.html
+   Single desktop <tr> for one job. `job` = Job ORM object.
+   Included by both jobs.html (initial page load, inside #jobs-table tbody)
+   and jobs_rows.html (AJAX filter/load-more batches, inside a <template>).
+   Not meant to be requested directly.
+#}
+<tr
+    data-job-id="{{ job.ID }}"
+    data-score="{{ job.fit_score }}"
+    data-remote="{{ job.remote | lower }}"
+    data-status="{{ job.latest_status_key or 'NONE' }}"
+    data-company="{{ job.company_name | lower if job.company_name else '' }}"
+    data-postdate="{{ job.search_date.strftime('%Y-%m-%d') if job.search_date else '' }}"
+>
+    <td>
+        <span class="score-badge {% if job.fit_score >= 90 %}score-high{% elif job.fit_score >= 50 %}score-mid{% else %}score-low{% endif %}">
+            {{ job.fit_score }}
+        </span>
+    </td>
+    <td class="job-title-cell">
+        <a class="job-title-link" style="cursor:pointer;" hx-get="/jobs/detail/{{ job.ID }}" hx-target="#job-detail-panel" hx-swap="innerHTML" hx-on::after-request="openDetailPanel()">{{ job.job_title }}</a>
+        <div class="job-company">{{ job.company_name or '—' }}</div>
+    </td>
+    <td>
+        <span class="tag {% if job.remote %}tag-remote{% endif %}">
+            {{ 'Remote' if job.remote else (job.location or '—') }}
+        </span>
+    </td>
+    <td style="color:var(--text-muted);font-size:10px;white-space:nowrap;">
+        {{ job.search_date.strftime('%b %d') if job.search_date else '—' }}
+    </td>
+    <td class="ats-cell">
+        <div class="ats-buttons" id="ats-{{ job.ID }}" hx-target="#ats-{{ job.ID }}" hx-swap="outerHTML settle:300ms">
+            {% set current = job.latest_status_key or '' %}
+            <button class="ats-btn {% if current == 'APPLIED' %}status-applied{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"APPLIED"}' onclick="showToast('Marked as Applied')">Applied</button>
+            <button class="ats-btn {% if current == 'PHONE_SCREEN' %}status-phone_screen{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"PHONE_SCREEN"}' onclick="showToast('Marked as Phone Screen')">Phone</button>
+            <button class="ats-btn {% if current == 'INTERVIEWING' %}status-interviewing{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"INTERVIEWING"}' onclick="showToast('Marked as Interviewing')">Interview</button>
+            <button class="ats-btn {% if current == 'TECHNICAL_ASSESSMENT' %}status-technical{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"TECHNICAL_ASSESSMENT"}' onclick="showToast('Marked as Technical')">Technical</button>
+            <button class="ats-btn {% if current == 'REJECTED' %}status-rejected{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"REJECTED"}' onclick="showToast('Marked as Rejected')">Rejected</button>
+            <button class="ats-btn {% if current == 'OFFER' %}status-offer{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"OFFER"}' onclick="showToast('🎉 Offer logged!')">Offer</button>
+            <button class="ats-btn {% if current == 'CLOSED' %}status-closed{% endif %}" hx-post="/ats/log" hx-vals='{"job_id":{{ job.ID }},"status":"CLOSED"}' onclick="showToast('Marked as Closed')">Closed</button>
+        </div>
+    </td>
+</tr>
