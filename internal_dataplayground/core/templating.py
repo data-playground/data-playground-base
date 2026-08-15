@@ -5,8 +5,8 @@ from fastapi.templating import Jinja2Templates
 #
 # Uses a ChoiceLoader so that template lookups first check the existing
 # root `templates/` directory (unchanged for every domain not yet migrated),
-# then fall back to `domains/habits/templates/` (the first domain-folder
-# pilot). This lets router code keep calling
+# then fall back to a domain specific template.
+# This lets router code keep calling something like
 # `templates.TemplateResponse("habits.html", ...)` — the same bare filename
 # as before the move — without needing to know which directory it now
 # physically lives in.
@@ -19,4 +19,5 @@ templates.env.loader = ChoiceLoader([
     FileSystemLoader("domains/blog/templates"),
     FileSystemLoader("domains/code_intel/templates"),
     FileSystemLoader("domains/jobs/templates"),
+    FileSystemLoader("domains/explorer/templates"),
 ])

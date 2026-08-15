@@ -8,14 +8,15 @@ from fastapi.templating import Jinja2Templates
 from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from routers import dashboard, explorer
+from routers import dashboard
 from routers import finance_summary, finance_ledger, finance_upload, finance_settings
 from routers import journal
-from domains.habits.routers import habits
-from domains.blog.routers import blog
-from domains.code_intel.routers import ci_projects, ci_files, ci_readme
-from domains.jobs.routers import jobs, ats, staging, job_config
-from routers import recipe_extract, recipe_discovery, pantry, recipes   # ← NEW
+from domains.habits.routers import habits # WO1
+from domains.blog.routers import blog # WO2
+from domains.code_intel.routers import ci_projects, ci_files, ci_readme # WO2
+from domains.jobs.routers import jobs, ats, staging, job_config # WO3
+from domains.explorer.routers import explorer # WO4
+from routers import recipe_extract, recipe_discovery, pantry, recipes
 from routers import workout, workout_log, workout_plans, workout_settings
 from routers import media, media_search, media_recommend, media_settings
 from routers import intent, weekly_plan
@@ -38,6 +39,7 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static/habits", StaticFiles(directory="domains/habits/static"), name="habits_static")
 app.mount("/static/blog", StaticFiles(directory="domains/blog/static"), name="blog_static")
 app.mount("/static/jobs", StaticFiles(directory="domains/jobs/static"), name="jobs_static")
+app.mount("/static/explorer", StaticFiles(directory="domains/explorer/static"), name="explorer_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Finance (specific prefixes before catch-all /finance summary) ──────────────

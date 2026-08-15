@@ -1,4 +1,3 @@
-# routers/explorer.py
 """
 SQL Explorer — Read-Only Query Interface
 
@@ -9,8 +8,6 @@ Endpoints:
 
 Security:
   - Keyword blocklist rejects any query containing write operations
-  - Uses a dedicated read-only DB session to enforce permissions at the DB level
-    (configure the MariaDB user with SELECT-only grants — see notes below)
   - Row cap of 500 rows prevents accidental full-table dumps
 """
 
@@ -20,17 +17,16 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from core.templating import templates
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/explorer", tags=["Explorer"])
-templates = Jinja2Templates(directory="templates")
 
 # ── Security ───────────────────────────────────────────────────────────────────
 
