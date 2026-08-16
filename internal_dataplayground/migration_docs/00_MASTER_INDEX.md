@@ -21,7 +21,7 @@ historical log.
 
 | # | Domain(s) | File | Status |
 |---|---|---|---|
-| 1 | `habits` (pilot) | *(executed inline, no file)* | ✅ **Executed and reviewed.** One follow-up bug ticket written (log/unlog `view` context bug) — status of that fix unknown, not yet confirmed back to me. |
+| 1 | `habits` (pilot) | `work_order_01_habits_domain.md` |  📝 Drafted, **not yet executed** |
 | 2 | `blog` + `code_intel` | `work_order_02_blog_code_intel_domain.md` | 📝 Drafted, **not yet executed** |
 | 3 | `jobs` | `work_order_03_jobs_domain.md` | 📝 Drafted, **not yet executed** |
 | 4 | `explorer` | `work_order_04_explorer_domain.md` | 📝 Drafted, **not yet executed** |
