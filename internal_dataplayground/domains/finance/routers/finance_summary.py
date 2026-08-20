@@ -12,22 +12,21 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, extract, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.templating import templates
 from database import get_db
-from models import Account, Transaction
+from domains.finance.models import Account, Transaction
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
-templates = Jinja2Templates(directory="templates")
 
 
 async def _get_active_categories(db: AsyncSession) -> list[str]:
     """Returns names of all active categories, ordered alphabetically."""
-    from models import Category
+    from domains.finance.models import Category
     result = await db.execute(
         select(Category.name)
         .where(Category.is_active == True)

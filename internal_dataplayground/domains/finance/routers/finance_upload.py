@@ -18,18 +18,17 @@ from typing import Optional
 from database import get_db  #, get_key
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from google import genai
-from models import Account, Category, Transaction
+from domains.finance.models import Account, Category, Transaction
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.templating import templates
 from routers._helpers import html_error
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
-templates = Jinja2Templates(directory="templates")
 
 
 def _get_client():

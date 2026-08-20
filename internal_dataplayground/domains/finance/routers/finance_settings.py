@@ -16,17 +16,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.templating import templates
 from database import get_db
-from models import Account, AccountType, Category
+from domains.finance.models import Account, AccountType, Category
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
-templates = Jinja2Templates(directory="templates")
 
 
 # ── Settings page ──────────────────────────────────────────────────────────────
