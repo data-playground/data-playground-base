@@ -19,20 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.templating import templates
 from database import get_db
 from domains.finance.models import Account, Category, Transaction
+from domains.finance.queries import get_active_categories
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
-
-
-async def _get_active_categories(db: AsyncSession) -> list[str]:
-    """Returns names of all active categories, ordered alphabetically."""
-    result = await db.execute(
-        select(Category.name)
-        .where(Category.is_active == True)
-        .order_by(Category.name)
-    )
-    return [r[0] for r in result.all()]
 
 
 @router.get("/ledger", response_class=HTMLResponse)
@@ -55,7 +46,11 @@ async def finance_ledger(
     if acct_id:
         stmt = stmt.where(Transaction.account_id == acct_id)
     if category and category.strip():
-        stmt = stmt.where(Transaction.category == category)
+        # Transaction.category is a Python property (backed by category_id),
+        # not a queryable column — filter via a join on the real FK instead.
+        stmt = stmt.join(Category, Transaction.category_id == Category.id).where(
+            Category.name == category
+        )
     if month:
         stmt = stmt.where(extract("month", Transaction.date) == month)
     if year:
@@ -67,7 +62,7 @@ async def finance_ledger(
     accounts_result = await db.execute(select(Account).order_by(Account.name))
     accounts = accounts_result.scalars().all()
 
-    categories = await _get_active_categories(db)
+    categories = await get_active_categories(db)
 
     return templates.TemplateResponse(
         "finance_ledger.html",
@@ -102,14 +97,15 @@ async def update_category(
     existing = await db.execute(
         select(Category).where(Category.name == category_str)
     )
-    if not existing.scalar_one_or_none():
+    cat = existing.scalar_one_or_none()
+    if not cat:
         raise HTTPException(status_code=422, detail="Invalid category")
 
     txn = await db.get(Transaction, txn_id)
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    txn.category = category_str
+    txn.category_id = cat.id
     await db.commit()
 
     slug = category_str.lower().replace(" ", "-").replace("&", "").replace("--", "-")

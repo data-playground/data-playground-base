@@ -41,6 +41,10 @@ class Category(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction", back_populates="category_obj"
+    )
+
 
 class Account(Base):
     __tablename__ = "accounts"
@@ -62,19 +66,54 @@ class Account(Base):
 class Transaction(Base):
     __tablename__ = "transactions"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # BigInteger().with_variant(Integer, "sqlite"): SQLite's aiosqlite driver
+    # only auto-generates rowids for a plain INTEGER primary key, not
+    # BigInteger — the variant keeps BIGINT AUTO_INCREMENT on the real
+    # MariaDB backend (unaffected) while making this table usable in fast
+    # in-memory SQLite tests. See finance-migration-postmortem.md §5.2.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True, autoincrement=True,
+    )
     account_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True
     )
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False, index=True)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    # category is now a plain string referencing categories.name
-    category: Mapped[str] = mapped_column(String(100), nullable=False, default="Other")
+
+    # category_id is the source of truth (FK -> categories.id), replacing
+    # the old free-standing `category` string column. Nullable + SET NULL
+    # so a category can be safely deleted in the future without corrupting
+    # transaction rows (today the app has no delete-category endpoint, only
+    # toggle-active, but the FK is defensive against that changing later).
+    # Also nullable to tolerate legacy rows whose original category string
+    # didn't match any live Category row at backfill time — see
+    # domains/finance/migrations/0001_add_transaction_category_fk.py.
+    category_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
     account: Mapped["Account"] = relationship("Account", back_populates="transactions")
+    category_obj: Mapped[Optional["Category"]] = relationship(
+        "Category", back_populates="transactions", lazy="selectin"
+    )
+
+    @property
+    def category(self) -> str:
+        """
+        Backward-compatible string accessor. Every router/template that
+        pre-dates this fix reads `t.category` expecting a plain string
+        (e.g. `t.category.lower().replace(' ', '-')` for the CSS badge
+        slug) — this property means none of that code needed to change.
+        Falls back to "Other" for legacy rows that couldn't be matched to
+        a real Category row during backfill, matching the pre-fix
+        behavior where an unmatched category string also displayed as
+        "Other" (see finance_upload.py's categorisation fallback).
+        """
+        return self.category_obj.name if self.category_obj else "Other"
 
 
 # ── Pydantic schemas ──

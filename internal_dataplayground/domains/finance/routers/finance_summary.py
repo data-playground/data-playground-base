@@ -17,22 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.templating import templates
 from database import get_db
-from domains.finance.models import Account, Transaction
+from domains.finance.models import Account, Category, Transaction
+from domains.finance.queries import get_active_categories
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/finance", tags=["Finance"])
-
-
-async def _get_active_categories(db: AsyncSession) -> list[str]:
-    """Returns names of all active categories, ordered alphabetically."""
-    from domains.finance.models import Category
-    result = await db.execute(
-        select(Category.name)
-        .where(Category.is_active == True)
-        .order_by(Category.name)
-    )
-    return [r[0] for r in result.all()]
 
 
 @router.get("", response_class=HTMLResponse)
@@ -46,16 +36,23 @@ async def finance_summary(
     sel_month = month or today.month
     sel_year = year or today.year
 
+    # Outer join so transactions with no matching category_id (legacy rows
+    # that couldn't be backfilled, or a category deleted out from under a
+    # transaction) still show up, grouped under "Other" — matching the
+    # pre-FK fallback behavior of Transaction.category.
+    cat_name = func.coalesce(Category.name, "Other").label("category_name")
     stmt = (
-        select(Transaction.category, func.sum(Transaction.amount).label("total"))
+        select(cat_name, func.sum(Transaction.amount).label("total"))
+        .select_from(Transaction)
+        .outerjoin(Category, Transaction.category_id == Category.id)
         .where(extract("month", Transaction.date) == sel_month)
         .where(extract("year", Transaction.date) == sel_year)
-        .group_by(Transaction.category)
+        .group_by(cat_name)
     )
     result = await db.execute(stmt)
     rows = result.all()
 
-    category_totals = {r.category: float(r.total) for r in rows}
+    category_totals = {r.category_name: float(r.total) for r in rows}
     total_income = sum(v for v in category_totals.values() if v > 0)
     total_expenses = sum(v for v in category_totals.values() if v < 0)
     net = total_income + total_expenses
@@ -70,7 +67,7 @@ async def finance_summary(
     accounts_result = await db.execute(select(Account).order_by(Account.name))
     accounts = accounts_result.scalars().all()
 
-    categories = await _get_active_categories(db)
+    categories = await get_active_categories(db)
 
     return templates.TemplateResponse(
         "finance.html",

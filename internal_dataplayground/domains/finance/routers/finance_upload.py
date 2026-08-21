@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import HTMLResponse
 from google import genai
 from domains.finance.models import Account, Category, Transaction
+from domains.finance.queries import get_active_categories, get_active_category_map
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,13 +34,6 @@ router = APIRouter(prefix="/finance", tags=["Finance"])
 
 def _get_client():
     return genai.Client(api_key=os.environ.get("GEMINI_API"))
-
-
-async def _get_active_categories(db: AsyncSession) -> list[str]:
-    result = await db.execute(
-        select(Category.name).where(Category.is_active == True).order_by(Category.name)
-    )
-    return [r[0] for r in result.all()]
 
 
 def _categorise_batch(rows: list[dict], categories: list[str]) -> list[str]:
@@ -155,7 +149,8 @@ async def process_csv(
     if not parsed:
         return html_error(request, "No valid rows parsed.", status_code=422)
 
-    active_categories = await _get_active_categories(db)
+    active_categories = await get_active_categories(db)
+    active_category_map = await get_active_category_map(db)
     all_categories = []
     for i in range(0, len(parsed), 150):
         all_categories.extend(_categorise_batch(parsed[i:i+150], active_categories))
@@ -174,12 +169,17 @@ async def process_csv(
                 continue
             if category_str not in active_categories:
                 category_str = "Other"
+            # category_id is None when category_str is "Other" and no
+            # Category row is literally named "Other" — Transaction.category
+            # (the read-side property) already falls back to displaying
+            # "Other" for that case, so behavior is unchanged from before
+            # the FK fix.
             db.add(Transaction(
                 account_id=account_id,
                 date=date_val,
                 description=row_data["description"],
                 amount=row_data["amount"],
-                category=category_str,
+                category_id=active_category_map.get(category_str),
             ))
         except Exception:
             skipped += 1
