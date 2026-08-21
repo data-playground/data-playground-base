@@ -76,7 +76,8 @@ ADD_COLUMN_SQL = text("""
             ON DELETE SET NULL
 """)
 
-# Dry-run counts only — no writes.
+# Dry-run counts only — no writes. Used once category_id already exists
+# (so we filter to only the not-yet-backfilled rows).
 COUNT_MATCHABLE_SQL = text("""
     SELECT COUNT(*) FROM transactions t
     JOIN categories c ON t.category = c.name
@@ -88,6 +89,25 @@ COUNT_UNMATCHED_SQL = text("""
     FROM transactions t
     LEFT JOIN categories c ON t.category = c.name
     WHERE t.category_id IS NULL AND c.id IS NULL
+    GROUP BY t.category
+    ORDER BY n DESC
+""")
+
+# Same preview, but usable BEFORE category_id exists at all — can't filter
+# on a column that isn't there yet, so this version just looks at every
+# row. This is what a first-time dry run actually needs; without it, a
+# dry run on a fresh database silently skipped the preview entirely
+# (see the bug this replaced).
+COUNT_MATCHABLE_NO_COLUMN_SQL = text("""
+    SELECT COUNT(*) FROM transactions t
+    JOIN categories c ON t.category = c.name
+""")
+
+COUNT_UNMATCHED_NO_COLUMN_SQL = text("""
+    SELECT t.category, COUNT(*) AS n
+    FROM transactions t
+    LEFT JOIN categories c ON t.category = c.name
+    WHERE c.id IS NULL
     GROUP BY t.category
     ORDER BY n DESC
 """)
@@ -122,32 +142,39 @@ async def main(apply: bool) -> int:
         else:
             print("transactions.category_id already exists — skipping column creation.")
 
-        # Backfill counts can be computed either way (column may or may not
-        # exist yet in dry-run mode) — but only actually query them if the
-        # column exists, otherwise the queries below would fail.
-        if already_exists or apply:
-            matchable = (await session.execute(COUNT_MATCHABLE_SQL)).scalar_one()
-            unmatched_rows = (await session.execute(COUNT_UNMATCHED_SQL)).all()
-            unmatched_total = sum(r.n for r in unmatched_rows)
+        # Preview the backfill regardless of whether category_id exists yet
+        # or whether --apply was passed — this is the whole point of a dry
+        # run. Before this fix, a first-time dry run (column doesn't exist,
+        # --apply not passed) skipped this block entirely, because the
+        # category_id-aware queries would themselves fail against a column
+        # that isn't there yet. Use the column-agnostic variants in that case.
+        if already_exists:
+            matchable_sql, unmatched_sql = COUNT_MATCHABLE_SQL, COUNT_UNMATCHED_SQL
+        else:
+            matchable_sql, unmatched_sql = COUNT_MATCHABLE_NO_COLUMN_SQL, COUNT_UNMATCHED_NO_COLUMN_SQL
 
-            print(f"\nRows with category_id still NULL, matchable to a real Category: {matchable}")
-            if unmatched_rows:
-                print(f"Rows with category_id still NULL, NO matching Category row (will show as 'Other'): {unmatched_total}")
-                print("  Breakdown by original category string:")
-                for r in unmatched_rows:
-                    print(f"    {r.category!r}: {r.n} row(s)")
-            else:
-                print("Rows with no matching Category row: 0")
+        matchable = (await session.execute(matchable_sql)).scalar_one()
+        unmatched_rows = (await session.execute(unmatched_sql)).all()
+        unmatched_total = sum(r.n for r in unmatched_rows)
 
-            if not apply:
-                print("\n[DRY RUN] Would backfill category_id for the matchable rows above. Re-run with --apply to do it.")
-            elif matchable:
-                print(f"\nBackfilling {matchable} row(s) ...")
-                await session.execute(BACKFILL_SQL)
-                await session.commit()
-                print("  done.")
-            else:
-                print("\nNothing to backfill.")
+        print(f"\nRows matchable to a real Category (would get category_id backfilled): {matchable}")
+        if unmatched_rows:
+            print(f"Rows with NO matching Category row (will show/stay as 'Other'): {unmatched_total}")
+            print("  Breakdown by original category string:")
+            for r in unmatched_rows:
+                print(f"    {r.category!r}: {r.n} row(s)")
+        else:
+            print("Rows with no matching Category row: 0")
+
+        if not apply:
+            print("\n[DRY RUN] Would backfill category_id for the matchable rows above. Re-run with --apply to do it.")
+        elif matchable:
+            print(f"\nBackfilling {matchable} row(s) ...")
+            await session.execute(BACKFILL_SQL)
+            await session.commit()
+            print("  done.")
+        else:
+            print("\nNothing to backfill.")
 
     print(
         "\nNote: the old `category` string column was NOT dropped. "
