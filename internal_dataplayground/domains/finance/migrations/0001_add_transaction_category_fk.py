@@ -41,8 +41,21 @@ MARIA_DB / APP_ENV environment as `uvicorn main:app`).
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 
 from sqlalchemy import text
+
+# Running this file directly (`python3 path/to/this_file.py`) puts only
+# this file's OWN directory on sys.path[0] — never the caller's cwd, and
+# never the app root three levels up where `database.py` actually lives.
+# That's true no matter what directory you invoke this script from,
+# which is why `import database` below would otherwise fail with
+# `ModuleNotFoundError: No module named 'database'` even when run from
+# inside internal_dataplayground/. Fix it by locating the app root
+# relative to this file's own path, not relative to the cwd.
+_APP_ROOT = Path(__file__).resolve().parents[3]  # .../internal_dataplayground
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
 
 import database
 
