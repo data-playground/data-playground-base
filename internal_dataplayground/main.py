@@ -14,9 +14,9 @@ from domains.code_intel.routers import ci_projects, ci_files, ci_readme # WO2
 from domains.jobs.routers import jobs, ats, staging, job_config # WO3
 from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
+from domains.journal.routers import journal # WO6
 
 from routers import dashboard
-from routers import journal
 from routers import recipe_extract, recipe_discovery, pantry, recipes
 from routers import workout, workout_log, workout_plans, workout_settings
 from routers import media, media_search, media_recommend, media_settings
@@ -42,6 +42,7 @@ app.mount("/static/blog", StaticFiles(directory="domains/blog/static"), name="bl
 app.mount("/static/jobs", StaticFiles(directory="domains/jobs/static"), name="jobs_static")
 app.mount("/static/explorer", StaticFiles(directory="domains/explorer/static"), name="explorer_static")
 app.mount("/static/finance", StaticFiles(directory="domains/finance/static"), name="finance_static")
+app.mount("/static/journal", StaticFiles(directory="domains/journal/static"), name="journal_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Finance (specific prefixes before catch-all /finance summary) ──────────────

@@ -24,15 +24,13 @@ from sqlalchemy import select, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import JournalEntry, WeeklySynthesis
+from domains.journal.models import JournalEntry, WeeklySynthesis
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/journal", tags=["Journal"])
 
-# Lazy import templates so we can reuse the shared Jinja2 instance
-from fastapi.templating import Jinja2Templates
-templates = Jinja2Templates(directory="templates")
+from core.templating import templates
 
 # Maximum days in the past a user can create a new entry (no arbitrary backdating)
 MAX_BACKDATE_DAYS = 7
