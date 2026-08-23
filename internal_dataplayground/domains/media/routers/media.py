@@ -10,19 +10,18 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import (
+from domains.media.models import (
     MediaItem, UserMedia, TVSeasonProgress, StreamingService,
     UserMediaStatus, MediaType, RecommendationMediaType, PREDEFINED_MOOD_TAGS,
 )
 from routers._helpers import html_error
+from core.templating import templates
 
 router = APIRouter(prefix="/media", tags=["Media"])
-templates = Jinja2Templates(directory="templates")
 log = logging.getLogger(__name__)
 
 

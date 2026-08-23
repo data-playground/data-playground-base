@@ -7,15 +7,14 @@ Prefix: /media/settings
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import StreamingService
+from domains.media.models import StreamingService
+from core.templating import templates
 
 router = APIRouter(prefix="/media/settings", tags=["Media Settings"])
-templates = Jinja2Templates(directory="templates")
 
 
 @router.get("", response_class=HTMLResponse)

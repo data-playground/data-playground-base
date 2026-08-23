@@ -29,8 +29,7 @@ from typing import Optional
 from database import get_db
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from models import (
+from domains.media.models import (
     MediaItem,
     MediaRecommendation,
     RecommendationMediaType,
@@ -43,9 +42,9 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from routers._helpers import html_error
+from core.templating import templates
 
 router = APIRouter(prefix="/media/recommend", tags=["Media Recommendations"])
-templates = Jinja2Templates(directory="templates")
 log = logging.getLogger(__name__)
 
 # ── Gemini toggle ─────────────────────────────────────────────────────────────

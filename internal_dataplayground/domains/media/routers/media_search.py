@@ -10,17 +10,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import MediaItem, UserMedia, MediaType, UserMediaStatus, MediaExternalSource
+from domains.media.models import MediaItem, UserMedia, MediaType, UserMediaStatus, MediaExternalSource
 from routers._helpers import html_error
 from services import tmdb_service, openlibrary_service
+from core.templating import templates
 
 router = APIRouter(prefix="/media/search", tags=["Media Search"])
-templates = Jinja2Templates(directory="templates")
 log = logging.getLogger(__name__)
 
 
