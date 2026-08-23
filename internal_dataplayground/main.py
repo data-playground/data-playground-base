@@ -45,6 +45,7 @@ app.mount("/static/explorer", StaticFiles(directory="domains/explorer/static"), 
 app.mount("/static/finance", StaticFiles(directory="domains/finance/static"), name="finance_static")
 app.mount("/static/journal", StaticFiles(directory="domains/journal/static"), name="journal_static")
 app.mount("/static/workout", StaticFiles(directory="domains/workout/static"), name="workout_static")
+app.mount("/static/media", StaticFiles(directory="domains/media/static"), name="media_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Finance (specific prefixes before catch-all /finance summary) ──────────────
@@ -78,7 +79,8 @@ app.include_router(recipes.router)            # ← NEW — last, has /{id} catc
 app.include_router(workout.router)
 app.include_router(workout_log.router)
 app.include_router(workout_log.body_metrics_router)   # separate sub-router!
-app.include_router(workout_plans.router)
+app.include_router(workout_plans_crud.router)
+app.include_router(workout_plan_ai_generator.router)   # separate sub-router!
 app.include_router(workout_settings.router)
 
 app.include_router(media_search.router)      # /media/search/*
