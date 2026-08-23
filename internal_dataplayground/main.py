@@ -20,7 +20,6 @@ from domains.workout.routers import workout, workout_log, workout_plans, workout
 
 from routers import dashboard
 from routers import recipe_extract, recipe_discovery, pantry, recipes
-from routers import workout, workout_log, workout_plans, workout_settings
 from routers import media, media_search, media_recommend, media_settings
 from routers import intent, weekly_plan
 
