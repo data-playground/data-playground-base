@@ -1,6 +1,13 @@
-# routers/workout_log.py
+# domains/workout/routers/workout_log.py
 """
 Workout Tracker — Session Logging
+
+NOTE: this module exports TWO separate APIRouter instances, both included
+separately in main.py:
+  - `router`               → prefix /workout/sessions
+  - `body_metrics_router`  → prefix /workout/body-metrics
+This split is preserved exactly as it was before the domain migration
+(Work Order #8) — do not merge or further split it.
 
 Endpoints:
   POST   /workout/sessions/start               → Start a new session
@@ -19,19 +26,18 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, desc, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import (
+from core.templating import templates
+from domains.workout.models import (
     BodyMetric, Exercise, WeightUnit,
     WorkoutPlan, WorkoutPlanDay, WorkoutSession, WorkoutSet,
 )
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout/sessions", tags=["Workout"])
-templates = Jinja2Templates(directory="templates")
 
 
 async def _get_previous_best(
@@ -64,7 +70,6 @@ async def start_session(
     form = await request.form()
     today = datetime.date.today()
 
-    # Check if an open session already exists for today
     existing_result = await db.execute(
         select(WorkoutSession)
         .where(WorkoutSession.session_date == today)
@@ -72,7 +77,6 @@ async def start_session(
     )
     existing = existing_result.scalar_one_or_none()
     if existing:
-        # Return the existing session rather than creating a duplicate
         return templates.TemplateResponse("partials/workout/active_session_header.html", {
             "request": request,
             "session": existing,
@@ -85,7 +89,6 @@ async def start_session(
     weight_unit_raw = str(form.get("weight_unit", "lb")).strip()
     weight_unit = WeightUnit.KG if weight_unit_raw == "kg" else WeightUnit.LB
 
-    # Default to active plan's location if not specified
     if not location_id and plan_id:
         plan = await db.get(WorkoutPlan, plan_id)
         if plan and plan.location_id:
@@ -152,7 +155,6 @@ async def log_set(
 
     is_warmup = form.get("is_warmup", "").lower() in ("true", "1", "on", "yes")
 
-    # Auto-increment set_number for this exercise in this session
     set_count_result = await db.execute(
         select(func.count(WorkoutSet.id))
         .where(WorkoutSet.session_id == session_id)
@@ -174,7 +176,6 @@ async def log_set(
     await db.commit()
     await db.refresh(workout_set)
 
-    # Previous best for the motivational comparison
     prev_best = await _get_previous_best(db, exercise_id, exclude_session_id=session_id)
     exercise = await db.get(Exercise, exercise_id)
 
@@ -207,7 +208,6 @@ async def end_session(
     now = datetime.datetime.utcnow()
     session.ended_at = now
 
-    # Calculate duration from started_at if available
     if session.started_at:
         session.duration_minutes = int((now - session.started_at).total_seconds() / 60)
 
@@ -243,7 +243,6 @@ async def session_detail(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Group sets by exercise for template rendering
     sets_by_exercise: dict[int, dict] = {}
     for ws in session.sets:
         if ws.exercise_id not in sets_by_exercise:
@@ -283,6 +282,7 @@ async def delete_set(
 
 
 # ── Body metrics ───────────────────────────────────────────────────────────────
+# Second, distinct APIRouter in this same module — see module docstring.
 
 body_metrics_router = APIRouter(prefix="/workout/body-metrics", tags=["Workout"])
 
@@ -314,7 +314,6 @@ async def log_body_metric(
 
     notes_raw = str(form.get("notes", "")).strip()
 
-    # Upsert — one entry per day
     existing_result = await db.execute(
         select(BodyMetric).where(BodyMetric.metric_date == metric_date)
     )

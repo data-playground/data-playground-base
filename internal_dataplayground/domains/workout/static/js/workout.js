@@ -1,8 +1,10 @@
-// static/js/workout.js
+// domains/workout/static/js/workout.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Life OS — Workout Tracker Client Logic
 // Handles: exercise search, set logging, session timer, unit toggle,
 //          weight modal, end-session modal, body weight sparkline.
+// Moved from static/js/workout.js as part of Work Order #8 (domain
+// migration) — content unchanged, only the file's own location moved.
 // ─────────────────────────────────────────────────────────────────────────────
 
 'use strict';

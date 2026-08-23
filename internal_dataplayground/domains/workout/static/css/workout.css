@@ -1,8 +1,10 @@
-/* static/css/workout.css
+/* domains/workout/static/css/workout.css
    ─────────────────────────────────────────────────────────────────────────
    Life OS — Workout Tracker
    Mobile-first. Tap targets ≥ 44px. All theme tokens from base.css.
    Never redeclare --accent, --bg, --border, etc. here.
+   Moved from static/css/workout.css as part of Work Order #8 (domain
+   migration) — content unchanged, only the file's own location moved.
    ─────────────────────────────────────────────────────────────────────────
 */
 

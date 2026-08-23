@@ -16,6 +16,8 @@ from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
 from domains.journal.routers import journal # WO6
 
+from domains.workout.routers import workout, workout_log, workout_plans, workout_settings # WO8
+
 from routers import dashboard
 from routers import recipe_extract, recipe_discovery, pantry, recipes
 from routers import workout, workout_log, workout_plans, workout_settings
@@ -43,6 +45,7 @@ app.mount("/static/jobs", StaticFiles(directory="domains/jobs/static"), name="jo
 app.mount("/static/explorer", StaticFiles(directory="domains/explorer/static"), name="explorer_static")
 app.mount("/static/finance", StaticFiles(directory="domains/finance/static"), name="finance_static")
 app.mount("/static/journal", StaticFiles(directory="domains/journal/static"), name="journal_static")
+app.mount("/static/workout", StaticFiles(directory="domains/workout/static"), name="workout_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Finance (specific prefixes before catch-all /finance summary) ──────────────

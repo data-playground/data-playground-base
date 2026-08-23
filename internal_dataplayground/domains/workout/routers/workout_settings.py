@@ -1,4 +1,4 @@
-# routers/workout_settings.py
+# domains/workout/routers/workout_settings.py
 """
 Workout Tracker — Settings
 
@@ -20,20 +20,19 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import (
+from core.templating import templates
+from domains.workout.models import (
     Equipment, EquipmentType, Exercise, ExerciseEquipmentType,
     LocationType, MuscleGroup, WeightUnit, WorkoutLocation,
 )
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout", tags=["Workout"])
-templates = Jinja2Templates(directory="templates")
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +336,23 @@ async def create_custom_exercise(request: Request, db: AsyncSession = Depends(ge
 
 @router.get("/exercises", response_class=JSONResponse)
 async def search_exercises(q: str = "", db: AsyncSession = Depends(get_db)):
-    """Exercise autocomplete for the session log panel."""
+    """Exercise autocomplete for the session log panel.
+
+    BUGFIX (post-migration, explicitly authorized by project owner —
+    see Work Order #8 report/follow-up, not part of the original migration
+    diff): this endpoint previously raised `NameError: name 'rows' is not
+    defined` — the query result was stored in `result` but the return
+    comprehension iterated an undefined `rows`. Fixed by materializing
+    `rows = result.all()`.
+
+    A second, previously-masked bug was found while fixing the first:
+    `primary_muscle_group` and `equipment_type` are plain Python
+    `enum.Enum` members (not string-enums), and Starlette's `JSONResponse`
+    calls raw `json.dumps()` with no enum handler — so once the NameError
+    was fixed, this endpoint would have immediately failed instead with
+    `TypeError: Object of type MuscleGroup is not JSON serializable`.
+    Fixed by serializing `.value` for both enum fields.
+    """
     stmt = select(
         Exercise.id, Exercise.name, Exercise.primary_muscle_group,
         Exercise.equipment_type, Exercise.is_compound, Exercise.is_custom,
@@ -347,13 +362,14 @@ async def search_exercises(q: str = "", db: AsyncSession = Depends(get_db)):
         stmt = stmt.where(Exercise.name.ilike(f"%{q.strip()}%"))
 
     result = await db.execute(stmt)
+    rows = result.all()
 
     return [
         {
             "id": r[0],
             "name": r[1],
-            "muscle": r[2],
-            "equipment": r[3],
+            "muscle": r[2].value,
+            "equipment": r[3].value,
             "compound": r[4],
             "custom": r[5],
         }

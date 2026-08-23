@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/workout.css">
+<link rel="stylesheet" href="/static/workout/css/workout.css">
 {% endblock %}
 
 {% block content %}
@@ -15,12 +15,10 @@
 
     <div class="workout-settings-grid">
 
-        {# ── LEFT: LOCATIONS & EQUIPMENT ── #}
         <div>
             <div class="settings-panel">
                 <div class="settings-panel-title">Locations & Equipment</div>
 
-                {# Add location form #}
                 <div style="display:flex;flex-direction:column;gap:8px;
                             margin-bottom:16px;padding-bottom:16px;
                             border-bottom:1px solid var(--border);">
@@ -58,14 +56,12 @@
                     </div>
                 </div>
 
-                {# Location list #}
                 <div id="location-list-container">
                     {% include "partials/workout/location_list.html" %}
                 </div>
             </div>
         </div>
 
-        {# ── RIGHT: CUSTOM EXERCISES ── #}
         <div>
             <div class="settings-panel">
                 <div class="settings-panel-title">Custom Exercises</div>
@@ -75,7 +71,6 @@
                     appear in the log form and be available to the AI plan generator.
                 </div>
 
-                {# Add custom exercise form #}
                 <div style="display:flex;flex-direction:column;gap:8px;
                             margin-bottom:16px;padding-bottom:16px;
                             border-bottom:1px solid var(--border);">
@@ -115,7 +110,6 @@
                     </div>
                 </div>
 
-                {# Custom exercise list #}
                 <div id="custom-exercise-list-container">
                     {% include "partials/workout/custom_exercise_list.html" %}
                 </div>
@@ -130,7 +124,6 @@
 
 {% block extra_js %}
 <script>
-// ── LOCATION ACTIONS ──────────────────────────────────────────────────────────
 async function addLocation() {
     const name = document.getElementById('loc-name').value.trim();
     if (!name) { showToast('Location name is required.', true); return; }
@@ -154,7 +147,6 @@ async function addLocation() {
 }
 
 function _swapHtml(containerId, html) {
-    // If the server returned a full HTML page (error page), bail out
     if (html.includes('<html') || html.includes('<!DOCTYPE')) {
         showToast('Server error — check console for details.', true);
         console.error('Unexpected full-page response:', html.slice(0, 500));
@@ -162,7 +154,6 @@ function _swapHtml(containerId, html) {
     }
     const container = document.getElementById(containerId);
     container.innerHTML = html;
-    // innerHTML suppresses <script> tags -- re-execute them manually
     container.querySelectorAll('script').forEach(old => {
         const s = document.createElement('script');
         s.textContent = old.textContent;
@@ -201,7 +192,6 @@ async function deleteEquipment(equipId, locationId) {
     }
 }
 
-// ── CUSTOM EXERCISE ───────────────────────────────────────────────────────────
 async function addCustomExercise() {
     const name = document.getElementById('ex-name').value.trim();
     if (!name) { showToast('Exercise name required.', true); return; }

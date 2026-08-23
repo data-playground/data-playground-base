@@ -8,13 +8,12 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/workout.css">
+<link rel="stylesheet" href="/static/workout/css/workout.css">
 {% endblock %}
 
 {% block content %}
 <main class="main-content" style="padding:20px;max-width:720px;">
 
-    {# ── CREATE PLAN MANUALLY ── #}
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
                 padding:18px;margin-bottom:20px;box-shadow:var(--shadow);">
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;
@@ -70,7 +69,6 @@
         </div>
     </div>
 
-    {# ── EXISTING PLANS ── #}
     <div style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
                 color:var(--text-muted);margin-bottom:10px;">Your Plans</div>
 
@@ -80,7 +78,6 @@
 
 </main>
 
-{# ── AI GENERATE MODAL ── #}
 <div class="modal-backdrop" id="generate-modal">
     <div class="modal-box" style="max-width:480px;border-radius:12px;">
         <div class="modal-head">
@@ -191,7 +188,6 @@ async function submitGenerate() {
     try {
         const resp = await fetch('/workout/plans/generate', { method: 'POST', body: fd });
         if (resp.ok) {
-            // Navigate to the full-page preview
             document.open();
             document.write(await resp.text());
             document.close();

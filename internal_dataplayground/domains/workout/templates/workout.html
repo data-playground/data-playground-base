@@ -16,7 +16,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/workout.css">
+<link rel="stylesheet" href="/static/workout/css/workout.css">
 {% endblock %}
 
 {% block content %}
@@ -407,5 +407,5 @@ const BODY_METRIC_DATES = {{ body_metrics | map(attribute='metric_date') | map('
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script src="/static/js/workout.js"></script>
+<script src="/static/workout/js/workout.js"></script>
 {% endblock %}

@@ -1,4 +1,4 @@
-# routers/workout_plans.py
+# domains/workout/routers/workout_plans.py
 """
 Workout Tracker — Plan Management + AI Plan Generator
 
@@ -20,8 +20,8 @@ from typing import Optional
 from database import get_db  #, get_key
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from models import (
+from core.templating import templates
+from domains.workout.models import (
     Exercise,
     ExerciseEquipmentType,
     MuscleGroup,
@@ -40,7 +40,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout/plans", tags=["Workout"])
-templates = Jinja2Templates(directory="templates")
 
 
 # ── Plan list ──────────────────────────────────────────────────────────────────
@@ -108,7 +107,6 @@ async def create_plan(
     db.add(plan)
     await db.flush()  # Get plan.id before creating days
 
-    # Create the named days
     day_names_raw = str(form.get("day_names", "")).strip()
     if day_names_raw:
         day_names = [d.strip() for d in day_names_raw.split(",") if d.strip()]
@@ -197,7 +195,11 @@ async def delete_plan(
     })
 
 
-# ── AI Plan Generator ──────────────────────────────────────────────────────────
+# ── AI Plan Generator ────────────────────────────────────────────────────────
+# NOTE: _call_gemini_for_plan below is one of six known duplicate AI-client
+# implementations tracked in GOVERNANCE.md §2.3. Left completely untouched
+# per this work order's HARD BOUNDARIES — do not route through a service
+# layer as part of this migration.
 
 async def _build_exercise_history_context(db: AsyncSession) -> str:
     """
@@ -208,7 +210,6 @@ async def _build_exercise_history_context(db: AsyncSession) -> str:
     from datetime import timedelta
     cutoff = cutoff - timedelta(days=30)
 
-    # Frequency: exercises logged most often in the last 30 days
     freq_result = await db.execute(
         text("""
             SELECT ws.exercise_id, e.name,
@@ -241,7 +242,6 @@ async def _build_exercise_history_context(db: AsyncSession) -> str:
             f"Recent max: {row['last_max_weight']} {unit}"
         )
 
-    # Muscle groups trained in the last 7 days
     muscle_result = await db.execute(
         text("""
             SELECT e.primary_muscle_group, COUNT(DISTINCT ws.session_id) AS cnt
@@ -289,7 +289,6 @@ async def _fuzzy_match_exercise(db: AsyncSession, name: str) -> Optional[Exercis
     Tries to find an exercise by exact name, then by LIKE match.
     Used to validate AI-suggested exercise names against the DB.
     """
-    # Exact match first
     result = await db.execute(
         select(Exercise).where(Exercise.name == name)
     )
@@ -297,7 +296,6 @@ async def _fuzzy_match_exercise(db: AsyncSession, name: str) -> Optional[Exercis
     if ex:
         return ex
 
-    # Case-insensitive LIKE match
     result = await db.execute(
         select(Exercise).where(Exercise.name.ilike(f"%{name}%")).limit(1)
     )
@@ -329,7 +327,6 @@ async def generate_plan(
 
     additional_notes = str(form.get("additional_notes", "")).strip()
 
-    # ── Build context for AI ───────────────────────────────────────────────
     location: Optional[WorkoutLocation] = None
     equipment_context = "No specific equipment logged."
     if location_id:
@@ -346,7 +343,6 @@ async def generate_plan(
 
     exercise_history = await _build_exercise_history_context(db)
 
-    # Pull all exercise names from DB for the AI to choose from
     exercises_result = await db.execute(
         select(Exercise.name, Exercise.primary_muscle_group, Exercise.equipment_type, Exercise.is_compound)
         .order_by(Exercise.primary_muscle_group, Exercise.name)
@@ -422,14 +418,13 @@ Prioritize exercises the user is already doing (from history) but ensure full co
             "error": f"Plan generation failed: {exc}. Try again or create a plan manually.",
         })
 
-    # ── Validate AI exercise names against DB ──────────────────────────────
     unmatched = []
     for day in plan_data.get("days", []):
         for ex_data in day.get("exercises", []):
             matched = await _fuzzy_match_exercise(db, ex_data["exercise_name"])
             if matched:
                 ex_data["exercise_id"] = matched.id
-                ex_data["exercise_name"] = matched.name  # Normalize to DB name
+                ex_data["exercise_name"] = matched.name
             else:
                 unmatched.append(ex_data["exercise_name"])
                 ex_data["exercise_id"] = None
@@ -474,7 +469,6 @@ async def save_generated_plan(
     location_id = int(location_id_raw) if location_id_raw else None
     should_activate = activate_raw.lower() in ("true", "1", "on", "yes")
 
-    # If activating, deactivate all existing plans
     if should_activate:
         all_plans_result = await db.execute(select(WorkoutPlan))
         for p in all_plans_result.scalars().all():
@@ -504,7 +498,7 @@ async def save_generated_plan(
         for order, ex_data in enumerate(day_data.get("exercises", []), 1):
             ex_id = ex_data.get("exercise_id")
             if not ex_id:
-                continue  # Skip unmatched exercises
+                continue
 
             plan_ex = WorkoutPlanExercise(
                 plan_id=plan.id,

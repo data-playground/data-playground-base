@@ -47,7 +47,6 @@
             </div>
         </div>
 
-        {# Equipment at this location #}
         {% if loc.active_equipment %}
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
             {% for eq in loc.active_equipment %}
@@ -65,7 +64,6 @@
         </div>
         {% endif %}
 
-        {# Add equipment inline form #}
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;">
             <input class="log-input" type="text" id="eq-name-{{ loc.id }}"
                    placeholder="Equipment name"

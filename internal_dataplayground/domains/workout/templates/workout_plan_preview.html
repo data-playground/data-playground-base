@@ -7,13 +7,12 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/workout.css">
+<link rel="stylesheet" href="/static/workout/css/workout.css">
 {% endblock %}
 
 {% block content %}
 <main class="main-content" style="padding:20px;max-width:900px;">
 
-    {# ── HEADER ── #}
     <div style="margin-bottom:20px;">
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:20px;
                     color:var(--text-primary);margin-bottom:6px;">
@@ -49,7 +48,6 @@
         </div>
     </div>
 
-    {# ── UNMATCHED EXERCISE WARNING ── #}
     {% if unmatched_exercises %}
     <div style="padding:12px 16px;background:rgba(232,160,32,0.08);
                 border:1px solid rgba(232,160,32,0.3);border-radius:8px;
@@ -61,7 +59,6 @@
     </div>
     {% endif %}
 
-    {# ── DAY GRID ── #}
     <div class="plan-preview-grid">
         {% for day in plan_data.days %}
         <div class="plan-preview-day">
@@ -98,7 +95,6 @@
         {% endfor %}
     </div>
 
-    {# ── SAVE FORM ── #}
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
                 padding:20px;box-shadow:var(--shadow);">
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;
@@ -145,7 +141,6 @@ async function savePlan() {
     const form = document.getElementById('save-plan-form');
     const fd = new FormData(form);
 
-    // Use a placeholder plan_id — the save endpoint ignores it and creates a new plan
     try {
         const resp = await fetch('/workout/plans/0/save', { method: 'POST', body: fd });
         if (resp.ok) {

@@ -1,4 +1,4 @@
-# routers/workout.py
+# domains/workout/routers/workout.py
 """
 Workout Tracker — Main Views
 
@@ -15,19 +15,18 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, desc, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import (
+from core.templating import templates
+from domains.workout.models import (
     WorkoutPlan, WorkoutPlanDay, WorkoutPlanExercise,
     WorkoutSession, WorkoutSet, Exercise, BodyMetric, WeightUnit,
 )
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout", tags=["Workout"])
-templates = Jinja2Templates(directory="templates")
 
 
 async def _get_active_plan(db: AsyncSession) -> Optional[WorkoutPlan]:
@@ -78,14 +77,10 @@ async def workout_home(request: Request, db: AsyncSession = Depends(get_db)):
     active_session = await _get_active_session(db)
 
     # ── Today's suggested plan day ─────────────────────────────────────────
-    # Determine which plan day to show based on session count modulo plan days.
-    # This gives a rolling rotation: if you have a 4-day plan and have done
-    # 5 sessions, it shows Day 2 next.
     suggested_day: Optional[WorkoutPlanDay] = None
     plan_exercises_with_prev: list[dict] = []
 
     if active_plan and active_plan.days:
-        # Count completed sessions for this plan
         sessions_count_result = await db.execute(
             select(func.count(WorkoutSession.id))
             .where(WorkoutSession.plan_id == active_plan.id)
@@ -95,21 +90,18 @@ async def workout_home(request: Request, db: AsyncSession = Depends(get_db)):
         day_idx = completed_sessions % len(active_plan.days)
         suggested_day = active_plan.days[day_idx]
 
-        # If there's an active session with a plan_day_id, use that instead
         if active_session and active_session.plan_day_id:
             for d in active_plan.days:
                 if d.id == active_session.plan_day_id:
                     suggested_day = d
                     break
 
-        # Build exercise list with previous best for each exercise
         for plan_ex in suggested_day.exercises:
             prev = await _get_previous_best(
                 db,
                 plan_ex.exercise_id,
                 exclude_session_id=active_session.id if active_session else None,
             )
-            # Count sets already logged in active session for this exercise
             sets_logged = 0
             if active_session:
                 sets_result = await db.execute(
@@ -145,7 +137,6 @@ async def workout_home(request: Request, db: AsyncSession = Depends(get_db)):
     )
     body_metrics = metrics_result.scalars().all()
 
-    # Latest body weight for display
     latest_metric: Optional[BodyMetric] = body_metrics[-1] if body_metrics else None
 
     # ── All exercises for the quick-add search ─────────────────────────────
@@ -191,7 +182,6 @@ async def exercise_history(
     if not exercise:
         return HTMLResponse("Exercise not found", status_code=404)
 
-    # Join to sessions so we get the session date for display
     result = await db.execute(
         select(WorkoutSet, WorkoutSession.session_date)
         .join(WorkoutSession, WorkoutSet.session_id == WorkoutSession.id)
@@ -215,7 +205,6 @@ async def workout_progress(request: Request, db: AsyncSession = Depends(get_db))
     """
     Progress page: weight-over-time chart for each exercise logged ≥3 times.
     """
-    # Find exercises with enough data to chart
     freq_result = await db.execute(
         select(
             WorkoutSet.exercise_id,
@@ -230,7 +219,6 @@ async def workout_progress(request: Request, db: AsyncSession = Depends(get_db))
     )
     freq_rows = freq_result.all()
 
-    # For each exercise, get the progression data (max weight per session)
     progress_data = []
     for row in freq_rows:
         exercise = await db.get(Exercise, row.exercise_id)
@@ -265,7 +253,6 @@ async def workout_progress(request: Request, db: AsyncSession = Depends(get_db))
             ],
         })
 
-    # Body metrics for the weight chart
     cutoff = datetime.date.today() - datetime.timedelta(days=90)
     metrics_result = await db.execute(
         select(BodyMetric)

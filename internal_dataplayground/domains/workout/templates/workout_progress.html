@@ -7,13 +7,12 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/workout.css">
+<link rel="stylesheet" href="/static/workout/css/workout.css">
 {% endblock %}
 
 {% block content %}
 <main class="main-content" style="padding:20px;max-width:800px;">
 
-    {# ── BODY WEIGHT CHART ── #}
     {% if body_metrics %}
     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
                 padding:18px;margin-bottom:20px;box-shadow:var(--shadow);">
@@ -46,7 +45,6 @@
     </div>
     {% endif %}
 
-    {# ── EXERCISE PROGRESSION CHARTS ── #}
     {% if progress_data %}
     <div style="font-size:9px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
                 color:var(--text-muted);margin-bottom:12px;">
@@ -64,7 +62,6 @@
                 </div>
             </div>
 
-            {# Max weight and trend summary #}
             {% if item.data %}
             {% set first = item.data[0] %}
             {% set last = item.data[-1] %}
@@ -128,7 +125,6 @@
     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
     const textColor = isDark ? 'rgba(200,200,220,0.5)' : 'rgba(80,80,120,0.5)';
 
-    // Body weight chart
     const bwCanvas = document.getElementById('body-weight-chart');
     if (bwCanvas) {
         const metrics = {{ body_metrics | map(attribute='weight') | list | tojson }};
@@ -181,7 +177,6 @@
         });
     }
 
-    // Exercise progression charts
     document.querySelectorAll('canvas[data-labels]').forEach(canvas => {
         const labels = JSON.parse(canvas.dataset.labels || '[]');
         const values = JSON.parse(canvas.dataset.values || '[]');
