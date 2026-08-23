@@ -16,7 +16,7 @@ from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
 from domains.journal.routers import journal # WO6
 
-from domains.workout.routers import workout, workout_log, workout_plans, workout_settings # WO8
+from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
 
 from routers import dashboard
 from routers import recipe_extract, recipe_discovery, pantry, recipes

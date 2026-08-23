@@ -30,6 +30,7 @@ from domains.workout.models import (
     Equipment, EquipmentType, Exercise, ExerciseEquipmentType,
     LocationType, MuscleGroup, WeightUnit, WorkoutLocation,
 )
+from domains.workout.routers._shared import parse_weight_unit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout", tags=["Workout"])
@@ -218,7 +219,7 @@ async def add_equipment(
     max_weight = float(max_weight_raw) if max_weight_raw else None
 
     weight_unit_raw = str(form.get("weight_unit", "lb")).strip()
-    weight_unit = WeightUnit.KG if weight_unit_raw == "kg" else WeightUnit.LB
+    weight_unit = parse_weight_unit(weight_unit_raw)
 
     notes = str(form.get("notes", "")).strip() or None
 

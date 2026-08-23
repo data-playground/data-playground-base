@@ -35,26 +35,15 @@ from domains.workout.models import (
     BodyMetric, Exercise, WeightUnit,
     WorkoutPlan, WorkoutPlanDay, WorkoutSession, WorkoutSet,
 )
+from domains.workout.routers._shared import _get_previous_best, parse_weight_unit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout/sessions", tags=["Workout"])
 
-
-async def _get_previous_best(
-    db: AsyncSession, exercise_id: int, exclude_session_id: Optional[int] = None
-) -> Optional[WorkoutSet]:
-    """Most recent working set for an exercise, excluding the current session."""
-    stmt = (
-        select(WorkoutSet)
-        .where(WorkoutSet.exercise_id == exercise_id)
-        .where(WorkoutSet.is_warmup == False)
-        .where(WorkoutSet.weight_used != None)
-        .order_by(desc(WorkoutSet.created_at))
-    )
-    if exclude_session_id:
-        stmt = stmt.where(WorkoutSet.session_id != exclude_session_id)
-    result = await db.execute(stmt.limit(1))
-    return result.scalar_one_or_none()
+# NOTE: _get_previous_best() used to be defined locally in this file (and,
+# identically, in workout.py). Consolidated into
+# domains/workout/routers/_shared.py as an explicitly-authorized follow-up
+# to Work Order #8 — see that module's docstring.
 
 
 @router.post("/start", response_class=HTMLResponse)
@@ -87,7 +76,7 @@ async def start_session(
     plan_day_id = int(form.get("plan_day_id")) if form.get("plan_day_id") else None
     location_id = int(form.get("location_id")) if form.get("location_id") else None
     weight_unit_raw = str(form.get("weight_unit", "lb")).strip()
-    weight_unit = WeightUnit.KG if weight_unit_raw == "kg" else WeightUnit.LB
+    weight_unit = parse_weight_unit(weight_unit_raw)
 
     if not location_id and plan_id:
         plan = await db.get(WorkoutPlan, plan_id)
@@ -146,7 +135,7 @@ async def log_set(
     weight_used = Decimal(weight_raw) if weight_raw else None
 
     weight_unit_raw = str(form.get("weight_unit", session.weight_unit.value)).strip()
-    weight_unit = WeightUnit.KG if weight_unit_raw == "kg" else WeightUnit.LB
+    weight_unit = parse_weight_unit(weight_unit_raw)
 
     rpe_raw = form.get("rpe", "").strip()
     rpe = int(rpe_raw) if rpe_raw else None
@@ -307,7 +296,7 @@ async def log_body_metric(
     weight = Decimal(weight_raw) if weight_raw else None
 
     weight_unit_raw = str(form.get("weight_unit", "lb")).strip()
-    weight_unit = WeightUnit.KG if weight_unit_raw == "kg" else WeightUnit.LB
+    weight_unit = parse_weight_unit(weight_unit_raw)
 
     bf_raw = str(form.get("body_fat_pct", "")).strip()
     body_fat_pct = Decimal(bf_raw) if bf_raw else None

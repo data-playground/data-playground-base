@@ -24,6 +24,7 @@ from domains.workout.models import (
     WorkoutPlan, WorkoutPlanDay, WorkoutPlanExercise,
     WorkoutSession, WorkoutSet, Exercise, BodyMetric, WeightUnit,
 )
+from domains.workout.routers._shared import _get_previous_best
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/workout", tags=["Workout"])
@@ -48,26 +49,10 @@ async def _get_active_session(db: AsyncSession) -> Optional[WorkoutSession]:
     )
     return result.scalar_one_or_none()
 
-
-async def _get_previous_best(
-    db: AsyncSession, exercise_id: int, exclude_session_id: Optional[int] = None
-) -> Optional[WorkoutSet]:
-    """
-    Returns the most recent working set for an exercise (excluding warmups
-    and optionally the current session). Used to populate 'Previous best' display.
-    """
-    stmt = (
-        select(WorkoutSet)
-        .where(WorkoutSet.exercise_id == exercise_id)
-        .where(WorkoutSet.is_warmup == False)
-        .where(WorkoutSet.weight_used != None)
-        .order_by(desc(WorkoutSet.created_at))
-    )
-    if exclude_session_id:
-        stmt = stmt.where(WorkoutSet.session_id != exclude_session_id)
-    stmt = stmt.limit(1)
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none()
+# NOTE: _get_previous_best() used to be defined locally in this file (and,
+# identically, in workout_log.py). Consolidated into
+# domains/workout/routers/_shared.py as an explicitly-authorized follow-up
+# to Work Order #8 — see that module's docstring.
 
 
 @router.get("", response_class=HTMLResponse)
