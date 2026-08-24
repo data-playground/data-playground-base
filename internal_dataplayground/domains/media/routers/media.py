@@ -10,7 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -23,6 +23,13 @@ from core.templating import templates
 
 router = APIRouter(prefix="/media", tags=["Media"])
 log = logging.getLogger(__name__)
+
+# Hard cap on rows rendered per request — mirrors the fix applied to the
+# jobs domain (WO#3 Phase 6), where an unbounded query combined with
+# post-fetch Python filtering caused GET /jobs to hang for 60+ seconds at
+# ~2,300 rows. Media libraries are smaller today, but the same shape of
+# bug is cheap to prevent now and expensive to discover later.
+PAGE_SIZE = 300
 
 
 # ── BOARD VIEW ────────────────────────────────────────────────────────────────
@@ -37,35 +44,60 @@ async def media_board(
     service_filter: Optional[int] = None,
     q: Optional[str] = None,
 ):
-    stmt = (
-        select(UserMedia)
-        .join(MediaItem, UserMedia.media_item_id == MediaItem.id)
-        .order_by(UserMedia.updated_at.desc())
-    )
-
-    if type_filter and type_filter in [t.value for t in MediaType]:
-        stmt = stmt.where(MediaItem.media_type == type_filter)
-    if status_filter and status_filter in [s.value for s in UserMediaStatus]:
-        stmt = stmt.where(UserMedia.status == status_filter)
-    if q:
-        stmt = stmt.where(MediaItem.title.ilike(f"%{q}%"))
-
-    result = await db.execute(stmt)
-    user_media_list = result.scalars().all()
-
+    # ── Resolve the service filter to a TMDB provider ID up front, so it
+    # can be pushed into SQL alongside every other filter instead of being
+    # applied as a second, post-fetch Python pass over the full result set. ──
+    service_provider_id: Optional[int] = None
     if service_filter:
         svc = await db.get(StreamingService, service_filter)
         if svc and svc.tmdb_provider_id:
-            pid = svc.tmdb_provider_id
-            user_media_list = [
-                um for um in user_media_list
-                if pid in (um.media_item.streaming_available_on or [])
-            ]
+            service_provider_id = svc.tmdb_provider_id
 
-    all_genres: set[str] = set()
-    for um in user_media_list:
-        for g in (um.media_item.genre_list or []):
-            all_genres.add(g)
+    def _apply_filters(stmt):
+        if type_filter and type_filter in [t.value for t in MediaType]:
+            stmt = stmt.where(MediaItem.media_type == type_filter)
+        if status_filter and status_filter in [s.value for s in UserMediaStatus]:
+            stmt = stmt.where(UserMedia.status == status_filter)
+        if q:
+            stmt = stmt.where(MediaItem.title.ilike(f"%{q}%"))
+        if service_provider_id is not None:
+            # JSON_CONTAINS checks whether the scalar provider ID appears
+            # anywhere in the streaming_provider_ids JSON array column —
+            # same check the old Python loop did, now done in SQL so it
+            # applies before PAGE_SIZE truncates the result set, not after.
+            stmt = stmt.where(
+                func.json_contains(
+                    MediaItem.streaming_provider_ids, str(service_provider_id)
+                )
+            )
+        return stmt
+
+    # ── True counts for the topbar stats, computed independently of the
+    # PAGE_SIZE cap below — "N tracked" should never silently become
+    # "N shown" once a library has more than PAGE_SIZE matching items. ──────
+    stats_stmt = _apply_filters(
+        select(UserMedia.status, func.count(UserMedia.id))
+        .join(MediaItem, UserMedia.media_item_id == MediaItem.id)
+        .group_by(UserMedia.status)
+    )
+    stats_result = await db.execute(stats_stmt)
+    status_counts = {row[0]: row[1] for row in stats_result.all()}
+    stats = {
+        "total": sum(status_counts.values()),
+        "completed": status_counts.get(UserMediaStatus.COMPLETED, 0),
+        "in_progress": status_counts.get(UserMediaStatus.IN_PROGRESS, 0),
+        "want_to": status_counts.get(UserMediaStatus.WANT_TO, 0),
+    }
+
+    # ── The actual page of rows to render, capped at PAGE_SIZE ──────────────
+    stmt = _apply_filters(
+        select(UserMedia)
+        .join(MediaItem, UserMedia.media_item_id == MediaItem.id)
+        .order_by(UserMedia.updated_at.desc())
+        .limit(PAGE_SIZE)
+    )
+    result = await db.execute(stmt)
+    user_media_list = result.scalars().all()
 
     svc_result = await db.execute(
         select(StreamingService)
@@ -74,18 +106,10 @@ async def media_board(
     )
     subscribed_services = svc_result.scalars().all()
 
-    stats = {
-        "total": len(user_media_list),
-        "completed": sum(1 for um in user_media_list if um.status == UserMediaStatus.COMPLETED),
-        "in_progress": sum(1 for um in user_media_list if um.status == UserMediaStatus.IN_PROGRESS),
-        "want_to": sum(1 for um in user_media_list if um.status == UserMediaStatus.WANT_TO),
-    }
-
     return templates.TemplateResponse("media.html", {
         "request": request,
         "active_module": "media",
         "user_media_list": user_media_list,
-        "all_genres": sorted(all_genres),
         "subscribed_services": subscribed_services,
         "stats": stats,
         "type_filter": type_filter,
