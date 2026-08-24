@@ -22,6 +22,7 @@ templates.env.loader = ChoiceLoader([
     FileSystemLoader("domains/explorer/templates"),
     FileSystemLoader("domains/finance/templates"),
     FileSystemLoader("domains/journal/templates"),
+    FileSystemLoader("domains/recipes/templates"),
     FileSystemLoader("domains/workout/templates"),
     FileSystemLoader("domains/media/templates"),
 ])

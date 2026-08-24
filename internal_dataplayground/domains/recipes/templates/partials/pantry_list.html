@@ -1,0 +1,46 @@
+{# templates/partials/pantry_list.html
+   Returned by POST /pantry and DELETE /pantry/{ingredient_id}.
+   Swapped into #pantry-list-container.
+   `grouped`     = dict of {category_str: [PantryItem, ...]}
+   `categories`  = list of all category strings
+   `total_items` = int
+   `toast`       = optional success message string
+#}
+{% if toast %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const t = document.getElementById('pantry-toast');
+    if (t) { t.textContent = '{{ toast }}'; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400); }
+});
+</script>
+{% endif %}
+
+{% if grouped %}
+{% for category in categories %}
+{% if grouped[category] is defined and grouped[category] %}
+<div class="pantry-category-group" style="margin-bottom:20px;">
+    <div class="pantry-cat-label">{{ category | replace('_', ' ') | capitalize }}</div>
+    <div class="pantry-items">
+        {% for item in grouped[category] %}
+        <div class="pantry-item" id="pantry-item-{{ item.ingredient_id }}">
+            <span class="pantry-item-name">{{ item.ingredient.name }}</span>
+            <button class="pantry-remove-btn"
+                    hx-delete="/pantry/{{ item.ingredient_id }}"
+                    hx-target="#pantry-list-container"
+                    hx-swap="innerHTML"
+                    title="Remove from pantry">
+                ✕
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% else %}
+<div style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:11px;line-height:1.7;">
+    <div style="font-size:28px;margin-bottom:10px;opacity:.3;">🧺</div>
+    Your pantry is empty.<br>
+    Add ingredients using the form above.
+</div>
+{% endif %}

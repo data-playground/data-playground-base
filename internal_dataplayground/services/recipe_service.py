@@ -47,7 +47,7 @@ async def run_normalization_pipeline(
     """
     # Deferred import to avoid circular deps and keep agents testable standalone
     from airflow.agents.recipe_agents import agent_normalize_ingredients
-    from models import Ingredient, IngredientCategory, RecipeIngredient, IngredientUnit, RecipeTag
+    from domains.recipes.models import Ingredient, IngredientCategory, RecipeIngredient, IngredientUnit, RecipeTag
 
     # ── Step 1: normalize ─────────────────────────────────────────────────────
     if not raw_ingredient_lines:

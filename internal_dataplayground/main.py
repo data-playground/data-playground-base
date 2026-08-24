@@ -15,12 +15,11 @@ from domains.jobs.routers import jobs, ats, staging, job_config # WO3
 from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
 from domains.journal.routers import journal # WO6
-
+from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes # WO7
 from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
 from domains.media.routers import media, media_search, media_recommend, media_settings # WO9
 
 from routers import dashboard
-from routers import recipe_extract, recipe_discovery, pantry, recipes
 from routers import intent, weekly_plan
 
 
