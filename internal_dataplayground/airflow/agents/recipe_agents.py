@@ -50,82 +50,13 @@ When adding Playwright:
 
 import json
 import logging
-import os
 import re
 
-import requests
+from services.ai import MODEL_FLASH, call_gemini_json, call_gemma_json
+from services.ai.base import post_with_retry
+from services.ai.keys import get_provider_key
 
 log = logging.getLogger(__name__)
-
-
-# ── KEY HELPERS ───────────────────────────────────────────────────────────────
-
-def _gemini_key() -> str:
-    # from gcp_secrets import get_key
-    return os.environ.get("GEMINI_API")
-
-
-def _gemini_flash(system: str, prompt: str) -> str:
-    """
-    Calls Gemini 2.5 Flash. Used for extraction and discovery —
-    tasks that require understanding unstructured text or generating
-    rich multi-field responses.
-    """
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents":          [{"parts": [{"text": prompt}]}],
-    }
-    resp = requests.post(url, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def _gemini_flash_json(system: str, prompt: str, schema: dict) -> str:
-    """
-    Calls Gemini 2.5 Flash with JSON output enforcement.
-    Used for structured extraction where the schema must be exact.
-    """
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents":          [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema":   schema,
-        },
-    }
-    resp = requests.post(url, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def _gemma(prompt: str) -> str:
-    """
-    Calls gemma-3-27b-it via the Gemini API endpoint.
-    Used for normalization — a well-scoped structured task that doesn't
-    need frontier reasoning power but does need reliable JSON output.
-
-    Note: Gemma models don't support systemInstruction — the system
-    context is prepended into the user prompt directly.
-    """
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemma-4-31b-it:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "contents":         [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json"},
-    }
-    resp = requests.post(url, json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _safe_json(raw: str) -> any:
@@ -224,7 +155,7 @@ def agent_normalize_ingredients(raw_ingredient_lines: list[str]) -> list[dict]:
     prompt = _NORMALIZATION_PROMPT_TEMPLATE.format(raw_ingredients=joined)
 
     try:
-        raw = _gemma(prompt)
+        raw = call_gemma_json(prompt)
         result = _safe_json(raw)
     except Exception as exc:
         log.error("Ingredient normalization failed: %s", exc)
@@ -375,7 +306,7 @@ def agent_extract_recipe(raw_content: str, source_hint: str = "") -> dict:
     )
 
     try:
-        raw = _gemini_flash_json(_EXTRACTION_SYSTEM, prompt, _EXTRACTION_SCHEMA)
+        raw = call_gemini_json(_EXTRACTION_SYSTEM, prompt, _EXTRACTION_SCHEMA)
         result = _safe_json(raw)
     except Exception as exc:
         log.error("Recipe extraction failed: %s", exc)
@@ -411,10 +342,21 @@ def agent_extract_recipe_from_image(image_base64: str, mime_type: str = "image/j
     Args:
         image_base64: Base64-encoded image data (not the data URI prefix).
         mime_type: The image MIME type, e.g. "image/jpeg", "image/png".
+
+    Note: this function still builds its own vision-specific payload
+    (inlineData) and is not routed through call_gemini_json — that part is
+    unchanged from the pre-services/ai/ implementation and stays that way
+    until vision support is designed into the service layer (see the
+    WO#12 postmortem, Part 4 item 4). It DOES route its actual HTTP call
+    through the shared post_with_retry (imported directly from
+    services.ai.base rather than the usual services.ai top-level import —
+    an intentional, flagged exception; see postmortem Part 2 amendment 6)
+    so it gets the same 429/503 retry protection every other call in this
+    file already has, instead of failing immediately on a transient error.
     """
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
+        f"models/{MODEL_FLASH}:generateContent?key={get_provider_key('gemini')}"
     )
     payload = {
         "systemInstruction": {"parts": [{"text": _EXTRACTION_SYSTEM}]},
@@ -435,9 +377,12 @@ def agent_extract_recipe_from_image(image_base64: str, mime_type: str = "image/j
         },
     }
     try:
-        resp = requests.post(url, json=payload, timeout=120)
-        resp.raise_for_status()
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        data = post_with_retry(
+            url, payload, retries=3,
+            provider_name="Gemini", resource_label=MODEL_FLASH,
+            timeout=120,  # Vision payloads are larger/slower — original timeout, preserved explicitly.
+        )
+        raw = data["candidates"][0]["content"]["parts"][0]["text"]
         result = _safe_json(raw)
     except Exception as exc:
         log.error("Image recipe extraction failed: %s", exc)
@@ -545,7 +490,7 @@ def agent_discover_recipes_pantry(
     )
 
     try:
-        raw = _gemini_flash_json(_DISCOVERY_SYSTEM, prompt, _DISCOVERY_SCHEMA)
+        raw = call_gemini_json(_DISCOVERY_SYSTEM, prompt, _DISCOVERY_SCHEMA)
         results = _safe_json(raw)
     except Exception as exc:
         log.error("Pantry discovery failed: %s", exc)
@@ -595,7 +540,7 @@ def agent_discover_recipes_open(
     )
 
     try:
-        raw = _gemini_flash_json(_DISCOVERY_SYSTEM, prompt, _DISCOVERY_SCHEMA)
+        raw = call_gemini_json(_DISCOVERY_SYSTEM, prompt, _DISCOVERY_SCHEMA)
         results = _safe_json(raw)
     except Exception as exc:
         log.error("Open discovery failed: %s", exc)

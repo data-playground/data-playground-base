@@ -40,6 +40,7 @@ def post_with_retry(
     *,
     provider_name: str,
     resource_label: str,
+    timeout: float = 90.0,
 ) -> dict:
     """
     POSTs `payload` (JSON) to `url` with retry on 429 and 503, matching
@@ -68,6 +69,16 @@ def post_with_retry(
         provider_name:   Short label for log/error messages, e.g. "Gemini".
         resource_label:  Short label for log/error messages, e.g. the
                          model id being called.
+        timeout:         Per-request timeout in seconds, passed straight
+                         through to requests.post(). Defaults to 90.0 —
+                         the value every existing caller was already
+                         hardcoding before this parameter existed (see
+                         WO#12 postmortem, Part 2 amendment 6), so nothing
+                         already using post_with_retry changes behavior by
+                         omitting it. Added so callers with different
+                         latency needs (e.g. a multimodal/vision payload)
+                         can override it without duplicating this whole
+                         retry loop just to get a different timeout.
 
     Returns:
         Parsed JSON response body (resp.json()) on the first 2xx response.
@@ -77,7 +88,7 @@ def post_with_retry(
         RuntimeError: once `retries` attempts are exhausted on 429/503s.
     """
     for attempt in range(retries):
-        resp = requests.post(url, json=payload, timeout=90)
+        resp = requests.post(url, json=payload, timeout=timeout)
 
         if resp.status_code == 429:
             wait = 30 * (attempt + 1)

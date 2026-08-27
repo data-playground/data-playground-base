@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 # Model IDs in one place — swap here rather than hunting through call sites.
 MODEL_FLASH = "gemini-2.5-flash"
 MODEL_FLASH_LITE = "gemini-2.5-flash-lite"
+MODEL_GEMMA = "gemma-4-31b-it"
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
@@ -44,6 +45,30 @@ def call_gemini_text(system: str, prompt: str, model: str = MODEL_FLASH, retries
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents":          [{"parts": [{"text": prompt}]}],
+    }
+    data = post_with_retry(
+        _build_url(model), payload, retries,
+        provider_name="Gemini", resource_label=model,
+    )
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
+def call_gemma_json(prompt: str, model: str = MODEL_GEMMA, retries: int = 3) -> str:
+    """
+    Calls a Gemma model via the Gemini API endpoint. Unlike
+    call_gemini_json(), Gemma models don't support systemInstruction —
+    callers must prepend any system context directly into `prompt`
+    themselves, same as recipe_agents.py's original _gemma() required.
+    No responseSchema enforcement — only responseMimeType: application/json.
+
+    `retries` defaults to 3 for parity with call_gemini_text/call_gemini_json
+    (the original recipe_agents.py _gemma() had no retry logic at all —
+    see the WO#12 postmortem for the retry-semantics discussion this
+    introduced).
+    """
+    payload = {
+        "contents":         [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json"},
     }
     data = post_with_retry(
         _build_url(model), payload, retries,
