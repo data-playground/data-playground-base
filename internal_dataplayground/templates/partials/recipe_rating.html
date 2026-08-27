@@ -1,7 +1,0 @@
-{# ═══════════════════════════════════════════════════════════════════════════
-   templates/partials/recipe_rating.html
-   Returned by PATCH /recipes/{id}/rate.
-   Swapped into the span#rating-area on recipe_detail.html.
-   `recipe` = Recipe ORM object with updated user_rating
-   ═══════════════════════════════════════════════════════════════════════════ #}
-{% if recipe.user_rating %}{{ recipe.user_rating }}/5 ★{% else %}Rate this recipe{% endif %}
