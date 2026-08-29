@@ -331,5 +331,7 @@ def score_job_batch(
         f"Title: {j['job_title']}\nDesc: {j.get('description') or 'Not available'}\n---"
         for j in jobs_chunk
     )
-    raw = call_gemini_json(system, batch_content, _JOB_SCORE_SCHEMA, model=MODEL_FLASH_LITE)
+    raw = call_gemini_json(
+        batch_content, schema=_JOB_SCORE_SCHEMA, system=system, model=MODEL_FLASH_LITE,
+    )
     return json.loads(raw)

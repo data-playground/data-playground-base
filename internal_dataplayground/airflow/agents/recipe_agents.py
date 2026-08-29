@@ -306,7 +306,7 @@ def agent_extract_recipe(raw_content: str, source_hint: str = "") -> dict:
     )
 
     try:
-        raw = call_gemini_json(_EXTRACTION_SYSTEM, prompt, _EXTRACTION_SCHEMA)
+        raw = call_gemini_json(prompt, schema=_EXTRACTION_SCHEMA, system=_EXTRACTION_SYSTEM)
         result = _safe_json(raw)
     except Exception as exc:
         log.error("Recipe extraction failed: %s", exc)
@@ -490,7 +490,7 @@ def agent_discover_recipes_pantry(
     )
 
     try:
-        raw = call_gemini_json(_DISCOVERY_SYSTEM, prompt, _DISCOVERY_SCHEMA)
+        raw = call_gemini_json(prompt, schema=_DISCOVERY_SCHEMA, system=_DISCOVERY_SYSTEM)
         results = _safe_json(raw)
     except Exception as exc:
         log.error("Pantry discovery failed: %s", exc)
@@ -540,7 +540,7 @@ def agent_discover_recipes_open(
     )
 
     try:
-        raw = call_gemini_json(_DISCOVERY_SYSTEM, prompt, _DISCOVERY_SCHEMA)
+        raw = call_gemini_json(prompt, schema=_DISCOVERY_SCHEMA, system=_DISCOVERY_SYSTEM)
         results = _safe_json(raw)
     except Exception as exc:
         log.error("Open discovery failed: %s", exc)

@@ -9,10 +9,11 @@ This file owns exercise-history context building, the AI call itself,
 fuzzy exercise-name matching, and the generate/save flow. Shares the
 "/workout/plans" prefix with workout_plans_crud.py's router.
 
-NOTE: _call_gemini_for_plan below is one of six known duplicate AI-client
-implementations tracked in GOVERNANCE.md §2.3. Left byte-identical to its
-pre-split form — only its file location changed. Do not route it through
-a service layer until services/ai/ actually exists project-wide.
+NOTE: _call_gemini_for_plan below was one of six known duplicate AI-client
+implementations tracked in GOVERNANCE.md §2.3. Migrated to the AI Service
+Layer (services/ai/) under WO#13 — its body now delegates to
+services.ai.call_gemini_json() instead of building its own HTTP request.
+Kept as a thin wrapper so generate_plan()'s call site didn't need to change.
 
 Endpoints:
   POST  /workout/plans/generate         → AI plan generator (returns preview)
@@ -21,7 +22,6 @@ Endpoints:
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Optional
 
@@ -38,6 +38,7 @@ from domains.workout.models import (
     WorkoutPlanDay,
     WorkoutPlanExercise,
 )
+from services.ai import MODEL_FLASH, call_gemini_json
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,10 +47,9 @@ router = APIRouter(prefix="/workout/plans", tags=["Workout"])
 
 
 # ── AI Plan Generator ────────────────────────────────────────────────────────
-# NOTE: _call_gemini_for_plan below is one of six known duplicate AI-client
-# implementations tracked in GOVERNANCE.md §2.3. Left completely untouched
-# (only relocated) — do not route through a service layer as part of this
-# split.
+# NOTE: _call_gemini_for_plan below was one of six known duplicate AI-client
+# implementations tracked in GOVERNANCE.md §2.3. Migrated to the AI Service
+# Layer (services/ai/) under WO#13 — see the module docstring above.
 
 async def _build_exercise_history_context(db: AsyncSession) -> str:
     """
@@ -115,23 +115,14 @@ def _call_gemini_for_plan(
     prompt: str,
     system: str,
 ) -> str:
-    """Calls Gemini 2.5 Flash for plan generation. Sync wrapper for use in async context."""
-    import requests as req
-    api_key = os.environ.get("GEMINI_API")
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={api_key}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-        },
-    }
-    resp = req.post(url, json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    """
+    Calls Gemini 2.5 Flash for plan generation via the AI Service Layer
+    (GOVERNANCE.md §2.3). Kept as a thin wrapper — rather than inlining
+    the service call directly into generate_plan() — so generate_plan()'s
+    own call site (`_call_gemini_for_plan(prompt, system)`) doesn't need
+    to change; only this function's internals moved under WO#13.
+    """
+    return call_gemini_json(prompt, schema=None, system=system, model=MODEL_FLASH)
 
 
 async def _fuzzy_match_exercise(db: AsyncSession, name: str) -> Optional[Exercise]:

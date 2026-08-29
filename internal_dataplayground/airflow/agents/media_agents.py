@@ -68,13 +68,26 @@ def get_tmdb_watch_providers(tmdb_id: str, media_type: str) -> list[int] | None:
         as None/empty here — that's the whole point of this DAG existing).
 
     Raises:
-        requests.HTTPError: on a non-2xx TMDB response, so callers can
-            distinguish "confirmed no availability" (empty list) from
-            "the request itself failed" (exception) and handle each
+        requests.HTTPError: on a non-2xx, non-404 TMDB response, so callers
+            can distinguish "confirmed no availability" (empty list or None)
+            from "the request itself failed" (exception) and handle each
             differently — the DAG task below only advances
             streaming_fetched_at on a successful call, so a transient
             TMDB outage doesn't get misread as "nothing streams this
             anywhere" and silently overwrite good prior data.
+
+    NOTE (fixed post-WO#13 Task 2 finding): TMDB returns 404 on this
+    endpoint for titles it has no watch-provider data for at all — a real,
+    confirmed answer, not a request failure. This is special-cased below
+    to return None rather than raise, matching
+    services/tmdb_service.py's get_streaming_providers() behavior on the
+    same status code (that function does `if resp.status_code == 404:
+    return []` before raise_for_status()). Before this fix, a 404 here
+    raised requests.HTTPError, which the refresh DAG's except-block
+    treated as a transient failure and silently skipped — meaning
+    streaming_fetched_at was never advanced for titles TMDB legitimately
+    404s on, and they were retried forever instead of being recorded as
+    "confirmed: no availability" the way the add-time path already does.
     """
     if media_type not in ("movie", "tv"):
         raise ValueError(f"media_type must be 'movie' or 'tv', got {media_type!r}")
@@ -85,6 +98,8 @@ def get_tmdb_watch_providers(tmdb_id: str, media_type: str) -> list[int] | None:
         params={"api_key": _tmdb_key()},
         timeout=REQUEST_TIMEOUT_SEC,
     )
+    if resp.status_code == 404:
+        return None
     resp.raise_for_status()
     data = resp.json()
 

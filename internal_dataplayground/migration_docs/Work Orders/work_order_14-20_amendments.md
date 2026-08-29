@@ -13,6 +13,43 @@ didn't exist when the corresponding WO was drafted. Nothing here changes
 
 ---
 
+## Parallel-execution / file-conflict map (added once WO#13 and WO#17 were started concurrently)
+
+Built by checking every remaining WO's SCOPE against what the rewritten
+WO#13 actually touches (`services/ai/providers/gemini.py`,
+`weekly_agents.py`, `workout_plan_ai_generator.py`, `media_recommend.py`,
+`blog_agents.py`, `life_os_weekly_synthesis.py`, `media_agents.py`,
+`services/tmdb_service.py` read-only). Use this before starting any two
+work orders at once — a "no conflict" verdict means no shared file, not
+necessarily no logical dependency; both are checked separately below.
+
+| Pair | Shared file(s) | Safe in parallel? |
+|---|---|---|
+| WO#13 + WO#17 | none | ✅ |
+| WO#13 + WO#20 (or WO#10 Part 4) | none | ✅ |
+| WO#13 + WO#19 Task 2 (lint script) only | none — read-only against routers, writes one new file | ✅, if split from Task 1 |
+| WO#13 + WO#18 | `airflow/dags/life_os_weekly_synthesis.py` — WO#13 edits content, WO#18 moves location | ❌ — run WO#13's edit to this file first, then WO#18 |
+| WO#13 + WO#19 Task 1 | `airflow/agents/blog_agents.py` | ❌ |
+| WO#13 + WO#14 | `blog_agents.py`, `services/ai/__init__.py`; also a real dependency (WO#14 assumes WO#13's Gemini extraction already landed) | ❌ — strictly sequential |
+| WO#13 + WO#15 | `blog_agents.py`, `services/ai/__init__.py`; also depends on WO#14 being done first | ❌ |
+| WO#13 + WO#16 | `services/ai/providers/gemini.py`; also needs Groq+Cerebras (WO#14/#15) to exist first for the dispatcher design | ❌ |
+| WO#17 + WO#18, #19, #20 | none | ✅ all |
+| WO#18 + WO#19 (either task) | none — WO#18 never touches `airflow/agents/` | ✅ |
+| WO#18 + WO#20 | none | ✅ |
+| WO#19 + WO#20 | none | ✅ |
+| WO#14 + WO#15 | `blog_agents.py`; strict dependency (#15 needs #14 done) | ❌ |
+| WO#14 + WO#16 | `services/ai/__init__.py`; dependency (#16 needs #14+#15 done) | ❌ |
+| WO#15 + WO#16 | `services/ai/__init__.py`; same dependency | ❌ |
+| WO#14/#15/#16 + WO#17/#18/#19/#20 | none | ✅ all |
+
+**Practical reading:** once WO#13 lands, #18, #19 (both tasks), and #20
+can all run simultaneously with each other and with anything else in this
+row — then #14 → #15 → #16 must run strictly sequentially, one at a time,
+nothing else touching `blog_agents.py` or `services/ai/__init__.py`
+concurrently with any of the three.
+
+---
+
 ## WO#14 (Groq + Ghostwriter)
 
 **Why:** runs after the rewritten WO#13, which now removes
@@ -117,12 +154,16 @@ was migrated in WO#2, before WO#17 was even drafted).
 +   original draft, independent of anything discovered since)
 + `domains/jobs/templates/jobs.html` (same pattern) — confirmed path,
 +   WO#3 has run
-+ `weekly_plan_view.html` — **path still conditional.** WO#10 (planning)
-+   is in progress as of this amendment. If it has landed by the time this
-+   WO executes, the file is at
-+   `domains/planning/templates/weekly_plan_view.html`; otherwise it's
-+   still at `templates/weekly_plan_view.html`. Locate it directly rather
-+   than assuming either.
++ `weekly_plan_view.html` — **confirmed path, no longer conditional.**
++   WO#10 (planning) has run: this file is at
++   `domains/planning/templates/weekly_plan_view.html`. One more thing
++   worth knowing before editing it: per WO#10's own authorized follow-up
++   work, `weekly_plan.py` was further split into a third router,
++   `weekly_plan_shopping.py` — this doesn't affect a template edit
++   directly, but if this toast-consolidation touches any inline
++   `<script>` logic that assumes a particular router owns a particular
++   endpoint, confirm against the current 3-router split rather than the
++   2-router shape assumed when this file's toast code was first written.
 ```
 
 **No change** to the actual toast-consolidation logic, the
@@ -218,61 +259,99 @@ are gone and Task 1 can't be executed as written.
 
 ## WO#20 (Shim Removal Cleanup Pass)
 
-**Why:** WO#20 was drafted to *discover* each domain's shim status from
-scratch. Nine domains have since run, and their postmortems already did
-significant parts of that discovery — most usefully, the media
-postmortem's own per-name breakdown of `dashboard.py`'s import block.
-Re-discovering this from zero would be wasted effort; seeding WO#20 with
-what's already known lets a partial run close real ground immediately.
+**Why this amendment changed since it was first written:** the original
+version of this amendment seeded WO#20 with per-domain findings current
+as of the media (WO#9) postmortem, and correctly flagged Journal,
+Recipes, and Workout as blocked on `planning` (WO#10) migrating. **WO#10
+has since run, and its own postmortem resolved all three blocking
+conditions directly** — the table below is corrected accordingly.
 
-**Add, as a new section immediately after SCOPE, before STEPS:**
+**More importantly: WO#10's postmortem Part 4 is now a more complete,
+more current final-cleanup specification than this WO#20 draft.** It has
+real, verified answers (not seeded hypotheses) for `models.py`'s exact
+end state (§4.2 — confirmed via AST parse: 249 lines, zero remaining
+`ClassDef` nodes, purely 10 shim imports), the full `dashboard.py`
+breakdown (§4.3), a complete cross-domain relationship inventory verified
+via real `configure_mappers()` (§4.4), confirmed final states for
+`core/templating.py` and `main.py` (§4.5–4.6), a `routers/`/`templates/`/
+`static/` audit checklist (§4.7), a program-wide file-size-ceiling table
+(§4.8), and its own 12-item final verification checklist (§4.11) that
+substantially overlaps WO#20's own ACCEPTANCE CRITERIA. **Recommend
+treating WO#10's Part 4 as the operative final-cleanup work order going
+forward, and either retiring WO#20 as a standalone document or reducing
+it to a thin pointer at WO#10 Part 4** — maintaining two overlapping
+specs risks exactly the kind of drift this whole amendment file exists to
+catch. If WO#20 is kept as a separate document anyway (e.g. because its
+mechanical mid-run idempotency check, absent from WO#10 Part 4, is worth
+preserving), at minimum replace its own per-domain discovery steps with a
+direct reference to WO#10 §4.2–§4.4 rather than re-deriving the same
+findings a third time.
+
+**Add, as a new section immediately after SCOPE, before STEPS** (revised
+from the original amendment — three rows changed from "blocked" to
+"unblocked," Planning added, and every row's evidence upgraded from
+"inferred" to "confirmed directly against real source" per WO#10 §4.3):
 
 > ## Known findings as of this amendment (confirm, don't re-derive from
-> scratch)
->
-> The table below is seeded from postmortem evidence already on file. Use
-> it as a starting hypothesis for Step 1–3's per-domain checks, not a
-> substitute for actually running them — a "known" row can still be wrong
-> if something changed since its postmortem was written.
+> scratch — and see the note above recommending WO#10 Part 4 as the
+> primary source instead of this table)
 >
 > | Domain | Shim exists? | Non-dashboard consumer? | Action this seeds |
 > |---|---|---|---|
 > | Habits | Yes | No | Repoint `dashboard.py`'s `Habit`, `HabitLog`, `HabitSettings` import; remove shim |
 > | Blog | Yes | No | Repoint `dashboard.py`'s `BlogIdea`, `BlogIdeaStatus` import; remove shim |
-> | Code Intel | Yes | **None found anywhere** (media postmortem §3.2 — zero dashboard.py usage, likely zero anywhere, though this specific "anywhere" claim is inherited from an earlier postmortem's weaker check, not re-verified as rigorously as media's own) | Remove shim; **no `dashboard.py` edit needed** — but re-run the full-repo consumer grep for these class names once, since the "zero anywhere" claim is less rigorously sourced than media's |
+> | Code Intel | Yes | No (confirmed, WO#10 §4.3) | Remove shim; **no `dashboard.py` edit needed** |
 > | Jobs | Yes | No | Repoint `dashboard.py`'s `Job`, `ApplicationLog`, `ApplicationStatus`, `StagingJob`, `StagingJobStatus` import; remove shim |
 > | Explorer | N/A — no models, no shim | — | Nothing to do, ever |
 > | Finance | Yes | No | Repoint `dashboard.py`'s `Transaction` import; remove shim |
-> | Journal | Yes | **Yes — `save_entry()`'s local import of `WeeklyPlanDay`/`WeeklyPlan`/`WeeklyPlanStatus`, deliberately left pointing at the shim per WO#6's own instruction** | **Do not remove this shim until `planning` (WO#10) migrates and repoints that specific local import** (per WO#6's own instruction and WO#10's own Step 8) — repointing `dashboard.py`'s `JournalEntry`/`WeeklySynthesis` import alone is *not* sufficient to retire this shim |
-> | Recipes+Pantry | Yes | **Yes — `weekly_plan.py`'s module-level and local (`_generate_shopping_list()`) imports of `Recipe`/`RecipeMealType`/`Ingredient`/`PantryItem`/`RecipeIngredient`** | **Same — blocked on WO#10**, per the recipes postmortem's own Part C §C.2 |
-> | Workout | Yes | **Yes — `weekly_plan.py`'s `WorkoutPlan`/`WorkoutPlanDay`/`WorkoutSession`/`WeightUnit` imports** | **Same — blocked on WO#10**, per the workout postmortem's own §7.1's precise (single-file) condition |
-> | Media | Yes | **None found anywhere** (media postmortem §1.5/§3.2 — the most rigorously checked of any domain in this set) | Remove shim; **no `dashboard.py` edit needed** |
-> | Planning | Not yet migrated as of this amendment | — | Not applicable yet — WO#10 in progress |
+> | Journal | Yes | **No longer** — WO#10 repointed `save_entry()`'s local import from the shim to `domains.planning.models` directly (its Step 8/§1.3) | Repoint `dashboard.py`'s `JournalEntry`, `WeeklySynthesis` import; remove shim. **This domain is now unblocked** — the WO#6-era condition ("wait for planning") is satisfied. |
+> | Recipes+Pantry | Yes | **No longer** — WO#10 repointed `weekly_plan.py`'s module-level and local (`_generate_shopping_list()`) imports to `domains.recipes.models` directly (§1.3) | Remove shim; **no `dashboard.py` edit needed** (confirmed zero references, WO#10 §4.3). **Unblocked.** |
+> | Workout | Yes | **No longer** — WO#10 repointed `weekly_plan.py`'s `WorkoutPlan`/`WorkoutPlanDay`/`WorkoutSession`/`WeightUnit` imports to `domains.workout.models` directly (§1.3) | Remove shim; **no `dashboard.py` edit needed** (confirmed, WO#10 §4.3). **Unblocked.** |
+> | Media | Yes | No | Remove shim; **no `dashboard.py` edit needed** |
+> | Planning | Yes | No (trivially — nothing consumes planning's own shim except possibly future code) | Remove shim; **no `dashboard.py` edit needed** (confirmed, WO#10 §4.3) |
 >
-> **Practical implication:** Code Intel and Media can be fully closed out
-> by WO#20 *today*, without waiting for `planning`. Habits, Blog, Jobs,
-> and Finance can also be closed today, each with a specific,
-> already-known `dashboard.py` repoint. Journal, Recipes, and Workout are
-> **genuinely blocked on WO#10** — not because of any uncertainty, but
-> because their real non-dashboard consumer is planning's own router,
-> which doesn't exist at its final location yet. Don't run this task's
-> "act" step for those three until WO#10's postmortem confirms the
-> relevant imports were actually repointed as instructed.
+> **Practical implication, corrected from the original amendment:** every
+> single domain is now unblocked. **5 of 10 (Code Intel, Recipes, Workout,
+> Media, Planning) can be closed with zero `dashboard.py` edit. The other
+> 5 (Habits, Blog, Jobs, Finance, Journal) each need one specific,
+> already-known `dashboard.py` import line repointed** (exact replacement
+> lines are given in WO#10's postmortem §4.3). **There is no longer any
+> reason to defer a full WO#20 run** — the readiness check WO#10's own
+> Part 4 §4.1 specifies (`grep -rn "from models import" ... | grep -v
+> "^./models.py:"` returning only `dashboard.py`) is the one thing worth
+> re-confirming against the real repository before running the full pass,
+> since every postmortem in this series — including WO#10's own — has
+> flagged its confidence as bounded by whatever files it was actually
+> given.
 
 **No change** to the mechanical STEPS or ACCEPTANCE CRITERIA — the table
-above is a head start on Steps 1–3's findings, not a replacement for
-running them.
+above (and, more importantly, WO#10 Part 4 itself) is a head start on
+Steps 1–3's findings, not a replacement for actually running the
+readiness check first.
 
 ---
 
 ## Summary of what does *not* need amending
 
-- **WO#12** (recipe_agents.py) — no path or scope drift found; its own
-  postmortem hasn't been reviewed yet, so this isn't a final word, but
-  nothing in WO#13–20's own text depends on WO#12 having deviated from
-  its draft.
+- **WO#12** (recipe_agents.py) — now audited against its postmortem. No
+  path or scope drift affecting WO#13–20: WO#12's follow-on amendments
+  (model-constant fix, `_gemini_key()` removal, vision-call retry
+  coverage) are all self-contained within `recipe_agents.py` and don't
+  touch any file WO#13–20 also touch.
+- **WO#14, WO#15, WO#18, WO#19** — no further changes beyond what's
+  already in this document.
 - **The vision-support and `finance_upload.py` portions of WO#16** —
   unaffected by anything above.
-- **WO#17's toast-consolidation logic itself, `sidebar_js.html`
-  investigation, and 2600ms disclosure requirement** — only file paths
-  changed, not the work.
+- **WO#17's toast-consolidation logic itself and the `sidebar_js.html`
+  investigation** — only file paths changed (see the `weekly_plan_view.html`
+  update above), not the work itself. The 2600ms disclosure requirement is
+  unaffected.
+
+## Superseded by this update
+
+- **WO#20's original "blocked on WO#10" framing for Journal, Recipes, and
+  Workout** — WO#10 has run and resolved all three. See the rewritten
+  WO#20 section above.
+- **WO#20 as a standalone document, more broadly** — WO#10's own Part 4
+  is now the more complete, more current final-cleanup specification. See
+  the note at the top of the WO#20 section above.

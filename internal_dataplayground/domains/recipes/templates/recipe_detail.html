@@ -600,8 +600,6 @@
         </div>
     </form>
 </div>
-
-<div id="toast"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -762,17 +760,6 @@ async function deleteRecipe(id) {
     if (!confirm('Archive this recipe? It will be hidden from the library.')) return;
     const resp = await fetch(`/recipes/${id}`, { method: 'DELETE' });
     if (resp.ok) window.location.href = '/recipes';
-}
-
-// ── TOAST ─────────────────────────────────────────────────────────────────────
-let _t;
-function showToast(msg, err = false) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.borderLeftColor = err ? 'var(--red)' : 'var(--green)';
-    t.classList.add('show');
-    clearTimeout(_t);
-    _t = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
 // HTMX cook counter refresh

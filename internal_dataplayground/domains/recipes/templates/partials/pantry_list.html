@@ -7,12 +7,7 @@
    `toast`       = optional success message string
 #}
 {% if toast %}
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const t = document.getElementById('pantry-toast');
-    if (t) { t.textContent = '{{ toast }}'; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400); }
-});
-</script>
+<script>showToast('{{ toast }}');</script>
 {% endif %}
 
 {% if grouped %}

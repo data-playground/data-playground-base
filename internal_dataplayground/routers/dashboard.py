@@ -15,13 +15,11 @@ from sqlalchemy import select, func, desc, extract, case, not_, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import (
-    Job, ApplicationLog, ApplicationStatus,
-    StagingJob, StagingJobStatus,
-    Transaction, BlogIdea, BlogIdeaStatus,
-    Habit, HabitLog, HabitSettings,
-    JournalEntry, WeeklySynthesis,  
-)
+from domains.jobs.models import Job, ApplicationLog, ApplicationStatus, StagingJob, StagingJobStatus
+from domains.finance.models import Transaction
+from domains.blog.models import BlogIdea, BlogIdeaStatus
+from domains.habits.models import Habit, HabitLog, HabitSettings
+from domains.journal.models import JournalEntry, WeeklySynthesis
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 templates = Jinja2Templates(directory="templates")

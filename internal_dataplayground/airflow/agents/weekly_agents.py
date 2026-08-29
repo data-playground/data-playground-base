@@ -8,34 +8,11 @@ agent_plan_workouts: Distributes workout days across a week from intent + active
 
 import json
 import logging
-import os
 from datetime import date, timedelta
 
+from services.ai import MODEL_FLASH, call_gemini_json
+
 log = logging.getLogger(__name__)
-
-
-def _gemini_key() -> str:
-    # from gcp_secrets import get_key
-    return os.environ.get("GEMINI_API")
-
-
-def _gemini_flash_json(system: str, prompt: str, schema: dict) -> str:
-    import requests
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents":          [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema":   schema,
-        },
-    }
-    resp = requests.post(url, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 # ── MEAL PLANNER ──────────────────────────────────────────────────────────────
@@ -136,7 +113,7 @@ Generate 7 days (day_number 1=Monday through 7=Sunday).
 Prioritise library recipes. Use "NEW: " prefix for suggestions outside the library.
 """
 
-    raw = _gemini_flash_json(system, prompt, _MEAL_PLAN_SCHEMA)
+    raw = call_gemini_json(prompt, schema=_MEAL_PLAN_SCHEMA, system=system, model=MODEL_FLASH)
     return json.loads(raw)
 
 
@@ -220,5 +197,5 @@ WORKOUT PLAN DAYS AVAILABLE (assign in rotation):
 Return 7 entries (day_number 1=Monday through 7=Sunday).
 """
 
-    raw = _gemini_flash_json(system, prompt, schema)
+    raw = call_gemini_json(prompt, schema=schema, system=system, model=MODEL_FLASH)
     return json.loads(raw)

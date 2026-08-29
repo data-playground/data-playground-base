@@ -95,6 +95,38 @@ merging two things GOVERNANCE.md deliberately keeps separate — see Task
   (routing table), and its section-header comments. This is a partial-file
   edit, not a full migration of the file.
 
+**Task 1 — `weekly_agents.py` specifically (added after WO#10's
+postmortem surfaced this — not in the original draft):**
+- **`weekly_agents.py` has already been edited once, outside this work
+  order, under WO#10's own authorized follow-up work.**
+  `agent_plan_meals()`'s `workout_day_names`/`rest_day_names`
+  construction was changed from raw day-offset arithmetic
+  (`date(week_start.year, week_start.month, week_start.day + d - 1)`,
+  which crashed on ~21% of weeks whenever day 7 crossed a month boundary,
+  silently producing an empty meal plan) to `week_start + timedelta(days=d
+  - 1)`. **This fix must be preserved exactly.** If the copy of
+  `weekly_agents.py` you're working from still contains the `date(...)`
+  construction, you are working from a stale, pre-fix snapshot — stop and
+  get the current file rather than proceeding, and do not "helpfully"
+  revert the `timedelta` version back to something that looks more like
+  what this document originally described.
+- This work order's own edit to `weekly_agents.py` (Step 2) is scoped
+  *only* to the `_gemini_flash_json` call sites in `agent_plan_meals()`
+  and `agent_schedule_workouts()` — it has nothing to do with, and must
+  not touch, the date-arithmetic logic. The two changes are in the same
+  file but are otherwise unrelated; verify your diff shows only the
+  provider-call substitution, not any line inside the
+  `workout_day_names`/`rest_day_names` construction.
+- **Check `weekly_agents.py` for hardcoded model-ID literals while you're
+  in this file** (per WO#12's postmortem, Part 4 item 2, which
+  specifically names this file as a candidate) — replace any literal
+  Gemini model string with the shared `MODEL_FLASH`/`MODEL_FLASH_LITE`
+  constant from `services.ai`, the same fix WO#12 already applied to
+  `recipe_agents.py`'s vision function. Do the same spot-check in
+  `workout_plan_ai_generator.py`, `media_recommend.py`, and whichever
+  `blog_agents.py` functions this WO migrates — cheap to do now, per
+  WO#12's own recommendation not to leave it for a later audit pass.
+
 **Task 2 — `media_agents.py` / TMDB duplication:**
 - **This is not a `services/ai/` consolidation and must not become one.**
   `media_agents.py` calls TMDB, not an LLM provider — it has nothing to
@@ -236,7 +268,12 @@ files.
    `agent_schedule_workouts()` use `_gemini_flash_json(system, prompt,
    schema)` — replace with `from services.ai import call_gemini_json` and
    `call_gemini_json(prompt, schema=schema, system=system)`. Delete the
-   now-unused private `_gemini_flash_json()`.
+   now-unused private `_gemini_flash_json()`. **Before touching this file,
+   confirm `agent_plan_meals()`'s day-name construction already uses
+   `timedelta`, not raw `date(year, month, day + offset)` arithmetic** —
+   see HARD BOUNDARIES. Your diff for this step should touch only the
+   provider-call substitution; if it touches the date-arithmetic lines at
+   all, something has gone wrong.
 
 3. **Update `workout_plan_ai_generator.py`'s plan generator.** Replace
    `_call_gemini_for_plan()`'s body with a call to
@@ -340,6 +377,14 @@ files.
 - [ ] `weekly_agents.py::agent_plan_meals()` and
   `agent_schedule_workouts()` produce identical requests (`systemInstruction`
   and `responseSchema` both present) to their pre-migration behavior
+- [ ] **`agent_plan_meals()`'s `timedelta`-based day-name construction
+  (the WO#10 month-boundary fix) is byte-identical before and after this
+  WO's edit** — confirm via diff that only the provider-call lines
+  changed. Re-run the full-year sweep (every Monday of a test year) that
+  WO#10's postmortem used to find the original bug, and confirm 0/52 weeks
+  still raise or silently produce an empty plan post-edit — this is a
+  regression check for a bug that's already been fixed once, not a new
+  discovery exercise
 - [ ] `workout_plan_ai_generator.py`'s plan generator produces a request
   with `systemInstruction` present, no `responseSchema`, only
   `responseMimeType: "application/json"`

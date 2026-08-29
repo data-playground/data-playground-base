@@ -10,10 +10,13 @@ two things moved out:
   - The API key lookup -> services.ai.keys.get_provider_key("gemini")
     (replacing gemini_client.py's private _gemini_key()).
 
-Function names and signatures are kept IDENTICAL to what job_agents.py
-already imports and calls (`call_gemini_json(system, prompt, schema,
-model=..., retries=...)`), so migrating job_agents.py is a one-line import
-change rather than a call-site rewrite.
+Function names are kept IDENTICAL to what job_agents.py already imports.
+call_gemini_json()'s signature was generalized under WO#13 to make
+`schema` and `system` optional keyword arguments (was previously
+positional `(system, prompt, schema, model=..., retries=...)`) so it
+could also serve callers with no schema (workout_plan_ai_generator.py,
+media_recommend.py) or no system instruction (media_recommend.py). See
+call_gemini_json()'s own docstring for the backward-compatibility note.
 """
 import logging
 
@@ -78,21 +81,44 @@ def call_gemma_json(prompt: str, model: str = MODEL_GEMMA, retries: int = 3) -> 
 
 
 def call_gemini_json(
-    system: str,
     prompt: str,
-    schema: dict,
+    schema: dict | None = None,
+    system: str | None = None,
     model: str = MODEL_FLASH,
     retries: int = 3,
 ) -> str:
-    """Structured JSON response. Returns the raw JSON string — caller does json.loads()."""
+    """
+    Structured JSON response. Returns the raw JSON string — caller does json.loads().
+
+    `schema` is optional: when provided, a Gemini responseSchema is
+    enforced (OBJECT/ARRAY-shaped structured output). When omitted, only
+    responseMimeType: "application/json" is set — free-form JSON, caller
+    validates shape itself (e.g. media_recommend.py's _gemini_explain()).
+
+    `system` is optional: when omitted, no systemInstruction is sent at
+    all, rather than sending an empty one (media_recommend.py's
+    _gemini_explain() relies on this — the absence of a system
+    instruction there is intentional, not an oversight).
+
+    NOTE ON BACKWARD COMPATIBILITY (WO#13): this signature reorders and
+    changes the defaults of the original (system, prompt, schema, model,
+    retries) signature used by job_agents.py (WO#11) and recipe_agents.py
+    (WO#12). Both files' call sites already relied on positional order
+    and would silently pass arguments to the wrong parameters under the
+    new signature — they've been updated to explicit keyword arguments
+    as part of this change (see job_agents.py / recipe_agents.py diffs).
+    """
+    generation_config = {"responseMimeType": "application/json"}
+    if schema is not None:
+        generation_config["responseSchema"] = schema
+
     payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
         "contents":          [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema":   schema,
-        },
+        "generationConfig":  generation_config,
     }
+    if system is not None:
+        payload["systemInstruction"] = {"parts": [{"text": system}]}
+
     data = post_with_retry(
         _build_url(model), payload, retries,
         provider_name="Gemini", resource_label=model,

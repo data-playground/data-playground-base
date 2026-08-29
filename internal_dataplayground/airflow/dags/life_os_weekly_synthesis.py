@@ -14,7 +14,7 @@ PRIVACY ARCHITECTURE — HARD CONSTRAINT:
       - workout metrics (Phase 4)
 
 AI Provider:
-    Default: Gemini 2.5 Flash via _gemini_flash() in blog_agents.py
+    Default: Gemini 2.5 Flash via call_gemini_text() (services.ai AI Service Layer)
     Optional: Ollama (local) — set SYNTHESIS_AI_PROVIDER=ollama in the
               Airflow Variable store or environment. The Ollama path is
               stubbed and ready to activate without code changes.
@@ -404,9 +404,9 @@ Rules:
             provider = "gemini"
 
     if provider == "gemini" and synthesis_text is None:
-        from agents.blog_agents import _gemini_flash
+        from services.ai import call_gemini_text
         try:
-            synthesis_text = _gemini_flash(system_prompt, prompt)
+            synthesis_text = call_gemini_text(system_prompt, prompt)
             model_used = _GEMINI_MODEL_LABEL
             log.info("Synthesis generated via Gemini 2.5 Flash")
         except Exception as exc:

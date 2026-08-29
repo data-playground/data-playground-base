@@ -362,7 +362,6 @@
     </div>
 </div>
 
-<div id="toast"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -436,16 +435,5 @@ async function submitOverride() {
         if (e.target.id === id) e.target.classList.remove('open');
     });
 });
-
-// ── TOAST ─────────────────────────────────────────────────────────────────────
-let _t;
-function showToast(msg, err=false) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.borderLeftColor = err ? 'var(--red)' : 'var(--green)';
-    t.classList.add('show');
-    clearTimeout(_t);
-    _t = setTimeout(() => t.classList.remove('show'), 2400);
-}
 </script>
 {% endblock %}

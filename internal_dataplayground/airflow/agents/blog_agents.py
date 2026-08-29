@@ -87,6 +87,8 @@ import time
 
 import requests
 
+from services.ai import MODEL_FLASH, call_gemini_json, call_gemini_text
+
 log = logging.getLogger(__name__)
 
 
@@ -104,10 +106,6 @@ LARGE_FILE_THRESHOLD_TOKENS = 40_000   # ~160K characters
 
 # ── KEY HELPERS ───────────────────────────────────────────────────────────────
 
-def _gemini_key() -> str:
-    # from gcp_secrets import get_key
-    return os.environ.get("GEMINI_API")
-
 def _groq_key() -> str:
     # from gcp_secrets import get_key
     return os.environ.get("GROQ_API")
@@ -118,67 +116,6 @@ def _cerebras_key() -> str:
 
 
 # ── PROVIDER CALL HELPERS ─────────────────────────────────────────────────────
-
-def _gemini_flash(system: str, prompt: str) -> str:
-    """
-    Calls Gemini 2.5 Flash for quality-sensitive, low-frequency tasks.
-    Used by: README Writer, Editor.
-    Free tier: 250 RPD — sufficient for once-per-article or once-per-project calls.
-    """
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents":          [{"parts": [{"text": prompt}]}],
-    }
-    resp = requests.post(url, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def _gemini_flash_json(system: str, prompt: str, schema: dict, retries: int = 3) -> str:
-    """
-    Calls Gemini 2.5 Flash with structured JSON output enforcement.
-    Used by: Researcher, Idea Expander.
-
-    Args:
-        system:  System instruction string.
-        prompt:  User prompt string.
-        schema:  Gemini responseSchema dict (OBJECT or ARRAY of OBJECTs).
-        retries: Number of retry attempts on 503 / Service Unavailable.
-
-    Returns:
-        Raw JSON string from the model (parse with json.loads).
-    """
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={_gemini_key()}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system}]},
-        "contents":          [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema":   schema,
-        },
-    }
-    for attempt in range(retries):
-        try:
-            resp = requests.post(url, json=payload, timeout=90)
-            resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except Exception as exc:
-            is_503 = "503" in str(exc) or "Service Unavailable" in str(exc)
-            if is_503 and attempt < retries - 1:
-                wait = 5 ** attempt   # 1s, 5s, 25s
-                log.warning("Gemini 503, retrying in %ds (attempt %d/%d)", wait, attempt + 1, retries)
-                time.sleep(wait)
-                continue
-            raise
-    raise RuntimeError("Gemini 2.5 Flash unavailable after retries")
-
 
 def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
     """
@@ -726,7 +663,7 @@ The architecture and decisions should speak for themselves.
         f"File narrations:\n{summary_block}\n\n"
         f"Write the README now. First-person is fine. Be direct."
     )
-    return _gemini_flash(system, prompt)
+    return call_gemini_text(system, prompt, model=MODEL_FLASH)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -895,7 +832,7 @@ titles provided. Do not suggest near-duplicates.
     )
 
     schema = {"type": "ARRAY", "items": _BLUEPRINT_ITEM_SCHEMA}
-    raw = _gemini_flash_json(system, prompt, schema)
+    raw = call_gemini_json(prompt, schema=schema, system=system, model=MODEL_FLASH)
     blueprints = json.loads(raw)
     return _validate_difficulty_distribution(blueprints)
 
@@ -1355,7 +1292,7 @@ Tags: [tag1, tag2, tag3, tag4, tag5]
 [Full polished Markdown article here]
 """
     prompt = f"Polish this draft and generate SEO metadata:\n\n{draft_content}"
-    return _gemini_flash(system, prompt)
+    return call_gemini_text(system, prompt, model=MODEL_FLASH)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1430,7 +1367,7 @@ FILLING THE BLUEPRINT:
         f"interesting insight and make it the narrative's core."
     )
 
-    raw = _gemini_flash_json(system, prompt, _EXPANDER_SCHEMA)
+    raw = call_gemini_json(prompt, schema=_EXPANDER_SCHEMA, system=system, model=MODEL_FLASH)
     return json.loads(raw)
 
 

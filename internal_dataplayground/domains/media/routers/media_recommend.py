@@ -37,6 +37,7 @@ from domains.media.models import (
     UserMedia,
     UserMediaStatus,
 )
+from services.ai import MODEL_FLASH, call_gemini_json
 from services.ml_service_client import build_query_vector, find_similar, health_check
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -346,9 +347,6 @@ async def _gemini_explain(
 
     Gemini does NOT see embeddings or raw vectors — just titles and metadata.
     """
-    import requests as req
-    # from gcp_secrets import get_key
-
     # Build context
     liked_lines = "\n".join(
         f"- {row.MediaItem.title} ({row.MediaItem.release_year or '?'}) — rated {row.UserMedia.user_rating}/10"
@@ -389,17 +387,7 @@ Respond ONLY with a JSON array, no markdown:
   ...
 ]"""
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={os.environ.get('GEMINI_API')}"
-    )
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json"},
-    }
-    resp = req.post(url, json=payload, timeout=30)
-    resp.raise_for_status()
-    raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    raw = call_gemini_json(prompt, schema=None, system=None, model=MODEL_FLASH)
 
     import json as _json
     import re

@@ -341,24 +341,5 @@ async function saveOrder() {
         resultEl.innerHTML = '<span style="color:var(--red);font-size:10px;">⚠ Failed</span>';
     }
 }
-
-// ── TOAST ─────────────────────────────────────────────────────────────────
-/**
- * Shows a brief, auto-dismissing toast notification.
- * Assumes a shared `#toast` element exists somewhere on the page (expected
- * to live in base.html, which is outside this domain's scope) — if it's
- * absent, this silently no-ops rather than throwing.
- * @param {string} msg - message text to display.
- * @param {boolean} [isError=false] - true renders it in the error style
- *   (adds the `error` CSS class) instead of the default success style.
- */
-function showToast(msg, isError = false) {
-    const t = document.getElementById('toast');
-    if (!t) return;
-    t.textContent = msg;
-    t.classList.toggle('error', isError);
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2600);
-}
 </script>
 {% endblock %}
