@@ -310,7 +310,7 @@ async def save_entry(
 
     try:
         from sqlalchemy import select as _select
-        from models import WeeklyPlanDay as _WPD, WeeklyPlan as _WP, WeeklyPlanStatus as _WPS
+        from domains.planning.models import WeeklyPlanDay as _WPD, WeeklyPlan as _WP, WeeklyPlanStatus as _WPS
         plan_day_result = await db.execute(
             _select(_WPD)
             .join(_WP, _WPD.weekly_plan_id == _WP.id)

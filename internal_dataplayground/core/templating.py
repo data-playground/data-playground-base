@@ -25,4 +25,5 @@ templates.env.loader = ChoiceLoader([
     FileSystemLoader("domains/recipes/templates"),
     FileSystemLoader("domains/workout/templates"),
     FileSystemLoader("domains/media/templates"),
+    FileSystemLoader("domains/planning/templates"),
 ])

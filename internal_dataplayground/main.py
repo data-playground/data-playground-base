@@ -18,9 +18,9 @@ from domains.journal.routers import journal # WO6
 from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes # WO7
 from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
 from domains.media.routers import media, media_search, media_recommend, media_settings # WO9
+from domains.planning.routers import intent, weekly_plan, weekly_plan_generator, weekly_plan_shopping # WO10
 
 from routers import dashboard
-from routers import intent, weekly_plan
 
 
 templates = Jinja2Templates(directory="templates")

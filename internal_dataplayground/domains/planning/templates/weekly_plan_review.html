@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Review Your Week{% endblock %}
+{% block page_title %}Review Plan{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/plan/new">← Regenerate</a>
+{% endblock %}
+{% block extra_css %}
+<style>
+.review-wrap { padding:20px; max-width:1100px; }
+.review-banner {
+    background:rgba(0,201,128,.06); border:1px solid rgba(0,201,128,.2);
+    border-radius:8px; padding:12px 16px; margin-bottom:20px;
+    font-size:11px; color:var(--text-secondary); line-height:1.6;
+    display:flex; align-items:center; gap:10px;
+}
+.day-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:10px;
+    margin-bottom:24px; }
+.day-card {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:10px; overflow:hidden;
+}
+.day-card.is-today { border-color:var(--accent); }
+.day-card-head {
+    padding:10px 10px 8px; background:var(--bg-hover);
+    border-bottom:1px solid var(--border);
+}
+.day-card-name { font-size:9px; font-weight:500; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--text-muted); }
+.day-card-date { font-family:'Syne',sans-serif; font-size:14px;
+    font-weight:700; color:var(--text-primary); line-height:1.2; }
+.day-card.is-today .day-card-date { color:var(--accent); }
+.workout-chip {
+    display:inline-block; padding:2px 7px; border-radius:3px;
+    font-size:8px; font-weight:500; letter-spacing:.04em;
+    text-transform:uppercase; margin-top:4px;
+}
+.chip-workout { background:rgba(124,111,255,.12); color:var(--accent); }
+.chip-rest    { background:var(--bg-card); color:var(--text-muted);
+    border:1px solid var(--border); }
+.meal-edit {
+    padding:8px 10px; border-bottom:1px solid var(--border); font-size:10px;
+}
+.meal-edit:last-child { border-bottom:none; }
+.me-type { font-size:8px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-muted); margin-bottom:2px; }
+.me-suggestion {
+    color:var(--text-primary); line-height:1.4; margin-bottom:4px;
+    font-size:9px;
+}
+.me-suggestion.is-new { color:var(--accent); }
+.me-select {
+    width:100%; font-family:'DM Mono',monospace; font-size:9px;
+    padding:3px 6px; border:1px solid var(--border);
+    background:var(--bg-hover); color:var(--text-primary);
+    border-radius:4px; outline:none;
+}
+.day-notes { padding:6px 10px; font-size:9px;
+    color:var(--text-muted); font-style:italic; line-height:1.4; }
+.confirm-section {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:10px; padding:20px; box-shadow:var(--shadow);
+}
+.confirm-btn {
+    padding:11px 26px; font-family:'DM Mono',monospace; font-size:12px;
+    font-weight:500; background:var(--accent); color:#fff; border:none;
+    border-radius:7px; cursor:pointer; transition:opacity .15s;
+}
+.confirm-btn:hover { opacity:.88; }
+.confirm-btn:disabled { opacity:.5; cursor:not-allowed; }
+@media(max-width:960px) { .day-grid { grid-template-columns:repeat(4,1fr); } }
+@media(max-width:600px) { .day-grid { grid-template-columns:repeat(2,1fr); } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="review-wrap">
+    <div class="review-banner">
+        <span style="font-size:18px;">✓</span>
+        <div>
+            <strong>Your week has been planned.</strong>
+            Review meals and workouts below. Use the dropdowns to link meals
+            to recipes in your library. Confirm when ready — you can still
+            override anything day-by-day once the week starts.
+        </div>
+    </div>
+
+    <form id="confirm-form" action="/plan/confirm" method="post">
+        <input type="hidden" name="week_start_date"
+               value="{{ week_start.isoformat() }}">
+
+        <div class="day-grid">
+            {% for day in merged_days %}
+            <div class="day-card {% if day.date == today %}is-today{% endif %}">
+                <div class="day-card-head">
+                    <div class="day-card-name">
+                        {{ day.date.strftime('%a') }}
+                    </div>
+                    <div class="day-card-date">
+                        {{ day.date.strftime('%b %-d') }}
+                    </div>
+                    <span class="workout-chip
+                        {% if day.is_workout %}chip-workout{% else %}chip-rest{% endif %}">
+                        {{ day.day_label }}
+                    </span>
+                    {# Pass workout data through to confirm #}
+                    <input type="hidden"
+                           name="day_{{ day.day_number }}_is_workout"
+                           value="{{ 'true' if day.is_workout else 'false' }}">
+                    <input type="hidden"
+                           name="day_{{ day.day_number }}_plan_day_id"
+                           value="{{ day.plan_day_id or '' }}">
+                </div>
+
+                {% for meal_key, meal_label in [
+                    ('breakfast','Breakfast'),
+                    ('lunch','Lunch'),
+                    ('dinner','Dinner'),
+                    ('snack','Snack')
+                ] %}
+                {% set suggestion = day[meal_key] %}
+                {% if suggestion and suggestion != 'none' and suggestion != '' %}
+                <div class="meal-edit">
+                    <div class="me-type">{{ meal_label }}</div>
+                    <div class="me-suggestion
+                        {% if suggestion[:4]|upper == 'NEW:' %}is-new{% endif %}">
+                        {{ suggestion }}
+                    </div>
+                    <select class="me-select"
+                            name="day_{{ day.day_number }}_{{ meal_key }}_recipe_id">
+                        <option value="">— not linked —</option>
+                        {% for recipe in recipes %}
+						{# Exact match only: suggestion must start with the recipe title #}
+						{% set title_lower      = recipe.title | lower %}
+						{% set suggestion_lower = suggestion | lower %}
+						{% set is_match = suggestion_lower[:title_lower | length] == title_lower %}
+						<option value="{{ recipe.id }}"
+								{% if is_match %}selected{% endif %}>
+							{{ recipe.title }}
+						</option>
+						{% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                {% if day.meal_notes %}
+                <div class="day-notes">{{ day.meal_notes }}</div>
+                {% endif %}
+                {% if day.workout_notes %}
+                <div class="day-notes" style="color:var(--accent);">
+                    {{ day.workout_notes }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="confirm-section">
+            <div style="font-family:'Syne',sans-serif;font-weight:700;
+                        font-size:14px;margin-bottom:6px;">
+                Confirm This Week's Plan
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);
+                      margin-bottom:16px;line-height:1.6;">
+                Confirming creates workout stubs for each workout day and
+                generates your shopping list. You can still override any day
+                or meal as the week progresses.
+            </p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <button type="submit" class="confirm-btn" id="confirm-btn">
+                    ✓ Confirm Plan
+                </button>
+                <a href="/plan/new" class="btn">← Regenerate</a>
+                <span style="font-size:10px;color:var(--text-muted);">
+                    {{ week_start.strftime('%B %-d') }} –
+                    {{ week_end.strftime('%-d, %Y') }}
+                </span>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('confirm-form').addEventListener('submit', () => {
+    const btn = document.getElementById('confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving plan…';
+});
+</script>
+{% endblock %}

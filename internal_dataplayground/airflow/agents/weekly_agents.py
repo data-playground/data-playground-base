@@ -89,11 +89,11 @@ def agent_plan_meals(
     )
 
     workout_day_names = [
-        date(week_start.year, week_start.month, week_start.day + d - 1).strftime("%A")
+        (week_start + timedelta(days=d - 1)).strftime("%A")
         for d in workout_days
     ]
     rest_day_names = [
-        date(week_start.year, week_start.month, week_start.day + d - 1).strftime("%A")
+        (week_start + timedelta(days=d - 1)).strftime("%A")
         for d in rest_days
     ]
 
@@ -160,7 +160,7 @@ def agent_schedule_workouts(
         active_plan_days:     The days defined in the active WorkoutPlan
         target_workout_days:  From intent (e.g. 4)
         unavailable_dates:    Dates the user pre-flagged as unavailable
-        week_start:           Monday of the target week
+        week_start:            Monday of the target week
 
     Returns:
         List of 7 dicts:

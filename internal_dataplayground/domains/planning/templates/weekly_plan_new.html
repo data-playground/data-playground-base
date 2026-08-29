@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Plan This Week{% endblock %}
+{% block page_title %}Plan This Week{% endblock %}
+{% block topbar_actions %}<a class="btn" href="/plan">← Back</a>{% endblock %}
+{% block extra_css %}
+<style>
+.plan-new-wrap { max-width:660px; margin:0 auto; padding:28px 24px 80px; }
+.preflight-section {
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:10px; padding:20px; margin-bottom:16px; box-shadow:var(--shadow);
+}
+.preflight-title {
+    font-family:'Syne',sans-serif; font-weight:700; font-size:13px;
+    margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border);
+}
+.day-avail-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+.day-avail-cell {
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding:10px 4px; border:2px solid var(--border); border-radius:8px;
+    cursor:pointer; transition:all .15s; text-align:center; user-select:none;
+}
+.day-avail-cell:hover { border-color:var(--red); }
+.day-avail-cell.unavailable {
+    border-color:var(--red); background:rgba(240,64,64,.06);
+}
+.dac-name { font-size:9px; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--text-muted); font-weight:500; }
+.dac-date { font-family:'Syne',sans-serif; font-size:15px;
+    font-weight:700; color:var(--text-primary); }
+.day-avail-cell.unavailable .dac-name,
+.day-avail-cell.unavailable .dac-date { color:var(--red); }
+.dac-label { font-size:8px; color:var(--text-muted); }
+.day-avail-cell.unavailable .dac-label { color:var(--red); }
+.intent-preview { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.ip-item { padding:10px 12px; background:var(--bg-hover); border-radius:6px; }
+.ip-label { font-size:9px; color:var(--text-muted); text-transform:uppercase;
+    letter-spacing:.1em; margin-bottom:3px; }
+.ip-value { font-size:11px; color:var(--text-primary); font-weight:500; }
+.generate-btn {
+    width:100%; padding:13px; font-family:'DM Mono',monospace; font-size:12px;
+    font-weight:500; background:var(--accent); color:#fff; border:none;
+    border-radius:8px; cursor:pointer; transition:opacity .15s;
+}
+.generate-btn:hover { opacity:.88; }
+.generate-btn:disabled { opacity:.5; cursor:not-allowed; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.spinner { width:16px; height:16px; border:2px solid rgba(255,255,255,.3);
+    border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite;
+    display:inline-block; vertical-align:middle; margin-right:6px; }
+@media(max-width:600px) {
+    .day-avail-grid { gap:4px; }
+    .day-avail-cell { padding:6px 2px; }
+    .dac-date { font-size:12px; }
+    .intent-preview { grid-template-columns:1fr; }
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="plan-new-wrap">
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:18px;
+                color:var(--text-primary);margin-bottom:6px;">
+        Plan {{ target_monday.strftime('%B %-d') }} –
+        {{ week_dates[-1].strftime('%-d, %Y') }}
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin-bottom:24px;line-height:1.6;">
+        Tap any days you won't be available to work out. Everything else
+        will be arranged around your schedule.
+    </p>
+
+    <form id="preflight-form" action="/plan/generate" method="post">
+        <input type="hidden" name="week_start_date"
+               value="{{ target_monday.isoformat() }}">
+
+        <div class="preflight-section">
+            <div class="preflight-title">
+                Your Availability
+                <span style="font-size:10px;font-weight:400;color:var(--text-muted);
+                             margin-left:6px;">tap days you can't work out</span>
+            </div>
+            <div class="day-avail-grid">
+                {% for date in week_dates %}
+                {% set i = loop.index0 %}
+                <div class="day-avail-cell" id="dac-{{ i }}"
+                     onclick="toggleDay({{ i }})">
+                    <div class="dac-name">{{ date.strftime('%a') }}</div>
+                    <div class="dac-date">{{ date.day }}</div>
+                    <div class="dac-label" id="dac-label-{{ i }}">Free</div>
+                    <input type="checkbox" name="unavailable_{{ i }}"
+                           id="unavailable-{{ i }}" style="display:none;">
+                </div>
+                {% endfor %}
+            </div>
+            <p style="font-size:9px;color:var(--text-muted);margin-top:10px;">
+                You can also override individual days after the plan is generated.
+            </p>
+        </div>
+
+        <div class="preflight-section">
+            <div class="preflight-title">
+                Generating From Your Goals
+                <a href="/intent" style="font-size:10px;font-weight:400;
+                   color:var(--accent);text-decoration:none;margin-left:6px;">
+                   Edit →
+                </a>
+            </div>
+            {% if intent %}
+            <div class="intent-preview">
+                <div class="ip-item">
+                    <div class="ip-label">Goal</div>
+                    <div class="ip-value">{{ intent.fitness_goal.label }}</div>
+                </div>
+                <div class="ip-item">
+                    <div class="ip-label">Workout Days</div>
+                    <div class="ip-value">{{ intent.weekly_workout_days }}/week</div>
+                </div>
+                <div class="ip-item">
+                    <div class="ip-label">Macros</div>
+                    <div class="ip-value">
+                        {{ intent.macro_preference | replace('_',' ') | title }}
+                    </div>
+                </div>
+                <div class="ip-item">
+                    <div class="ip-label">Cooking Time</div>
+                    <div class="ip-value">{{ intent.cooking_time_label }}</div>
+                </div>
+            </div>
+            {% if intent.food_preferences %}
+            <div style="margin-top:10px;padding:8px 12px;background:var(--bg-hover);
+                        border-radius:6px;font-size:10px;color:var(--text-secondary);
+                        line-height:1.5;">
+                <strong>Preferences:</strong> {{ intent.food_preferences }}
+            </div>
+            {% endif %}
+            {% if intent.health_notes %}
+            <div style="margin-top:8px;padding:8px 12px;
+                        background:rgba(232,160,32,.07);
+                        border:1px solid rgba(232,160,32,.2);border-radius:6px;
+                        font-size:10px;color:var(--score-mid);line-height:1.5;">
+                <strong>Health notes:</strong> {{ intent.health_notes }}
+            </div>
+            {% endif %}
+            {% else %}
+            <p style="font-size:11px;color:var(--text-muted);">
+                No goals set.
+                <a href="/intent" style="color:var(--accent);text-decoration:none;">
+                    Set them first →
+                </a>
+            </p>
+            {% endif %}
+        </div>
+
+        {% if active_plan %}
+        <div style="padding:10px 14px;background:rgba(124,111,255,.06);
+                    border:1px solid rgba(124,111,255,.18);border-radius:8px;
+                    font-size:11px;color:var(--text-secondary);
+                    margin-bottom:16px;line-height:1.5;">
+            🏋️ Using <strong style="color:var(--accent);">{{ active_plan.name }}</strong>
+            ({{ active_plan.target_days_per_week }} days/week,
+            {{ active_plan.days | length }} plan days)
+        </div>
+        {% else %}
+        <div style="padding:10px 14px;background:rgba(232,160,32,.07);
+                    border:1px solid rgba(232,160,32,.2);border-radius:8px;
+                    font-size:11px;color:var(--score-mid);margin-bottom:16px;">
+            ⚠ No active workout plan.
+            <a href="/workout/plans" style="color:var(--score-mid);">Set one up →</a>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="generate-btn" id="generate-btn">
+            ⚡ Generate My Week
+        </button>
+    </form>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function toggleDay(i) {
+    const cell  = document.getElementById('dac-' + i);
+    const check = document.getElementById('unavailable-' + i);
+    const label = document.getElementById('dac-label-' + i);
+    check.checked = !check.checked;
+    cell.classList.toggle('unavailable', check.checked);
+    label.textContent = check.checked ? 'Not available' : 'Free';
+}
+document.getElementById('preflight-form').addEventListener('submit', () => {
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Generating your week…';
+});
+</script>
+{% endblock %}

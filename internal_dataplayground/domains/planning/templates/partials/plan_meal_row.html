@@ -1,0 +1,36 @@
+{# templates/partials/plan_meal_row.html
+   Returned by PATCH /plan/meal/{meal_id}
+   Also {% include %}d inside plan_day_card.html and weekly_plan_view.html
+   `meal` = WeeklyPlanMeal ORM object
+#}
+<div class="pdc-meal" id="meal-row-{{ meal.id }}">
+    <span class="meal-type-tag">{{ meal.meal_type.value }}</span>
+    <div style="flex:1;min-width:0;">
+        {% if meal.active_recipe %}
+        <div class="meal-name">
+            <a href="/recipes/{{ meal.active_recipe.id }}">
+                {{ meal.active_recipe.title }}
+            </a>
+        </div>
+        {% if meal.active_recipe.time_display != '—' %}
+        <div class="meal-meta">⏱ {{ meal.active_recipe.time_display }}</div>
+        {% endif %}
+        {% else %}
+        <div class="meal-name" style="color:var(--text-muted);">No recipe linked</div>
+        {% endif %}
+        {% if meal.off_plan_note %}
+        <div class="meal-off-note">↗ {{ meal.off_plan_note }}</div>
+        {% endif %}
+    </div>
+    <div class="meal-actions">
+        {% if meal.status.value == 'planned' %}
+        <button class="meal-btn" onclick="markMeal({{ meal.id }},'eaten')">✓</button>
+        <button class="meal-btn" onclick="markMeal({{ meal.id }},'off_plan')">↗</button>
+        <button class="meal-btn" onclick="markMeal({{ meal.id }},'skipped')">—</button>
+        {% else %}
+        <span class="meal-btn s-{{ meal.status.value }}">
+            {{ meal.status.label }}
+        </span>
+        {% endif %}
+    </div>
+</div>
