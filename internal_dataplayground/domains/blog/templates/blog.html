@@ -129,7 +129,6 @@
 <div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>
 <div class="detail-drawer" id="detail-drawer"></div>
 
-<div id="toast"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -267,17 +266,6 @@ function closeDetail() {
     document.getElementById('detail-overlay').classList.remove('visible');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
-
-// ── TOAST ─────────────────────────────────────────────────────────────────────
-let toastTimer;
-function showToast(msg, isError = false) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.toggle('error', isError);
-    t.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
-}
 
 // Pick up toast messages set by HTMX partials via data-toast attribute
 document.body.addEventListener('htmx:afterSwap', e => {

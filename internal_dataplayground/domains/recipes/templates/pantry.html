@@ -199,26 +199,6 @@
 }
 .pantry-remove-btn:hover { color: var(--red); }
 
-/* Toast */
-#pantry-toast {
-    position: fixed;
-    bottom: 20px; right: 20px;
-    padding: 9px 16px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--green);
-    border-radius: 6px;
-    font-size: 11px;
-    color: var(--text-primary);
-    box-shadow: var(--shadow-lg);
-    opacity: 0;
-    transform: translateY(6px);
-    transition: all .2s ease;
-    pointer-events: none;
-    z-index: 999;
-}
-#pantry-toast.show { opacity: 1; transform: translateY(0); }
-
 /* ── MOBILE ───────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
     .pantry-wrap {
@@ -328,7 +308,6 @@
 
 </div>
 
-<div id="pantry-toast"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -418,7 +397,7 @@ async function addIngredient() {
         document.getElementById('pantry-list-container').innerHTML = await resp.text();
         input.value = '';
         document.getElementById('autocomplete-dropdown').classList.remove('open');
-        showPantryToast(`✓ "${name}" added to pantry`);
+        showToast(`✓ "${name}" added to pantry`);
     }
 
     btn.disabled = false;
@@ -432,24 +411,14 @@ async function quickAdd(name) {
     const resp = await fetch('/pantry', { method: 'POST', body: fd });
     if (resp.ok) {
         document.getElementById('pantry-list-container').innerHTML = await resp.text();
-        showPantryToast(`✓ "${name}" added`);
+        showToast(`✓ "${name}" added`);
     }
-}
-
-// ── TOAST ─────────────────────────────────────────────────────────────────────
-let _pt;
-function showPantryToast(msg) {
-    const t = document.getElementById('pantry-toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(_pt);
-    _pt = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
 // ── HTMX REMOVE FEEDBACK ──────────────────────────────────────────────────────
 document.addEventListener('htmx:afterSwap', e => {
     if (e.target.id === 'pantry-list-container') {
-        showPantryToast('Removed from pantry.');
+        showToast('Removed from pantry.');
     }
 });
 </script>
