@@ -21,6 +21,7 @@ The Gemini toggle is read from the MEDIA_RECOMMEND_AI environment variable:
   - If the variable is missing, defaults to "false" (safe default).
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -387,7 +388,13 @@ Respond ONLY with a JSON array, no markdown:
   ...
 ]"""
 
-    raw = call_gemini_json(prompt, schema=None, system=None, model=MODEL_FLASH)
+    # Runs off the event loop: call_gemini_json is a synchronous call
+    # (blocking requests.post, plus blocking time.sleep() on any 503
+    # retry). _gemini_explain() is itself async and awaited from
+    # generate_recommendations(), but without this, a single slow or
+    # retried Gemini call would stall every other request this FastAPI
+    # worker is handling, not just this one.
+    raw = await asyncio.to_thread(call_gemini_json, prompt, schema=None, system=None, model=MODEL_FLASH)
 
     import json as _json
     import re

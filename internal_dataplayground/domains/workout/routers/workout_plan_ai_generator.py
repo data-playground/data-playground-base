@@ -20,6 +20,7 @@ Endpoints:
   POST  /workout/plans/{id}/save        → Save AI-previewed plan
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -121,6 +122,11 @@ def _call_gemini_for_plan(
     the service call directly into generate_plan() — so generate_plan()'s
     own call site (`_call_gemini_for_plan(prompt, system)`) doesn't need
     to change; only this function's internals moved under WO#13.
+
+    Stays synchronous by design (matches call_gemini_json's signature).
+    generate_plan() is responsible for not blocking its event loop on
+    this call — it runs this function via asyncio.to_thread() rather
+    than awaiting it directly.
     """
     return call_gemini_json(prompt, schema=None, system=system, model=MODEL_FLASH)
 
@@ -250,7 +256,12 @@ Do not repeat the same exercise across days in the same week.
 Prioritize exercises the user is already doing (from history) but ensure full coverage."""
 
     try:
-        raw_json = _call_gemini_for_plan(prompt, system)
+        # Runs off the event loop: _call_gemini_for_plan is a synchronous
+        # call into services.ai (blocking requests.post, plus blocking
+        # time.sleep() on any 503 retry). Without this, a single slow or
+        # retried Gemini call would stall every other request this FastAPI
+        # worker is handling, not just this one.
+        raw_json = await asyncio.to_thread(_call_gemini_for_plan, prompt, system)
         plan_data = json.loads(raw_json)
     except Exception as exc:
         log.error("AI plan generation failed: %s", exc)
