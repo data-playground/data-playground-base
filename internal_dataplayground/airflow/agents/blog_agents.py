@@ -87,7 +87,7 @@ import time
 
 import requests
 
-from services.ai import MODEL_FLASH, call_gemini_json, call_gemini_text
+from services.ai import MODEL_FLASH, call_gemini_json, call_gemini_text, call_groq_text
 
 log = logging.getLogger(__name__)
 
@@ -106,40 +106,12 @@ LARGE_FILE_THRESHOLD_TOKENS = 40_000   # ~160K characters
 
 # ── KEY HELPERS ───────────────────────────────────────────────────────────────
 
-def _groq_key() -> str:
-    # from gcp_secrets import get_key
-    return os.environ.get("GROQ_API")
-
 def _cerebras_key() -> str:
     # from gcp_secrets import get_key
     return os.environ.get("CEREBRAS_API")
 
 
 # ── PROVIDER CALL HELPERS ─────────────────────────────────────────────────────
-
-def _groq_llama(system: str, prompt: str, temperature: float = 0.7) -> str:
-    """
-    Calls Llama 3.3 70B via Groq for prose generation.
-    Used by: Ghostwriter.
-    Free tier: 14,400 RPD, 131K context, ~6,000 TPM (fine for single-call tasks).
-    """
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {_groq_key()}",
-        "Content-Type":  "application/json",
-    }
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": prompt},
-        ],
-        "temperature": temperature,
-        "max_tokens":  8192,
-    }
-    resp = requests.post(url, headers=headers, json=payload, timeout=90)
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
 
 # Default backoff schedule for 429 responses (seconds).
 # Cerebras resets its RPM window every 60 seconds, so the max wait
@@ -1044,7 +1016,7 @@ VOICE AND STRUCTURE:
         f"Technical code breakdown:\n{code_narrative or 'None provided.'}"
     )
 
-    return _groq_llama(system, prompt, temperature=0.7)
+    return call_groq_text(system, prompt, temperature=0.7)
 
 
 # ═════════════════════════════════════════════════════════════════════════════

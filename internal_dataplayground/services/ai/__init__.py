@@ -13,6 +13,11 @@ from services.ai.providers.gemini import (
     call_gemini_json,
     call_gemma_json,
 )
+# ── Added by WO#14 (Groq provider + Ghostwriter migration) ─────────────────
+from services.ai.providers.groq import (
+    MODEL_LLAMA_70B,
+    call_groq_text,
+)
 
 __all__ = [
     "MODEL_FLASH",
@@ -21,4 +26,6 @@ __all__ = [
     "call_gemini_text",
     "call_gemini_json",
     "call_gemma_json",
+    "MODEL_LLAMA_70B",
+    "call_groq_text",
 ]
