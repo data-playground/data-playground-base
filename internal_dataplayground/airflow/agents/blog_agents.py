@@ -87,7 +87,7 @@ import time
 
 import requests
 
-from services.ai import MODEL_FLASH, call_gemini_json, call_gemini_text, call_groq_text
+from services.ai import MODEL_FLASH, call_gemini_json, call_gemini_text, call_groq_text, call_cerebras_text, MODEL_QWEN3
 
 log = logging.getLogger(__name__)
 
@@ -106,124 +106,11 @@ LARGE_FILE_THRESHOLD_TOKENS = 40_000   # ~160K characters
 
 # ── KEY HELPERS ───────────────────────────────────────────────────────────────
 
-def _cerebras_key() -> str:
-    # from gcp_secrets import get_key
-    return os.environ.get("CEREBRAS_API")
-
 
 # ── PROVIDER CALL HELPERS ─────────────────────────────────────────────────────
 
-# Default backoff schedule for 429 responses (seconds).
-# Cerebras resets its RPM window every 60 seconds, so the max wait
-# is capped there. If Retry-After header is present it overrides this.
-_CEREBRAS_BACKOFF = [75, 150, 300, 600]
-
 # Add this constant near the top with the other model IDs
 _CEREBRAS_INTER_REQUEST_SLEEP = 65  # seconds — slightly over 1 full minute window
-
-def _cerebras(model, system, prompt, temperature=0.3, max_tokens=4096):
-    log.info("_cerebras() v2 — retry loop active, backoff=%s", _CEREBRAS_BACKOFF)
-
-    import time
-
-    from cerebras.cloud.sdk import APIStatusError, Cerebras, RateLimitError
-
-    client = Cerebras(api_key=_cerebras_key(), max_retries=0).with_raw_response
-    last_exc = None
-
-    for attempt, wait in enumerate(_CEREBRAS_BACKOFF):
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user",   "content": prompt},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-
-            remaining_day = resp.headers.get("x-ratelimit-remaining-tokens-day", "?")
-            remaining_min = resp.headers.get("x-ratelimit-remaining-tokens-minute", "?")
-            reset_min     = resp.headers.get("x-ratelimit-reset-tokens-minute", "?")
-
-            if resp.status_code == 200:
-                log.info(
-                    "Cerebras %s OK — tokens remaining: %s/day, %s/min (reset in %ss)",
-                    model, remaining_day, remaining_min, reset_min,
-                )
-                content = resp.json()["choices"][0]["message"]["content"]
-                
-                # Return content AND remaining tokens so the DAG can decide how long to sleep
-                # We pack it as a tuple; callers that don't need it just take [0]
-                try:
-                    remaining_min_int = int(remaining_min)
-                except (ValueError, TypeError):
-                    remaining_min_int = 0
-                return content, remaining_min_int
-
-            if resp.status_code == 429:
-                retry_after = resp.headers.get("Retry-After")
-                actual_wait = float(retry_after) if retry_after else wait
-                log.warning(
-                    "Cerebras 429 on attempt %d/%d. Waiting %.1fs.",
-                    attempt + 1, len(_CEREBRAS_BACKOFF), actual_wait,
-                )
-                last_exc = RuntimeError(f"Cerebras 429 on attempt {attempt + 1}")
-                time.sleep(actual_wait)
-                continue
-
-            if resp.status_code == 503:
-                log.warning("Cerebras 503 on attempt %d/%d. Waiting %ds.",
-                            attempt + 1, len(_CEREBRAS_BACKOFF), wait)
-                last_exc = RuntimeError(f"Cerebras 503 on attempt {attempt + 1}")
-                time.sleep(wait)
-                continue
-
-            resp.raise_for_status()
-
-        except RateLimitError as exc:
-            response = getattr(exc, "response", None)
-            retry_after = 60  # safe default
-            if response is not None:
-                try:
-                    retry_after = int(getattr(response, "headers", {}).get("retry-after", 60))
-                except (ValueError, TypeError):
-                    pass
-            log.warning(
-                "Cerebras 429 RateLimitError on attempt %d/%d. Waiting %ds.",
-                attempt + 1, len(_CEREBRAS_BACKOFF), retry_after,
-            )
-            last_exc = exc
-            time.sleep(retry_after)
-            continue
-
-        except APIStatusError as exc:
-            if exc.status_code == 503:
-                log.warning("Cerebras APIStatusError 503 on attempt %d/%d. Waiting %ds.",
-                            attempt + 1, len(_CEREBRAS_BACKOFF), wait)
-                last_exc = exc
-                time.sleep(wait)
-                continue
-            log.error("Cerebras non-retriable APIStatusError: %s", exc)
-            raise
-
-        except Exception as exc:
-            log.error("Cerebras unexpected error: %s", exc)
-            raise
-
-    raise RuntimeError(
-        f"Cerebras {model} unavailable after {len(_CEREBRAS_BACKOFF)} retries. "
-        f"Last error: {last_exc}"
-    )
-
-
-# ── CEREBRAS MODEL IDs ────────────────────────────────────────────────────────
-# Pinned to specific versioned IDs to avoid silent quality regressions when
-# Cerebras rotates default model aliases. Update these when migrating.
-
-_CEREBRAS_QWEN3   = "qwen-3-235b-a22b-instruct-2507"   # Code Narrator, Commenter, Improver
-_CEREBRAS_LLAMA33 = "llama-3.3-70b"                     # Refiner
 
 
 # ── FILE TYPE DETECTION ───────────────────────────────────────────────────────
@@ -921,7 +808,7 @@ FORMAT:
         f"Code:\n{code_content}"
     )
 
-    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.25)
+    content, _ = call_cerebras_text(MODEL_QWEN3, system, prompt, temperature=0.25)
     return content
 
 
@@ -1065,7 +952,7 @@ Rules:
         f"Author feedback:\n{user_feedback}"
     )
 
-    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.3)
+    content, _ = call_cerebras_text(MODEL_QWEN3, system, prompt, temperature=0.3)
     return content
 
 
@@ -1411,7 +1298,7 @@ Just the file, starting from the first line.
 
     prompt = f"Add comments to {file_name} following the conventions above:\n\n{code_content}"
 
-    content, _ = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    content, _ = call_cerebras_text(MODEL_QWEN3, system, prompt, temperature=0.2)
     return content
 
 
@@ -1561,5 +1448,5 @@ FOCUS: Real issues only. Skip style nitpicks unless they cause actual friction.
         f"Code:\n{code_content}"
     )
 
-    content, remaining_tokens = _cerebras(_CEREBRAS_QWEN3, system, prompt, temperature=0.2)
+    content, remaining_tokens = call_cerebras_text(MODEL_QWEN3, system, prompt, temperature=0.2)
     return content, remaining_tokens

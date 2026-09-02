@@ -1,17 +1,7 @@
 # services/ai/base.py
 #
 # RECONSTRUCTED STUB — not provided in the source documents for this work
-# order. Inferred purely from call-site usage:
-#   - services/ai/providers/gemini.py:
-#       post_with_retry(url, payload, retries, provider_name=..., resource_label=...)
-#   - airflow/agents/recipe_agents.py (agent_extract_recipe_from_image):
-#       post_with_retry(url, payload, retries=3, provider_name="Gemini",
-#                        resource_label=MODEL_FLASH, timeout=120)
-# Signature and 429/503 handling shape is modeled on the existing bespoke
-# retry loops already in this codebase (blog_agents.py's commented-out
-# _cerebras() and job_agents.py's own patterns) since no other source of
-# truth was available. VERIFY AGAINST THE REAL FILE before merging — do
-# not treat this as ground truth.
+# order. VERIFY AGAINST THE REAL FILE before merging.
 import logging
 import time
 
@@ -19,9 +9,6 @@ import requests
 
 log = logging.getLogger(__name__)
 
-# Same conservative default backoff already used elsewhere in this
-# codebase for Gemini 503s (blog_agents.py's old _gemini_flash_json):
-# 1s, 5s, 25s.
 _DEFAULT_BACKOFF = [1, 5, 25]
 
 
@@ -33,14 +20,6 @@ def post_with_retry(
     resource_label: str = "",
     timeout: float = 90.0,
 ) -> dict:
-    """
-    Shared POST-with-retry used by every services/ai/providers/*.py
-    implementation. Retries on 503 (Service Unavailable) with exponential
-    backoff; raises immediately on any other non-2xx status.
-
-    Returns the parsed JSON response body. Callers index into it
-    (e.g. data["candidates"][0]["content"]["parts"][0]["text"]).
-    """
     last_exc = None
     for attempt in range(retries):
         try:
