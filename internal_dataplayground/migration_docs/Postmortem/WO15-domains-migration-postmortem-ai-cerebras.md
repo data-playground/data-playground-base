@@ -4,6 +4,27 @@
 **Not yet reviewed against the real repository or a live Cerebras endpoint** —
 see "Known Caveats" (§5) before treating anything here as final.
 
+> **Correction notice (post-delivery, two rounds):** the deliverable
+> shipped with this postmortem initially contained several
+> structurally-equivalent but **trimmed** reconstructions, built as a
+> lightweight sandbox test harness and then mistakenly shipped as the
+> actual code artifacts instead of the real files. **Round 1** caught
+> `blog_agents.py` (docstrings shortened, several functions' full bodies
+> missing, `_detect_file_type()` missing branches). **Round 2**, prompted
+> by a direct question about whether every other file shipped correctly,
+> found the same pattern in three more files that had been labeled
+> "included unmodified for context": `services/ai/base.py`,
+> `services/ai/providers/gemini.py`, and `services/ai/providers/groq.py`
+> all had their module/function docstrings and explanatory comments
+> stripped (functional code was intact in these three — only prose was
+> missing), and `services/ai/__init__.py` had lost three lines from its
+> header comment. **All are now fixed**, verified byte-for-byte identical
+> to the original source documents via `diff` (not eyeballed), and the
+> full 8-scenario mocked-SDK verification in §4.4 was re-run against the
+> fully-restored file set with identical results. The version now
+> included in the deliverable has been checked this way file-by-file, not
+> just for the one file that was first caught.
+
 **Series:** AI Service Layer, GOVERNANCE.md §2.3. Fourth of six
 (WO#11 → WO#12 → WO#13 → WO#14 → **WO#15 (this one)** → WO#16). This is the
 **last individual provider migration** in the series — Gemini (WO#11–13),
