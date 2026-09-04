@@ -42,11 +42,42 @@ necessarily no logical dependency; both are checked separately below.
 | WO#15 + WO#16 | `services/ai/__init__.py`; same dependency | ❌ |
 | WO#14/#15/#16 + WO#17/#18/#19/#20 | none | ✅ all |
 
-**Practical reading:** once WO#13 lands, #18, #19 (both tasks), and #20
-can all run simultaneously with each other and with anything else in this
-row — then #14 → #15 → #16 must run strictly sequentially, one at a time,
-nothing else touching `blog_agents.py` or `services/ai/__init__.py`
-concurrently with any of the three.
+**Practical reading, as originally written (superseded below — kept for
+history):** once WO#13 lands, #18, #19 (both tasks), and #20 can all run
+simultaneously with each other and with anything else in this row — then
+#14 → #15 → #16 must run strictly sequentially, one at a time, nothing
+else touching `blog_agents.py` or `services/ai/__init__.py` concurrently
+with any of the three.
+
+---
+
+## Updated state: WO#14 and WO#15 are now both done — WO#16 is the only thing left, and it turns out to be isolated
+
+This changes the practical answer materially. WO#16's actual SCOPE
+(`services/ai/__init__.py`, `services/ai/providers/gemini.py`,
+`services/ai/README.md`, `recipe_agents.py`'s one vision function,
+`finance_upload.py`'s comment-only edit, plus the new Task 2 added above —
+`blog_agents.py`'s shell cleanup) **shares zero files with Track B, Track
+C, or Track E as scoped in their brief documents.** The only thing WO#16
+now conflicts with is itself — i.e., don't run two copies of WO#16
+concurrently, and don't let anything else touch `blog_agents.py` or
+`services/ai/__init__.py` while WO#16's own Task 2 is in flight.
+
+| Pair | Shared file(s) | Safe in parallel? |
+|---|---|---|
+| WO#16 + Track B (either brief) | none | ✅ |
+| WO#16 + Track C (any/all 8 briefs) | none — router splits don't touch `services/ai/`, `blog_agents.py`, `recipe_agents.py`, or `finance_upload.py` | ✅ |
+| WO#16 + Track D (scoping only) | none — no file writes at all in this phase | ✅ |
+| WO#16 + Track E (all 4 briefs) | none — including the Blog Scout review, whose first phase is explicitly read-only against `blog_agents.py`'s prompt text, not an edit | ✅ |
+| Track B + Track C + Track D + Track E, all against each other | none, with one soft note: if Track E's Medium brief (E3) ends up folded into the `blog` domain, coordinate with Track C's Brief C5 (`blog.py`'s line-limit split) if both are in flight — a new feature landing mid-split makes for a hard-to-review diff, not a hard conflict | ✅, with that one coordination note |
+
+**Practical reading, current:** there is no longer a meaningful
+sequential bottleneck outside WO#16 itself. WO#16 can run at the same time
+as literally everything else drafted from the Track B/C/D/E briefs — the
+only discipline required is the same one that's applied throughout this
+whole series: don't have two separate efforts editing the same file
+concurrently. Given WO#16's own scope, that constraint doesn't touch any
+of the other tracks at all.
 
 ---
 
@@ -99,10 +130,11 @@ reasoning as WO#14.
 
 ## WO#16 (Capstone)
 
-**Why:** two things changed — the file rename from WO#8's split, and the
-fact that by WO#16's time *all* of `blog_agents.py`'s provider functions
-will already be migrated (via WO#13/#14/#15), not just the subset the
-original exclusion list named.
+**Why:** three things changed since this was drafted — the file rename
+from WO#8's split; the fact that by WO#16's time *all* of `blog_agents.py`'s
+provider functions are now migrated (WO#13/#14/#15 all confirmed executed);
+and two new, real findings from WO#14's and WO#15's own postmortems that
+nothing in the series currently owns.
 
 **Change, in HARD BOUNDARIES:**
 ```diff
@@ -122,8 +154,80 @@ Same correction wherever `workout_plans.py` appears elsewhere in the
 document (SCOPE's file list, ACCEPTANCE CRITERIA's "confirm zero changes"
 item) — replace with `workout_plan_ai_generator.py`.
 
+**New — add a mandatory pre-execution gate, before Step 1:**
+
+> **Before touching anything: `services/ai/base.py`, `services/ai/keys.py`,
+> and `services/ai/__init__.py` have been reconstructed stubs since
+> WO#11 — never verified against real source across four consecutive work
+> orders (WO#11, #13, #14, #15), each of which added to the same
+> reconstructed `__init__.py` export list. This compounds with every
+> passing WO. Swap in the real files and re-run the payload-shape and
+> retry-path checks from WO#11, #13, #14, and #15's postmortems against
+> them *before* WO#16 adds a fifth layer on top of an unverified
+> foundation.** If the real files aren't available in this environment
+> either, state that explicitly as a ⚠️ carried forward, not resolved —
+> do not let a fifth consecutive WO quietly inherit this gap without
+> naming it again.
+>
+> **Separately, verify any claim of "file included unmodified for
+> context" in your own deliverable independently, don't trust the label.**
+> WO#15's own postmortem shipped five files with silently truncated
+> content — caught only after a direct follow-up question, not by the
+> original self-check. This is now a confirmed, recurring pattern across
+> this program (WO#17, WO#20, WO#15), not a one-off. Diff every file you
+> claim is unchanged against its actual prior state before asserting it.
+
+**New — add as an explicit, separately-labeled Task 2 (mirroring WO#19's
+own two-task-bundle precedent — keep this diff-separable from Task 1's
+dispatcher/vision/finance_upload work, don't fold it in silently):**
+
+> ## Task 2 — `blog_agents.py` shell-level cleanup (new, confirmed by
+> both WO#14 and WO#15's postmortems, owned by neither)
+>
+> With Gemini, Groq, and Cerebras all extracted, clean up what's left:
+> - Remove now-dead `import os` (used only by the now-deleted
+>   `_cerebras_key()`) and `import time` (already effectively dead before
+>   WO#15, confirmed still dead after). `import requests` was already
+>   flagged dead by WO#14's postmortem and remains so — confirm via grep
+>   nothing added a new usage before removing.
+> - Remove the now-empty `# ── KEY HELPERS ──` section header.
+> - Resolve `_CEREBRAS_INTER_REQUEST_SLEEP = 65` — WO#15's postmortem
+>   flags it as an orphaned constant with no in-file consumer, possibly
+>   vestigial (`life_os_code_improve.py` has its own separate
+>   `INTER_REQUEST_DELAY_SEC`). Confirm before deleting rather than
+>   assuming.
+> - Relocate the module docstring's MODEL ROUTING table and ROUTING
+>   RATIONALE section into `services/ai/README.md`, per GOVERNANCE §2.3's
+>   own stated target state ("moved from blog_agents.py's header comment
+>   ... applies project-wide") — this WO's own Step 5 already creates
+>   `services/ai/README.md`; fold this relocation into that same step
+>   rather than treating it as a separate file creation.
+> - **Do not touch** the pre-existing duplicate `_estimate_tokens()`
+>   definition (flagged by both WO#14 and WO#15, predates this whole
+>   series) — report it per GOVERNANCE §4.5, same as every prior WO in
+>   this chain has correctly declined to fix it.
+>
+> Confirm final state: `grep -n "^def _"` in `blog_agents.py` should
+> return only `_detect_file_type` and (still, until reported/fixed
+> separately) the duplicate `_estimate_tokens`.
+
 **No change** to the vision-support work (Step 3, `recipe_agents.py`) or
 the `finance_upload.py` documentation decision (Step 4) — both unaffected.
+
+---
+
+## Note: the dead-block mystery WO#14 and WO#15 both flagged is resolved
+
+Both postmortems independently reported being unable to confirm whether
+the commented-out prior `_cerebras()` implementation block still existed
+in `blog_agents.py` — neither could explain the discrepancy from what the
+original WO#15 text assumed. **It's not a mystery: WO#19's Task 1 already
+removed it**, and WO#19 ran before both WO#14 and WO#15. Neither
+postmortem had visibility into WO#19's own postmortem to make this
+connection. Recorded here so nobody re-opens this as an open question —
+WO#15's own §6.2 checklist item asking "does this block exist, and if not,
+was WO#19's sub-task moot?" is answered: it existed, WO#19's task was real
+and necessary, and it's already done.
 
 ---
 
