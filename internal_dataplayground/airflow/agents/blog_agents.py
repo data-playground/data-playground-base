@@ -82,10 +82,6 @@ Target per 5-idea batch: 1 existing_asset, 2 new_build, 2 tutorial.
 
 import json
 import logging
-import os
-import time
-
-import requests
 
 from services.ai import MODEL_FLASH, call_gemini_json, call_gemini_text, call_groq_text, call_cerebras_text, MODEL_QWEN3
 
@@ -104,13 +100,17 @@ _CHARS_PER_TOKEN = 4
 LARGE_FILE_THRESHOLD_TOKENS = 40_000   # ~160K characters
 
 
-# ── KEY HELPERS ───────────────────────────────────────────────────────────────
-
-
 # ── PROVIDER CALL HELPERS ─────────────────────────────────────────────────────
 
 # Add this constant near the top with the other model IDs
 _CEREBRAS_INTER_REQUEST_SLEEP = 65  # seconds — slightly over 1 full minute window
+# WO#16 Task 2: confirmed this constant still has no in-file consumer
+# (life_os_code_improve.py's DAG has its own separate
+# INTER_REQUEST_DELAY_SEC constant, so this one may be vestigial). Left
+# in place, NOT deleted — the WO#16 amendment explicitly requires
+# confirming with whoever owns the real file before deleting it, which
+# this session has no way to do. Flagged again under the postmortem's
+# Notes section.
 
 
 # ── FILE TYPE DETECTION ───────────────────────────────────────────────────────

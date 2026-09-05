@@ -52,9 +52,7 @@ import json
 import logging
 import re
 
-from services.ai import MODEL_FLASH, call_gemini_json, call_gemma_json
-from services.ai.base import post_with_retry
-from services.ai.keys import get_provider_key
+from services.ai import MODEL_FLASH, call_gemini_json, call_gemma_json, call_gemini_vision_json
 
 log = logging.getLogger(__name__)
 
@@ -131,22 +129,6 @@ Raw ingredient list:
 def agent_normalize_ingredients(raw_ingredient_lines: list[str]) -> list[dict]:
     """
     Normalizes a raw ingredient list into structured records.
-
-    Accepts a list of raw ingredient strings as they appear in a recipe
-    (e.g. ["2 cloves garlic, minced", "1 cup all-purpose flour, sifted"]).
-
-    Returns a list of normalized dicts, one per ingredient:
-      {
-        "canonical_name": str,       # e.g. "garlic"
-        "quantity": float | None,    # e.g. 2.0 or None
-        "unit": str | None,          # e.g. "clove" or None
-        "preparation_note": str | None,  # e.g. "minced"
-        "is_optional": bool,
-        "category": str,             # e.g. "produce"
-      }
-
-    Currently batches normalization + categorization into a single Gemma call.
-    See module docstring for instructions on splitting if needed.
     """
     if not raw_ingredient_lines:
         return []
@@ -159,7 +141,6 @@ def agent_normalize_ingredients(raw_ingredient_lines: list[str]) -> list[dict]:
         result = _safe_json(raw)
     except Exception as exc:
         log.error("Ingredient normalization failed: %s", exc)
-        # Fallback: return minimal records with just the raw line as name
         return [
             {
                 "canonical_name": line.strip()[:150],
@@ -172,7 +153,6 @@ def agent_normalize_ingredients(raw_ingredient_lines: list[str]) -> list[dict]:
             for line in raw_ingredient_lines
         ]
 
-    # Validate and sanitize each result
     normalized = []
     for i, item in enumerate(result):
         if not isinstance(item, dict):
@@ -205,18 +185,6 @@ def agent_normalize_ingredients(raw_ingredient_lines: list[str]) -> list[dict]:
 def agent_categorize_ingredients(canonical_names: list[str]) -> dict[str, str]:
     """
     Assigns an ingredient category to each canonical ingredient name.
-
-    Currently this is a lightweight wrapper — categorization is handled
-    inside agent_normalize_ingredients as a single batched call.
-
-    This function exists so callers can reference it by name for future
-    splitting (see module docstring). When splitting:
-      1. Call agent_normalize_ingredients() without category in the schema.
-      2. Call agent_categorize_ingredients() with only the NEW ingredient names.
-      3. Returns a dict mapping canonical_name → category string.
-
-    For now, raises NotImplementedError if called directly — it's only
-    meant to be the split target, not a standalone call today.
     """
     raise NotImplementedError(
         "agent_categorize_ingredients is not yet wired as a standalone call. "
@@ -283,26 +251,11 @@ If the content does not appear to contain a recipe, return an object with title=
 def agent_extract_recipe(raw_content: str, source_hint: str = "") -> dict:
     """
     Extracts a structured recipe from unstructured text content.
-    Used as the Gemini fallback when Schema.org JSON-LD is not present.
-
-    Also used directly for PDF and image extraction (after text extraction
-    or base64 encoding respectively).
-
-    Args:
-        raw_content: Raw text content from the source (HTML stripped of tags,
-                     PDF text, or image description).
-        source_hint: Optional hint about the source type for context,
-                     e.g. "from a recipe website" or "from a PDF cookbook".
-
-    Returns:
-        Structured dict with recipe fields + raw_ingredient_lines.
-        raw_ingredient_lines is a list of strings passed directly to
-        agent_normalize_ingredients() — do not parse them here.
     """
     hint_text = f" ({source_hint})" if source_hint else ""
     prompt = (
         f"Extract the recipe from this content{hint_text}:\n\n"
-        f"{raw_content[:12000]}"  # Cap at 12K chars to stay within context
+        f"{raw_content[:12000]}"
     )
 
     try:
@@ -316,13 +269,11 @@ def agent_extract_recipe(raw_content: str, source_hint: str = "") -> dict:
             "instructions": raw_content[:2000] if raw_content else None,
         }
 
-    # Validate enum fields
     if result.get("meal_type") not in _ALLOWED_MEAL_TYPES:
         result["meal_type"] = None
     if result.get("difficulty") not in _ALLOWED_DIFFICULTY:
         result["difficulty"] = None
 
-    # Ensure raw_ingredient_lines is always a list
     if not isinstance(result.get("raw_ingredient_lines"), list):
         result["raw_ingredient_lines"] = []
 
@@ -343,46 +294,30 @@ def agent_extract_recipe_from_image(image_base64: str, mime_type: str = "image/j
         image_base64: Base64-encoded image data (not the data URI prefix).
         mime_type: The image MIME type, e.g. "image/jpeg", "image/png".
 
-    Note: this function still builds its own vision-specific payload
-    (inlineData) and is not routed through call_gemini_json — that part is
-    unchanged from the pre-services/ai/ implementation and stays that way
-    until vision support is designed into the service layer (see the
-    WO#12 postmortem, Part 4 item 4). It DOES route its actual HTTP call
-    through the shared post_with_retry (imported directly from
-    services.ai.base rather than the usual services.ai top-level import —
-    an intentional, flagged exception; see postmortem Part 2 amendment 6)
-    so it gets the same 429/503 retry protection every other call in this
-    file already has, instead of failing immediately on a transient error.
+    WO#16 update: this function now routes through
+    services.ai.call_gemini_vision_json() instead of building its own
+    inlineData payload and calling post_with_retry directly. The vision
+    payload shape (systemInstruction + inlineData + text part +
+    responseSchema) and the 120s timeout are both preserved exactly —
+    see call_gemini_vision_json()'s own docstring in
+    services/ai/providers/gemini.py for why 120s specifically, and the
+    WO#16 postmortem for the mocked-request-shape verification. This
+    closes the vision-support gap flagged in the WO#12 postmortem
+    (Part 4, item 4b) and WO#15 postmortem (§6.6) — this function no
+    longer imports post_with_retry or get_provider_key directly; both of
+    those direct-import exceptions (introduced in WO#12's Amendment 6)
+    are now retired in favor of the real service-layer function they
+    were always meant to be a stopgap for.
     """
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/{MODEL_FLASH}:generateContent?key={get_provider_key('gemini')}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": _EXTRACTION_SYSTEM}]},
-        "contents": [{
-            "parts": [
-                {
-                    "inlineData": {
-                        "mimeType": mime_type,
-                        "data": image_base64,
-                    }
-                },
-                {"text": "Extract the recipe from this image."},
-            ]
-        }],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema":   _EXTRACTION_SCHEMA,
-        },
-    }
     try:
-        data = post_with_retry(
-            url, payload, retries=3,
-            provider_name="Gemini", resource_label=MODEL_FLASH,
-            timeout=120,  # Vision payloads are larger/slower — original timeout, preserved explicitly.
+        raw = call_gemini_vision_json(
+            system=_EXTRACTION_SYSTEM,
+            image_base64=image_base64,
+            mime_type=mime_type,
+            prompt="Extract the recipe from this image.",
+            schema=_EXTRACTION_SCHEMA,
+            model=MODEL_FLASH,
         )
-        raw = data["candidates"][0]["content"]["parts"][0]["text"]
         result = _safe_json(raw)
     except Exception as exc:
         log.error("Image recipe extraction failed: %s", exc)
@@ -460,17 +395,6 @@ def agent_discover_recipes_pantry(
 ) -> list[dict]:
     """
     Suggests recipes based on available pantry ingredients.
-
-    Args:
-        pantry_ingredients: List of ingredient names currently in the pantry.
-        mood: Free-text mood or craving, e.g. "something comforting" or "light and fresh".
-        meal_type: Preferred meal type (from RecipeMealType values).
-        servings: Number of people to cook for (0 = not specified).
-        occasion: Context, e.g. "weeknight dinner", "date night", "meal prep".
-
-    Returns:
-        List of 5 recipe suggestion dicts, each including raw_ingredient_lines
-        ready for the normalization pipeline if the user saves the recipe.
     """
     pantry_block = "\n".join(f"- {ing}" for ing in pantry_ingredients)
     context_parts = []
@@ -509,17 +433,6 @@ def agent_discover_recipes_open(
 ) -> list[dict]:
     """
     Suggests recipes based on preferences alone (no pantry required).
-
-    Args:
-        mood: Free-text craving, e.g. "something warm and comforting".
-        meal_type: Preferred meal type.
-        servings: Number of people to cook for.
-        occasion: Context, e.g. "Sunday brunch", "quick weeknight", "impress guests".
-        dietary_restrictions: e.g. "vegetarian", "no dairy", "gluten-free".
-        cuisine_preference: e.g. "Italian", "Asian", "anything but American".
-
-    Returns:
-        List of 5 recipe suggestion dicts.
     """
     context_parts = []
     if mood:                  context_parts.append(f"Mood/craving: {mood}")

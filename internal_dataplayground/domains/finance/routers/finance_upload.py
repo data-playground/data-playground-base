@@ -68,6 +68,17 @@ Respond ONLY with a JSON array of exactly {len(rows)} strings in order.
 Example: ["Food & Dining", "Transport", "Income"]
 No explanation, no markdown, no code blocks. Raw JSON array only."""
     try:
+        # NOTE (WO#16, Step 4): this uses the google-genai SDK directly
+        # rather than services/ai/ — see services/ai/README.md's "SDK
+        # Exceptions" section for the full reasoning. Decision: left
+        # as-is. The SDK handles response parsing and model selection
+        # differently enough from the raw-REST pattern used by every
+        # other provider call in services/ai/ that converting it doesn't
+        # reduce duplication, it just changes which duplication exists.
+        # Revisit only if a second SDK-based caller appears, at which
+        # point the SDK-calling pattern itself may be worth its own
+        # services/ai/providers/ entry (SDK-based, not raw-REST like the
+        # three existing ones).
         response = client.models.generate_content(model="gemma-3-27b-it", contents=prompt)
         raw = response.text.strip()
         if raw.startswith("```"):

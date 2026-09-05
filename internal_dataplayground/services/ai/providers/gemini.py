@@ -6,17 +6,22 @@ Moved from airflow/agents/gemini_client.py — MODEL_FLASH, MODEL_FLASH_LITE,
 call_gemini_text(), and call_gemini_json() are unchanged in behavior. Only
 two things moved out:
   - The retry/backoff loop -> services.ai.base.post_with_retry (shared
-    with future providers/groq.py, providers/cerebras.py).
+    with providers/groq.py, providers/cerebras.py).
   - The API key lookup -> services.ai.keys.get_provider_key("gemini")
     (replacing gemini_client.py's private _gemini_key()).
 
 Function names are kept IDENTICAL to what job_agents.py already imports.
 call_gemini_json()'s signature was generalized under WO#13 to make
-`schema` and `system` optional keyword arguments (was previously
-positional `(system, prompt, schema, model=..., retries=...)`) so it
-could also serve callers with no schema (workout_plan_ai_generator.py,
-media_recommend.py) or no system instruction (media_recommend.py). See
-call_gemini_json()'s own docstring for the backward-compatibility note.
+`schema` and `system` optional keyword arguments. See call_gemini_json()'s
+own docstring for the backward-compatibility note.
+
+WO#16 adds call_gemini_vision_json() — Gemini's inlineData image +
+text-prompt call shape, used by
+recipe_agents.py::agent_extract_recipe_from_image(). This closes the
+vision gap flagged in the WO#12 postmortem (that function previously
+stayed on its own raw requests.post() call, with only its transport/
+retry layer routed through post_with_retry directly, per that
+postmortem's Amendment 6).
 """
 import logging
 
@@ -63,11 +68,6 @@ def call_gemma_json(prompt: str, model: str = MODEL_GEMMA, retries: int = 3) -> 
     callers must prepend any system context directly into `prompt`
     themselves, same as recipe_agents.py's original _gemma() required.
     No responseSchema enforcement — only responseMimeType: application/json.
-
-    `retries` defaults to 3 for parity with call_gemini_text/call_gemini_json
-    (the original recipe_agents.py _gemma() had no retry logic at all —
-    see the WO#12 postmortem for the retry-semantics discussion this
-    introduced).
     """
     payload = {
         "contents":         [{"parts": [{"text": prompt}]}],
@@ -91,22 +91,11 @@ def call_gemini_json(
     Structured JSON response. Returns the raw JSON string — caller does json.loads().
 
     `schema` is optional: when provided, a Gemini responseSchema is
-    enforced (OBJECT/ARRAY-shaped structured output). When omitted, only
-    responseMimeType: "application/json" is set — free-form JSON, caller
-    validates shape itself (e.g. media_recommend.py's _gemini_explain()).
+    enforced. When omitted, only responseMimeType: "application/json" is
+    set.
 
     `system` is optional: when omitted, no systemInstruction is sent at
-    all, rather than sending an empty one (media_recommend.py's
-    _gemini_explain() relies on this — the absence of a system
-    instruction there is intentional, not an oversight).
-
-    NOTE ON BACKWARD COMPATIBILITY (WO#13): this signature reorders and
-    changes the defaults of the original (system, prompt, schema, model,
-    retries) signature used by job_agents.py (WO#11) and recipe_agents.py
-    (WO#12). Both files' call sites already relied on positional order
-    and would silently pass arguments to the wrong parameters under the
-    new signature — they've been updated to explicit keyword arguments
-    as part of this change (see job_agents.py / recipe_agents.py diffs).
+    all, rather than sending an empty one.
     """
     generation_config = {"responseMimeType": "application/json"}
     if schema is not None:
@@ -122,5 +111,61 @@ def call_gemini_json(
     data = post_with_retry(
         _build_url(model), payload, retries,
         provider_name="Gemini", resource_label=model,
+    )
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
+# ── WO#16: Vision support ───────────────────────────────────────────────────
+
+def call_gemini_vision_json(
+    system: str,
+    image_base64: str,
+    mime_type: str,
+    prompt: str,
+    schema: dict,
+    model: str = MODEL_FLASH,
+    retries: int = 3,
+    timeout: float = 120.0,
+) -> str:
+    """
+    Calls Gemini with an image (inlineData) plus a text prompt, enforcing
+    JSON schema output. Used for image-based extraction — currently the
+    sole caller is recipe_agents.py::agent_extract_recipe_from_image().
+
+    Matches that function's pre-WO#16 raw payload structure exactly: a
+    systemInstruction, a contents list with one inlineData part
+    (mimeType + base64 data) and one text part, and a generationConfig
+    with responseMimeType + responseSchema.
+
+    `timeout` defaults to 120.0s, not the 90.0s default every other
+    function in this module gets from post_with_retry — vision payloads
+    (inline base64 image + text) are larger and slower. This matches
+    agent_extract_recipe_from_image()'s pre-WO#16 behavior exactly, which
+    passed timeout=120 explicitly (see the WO#12 postmortem's Amendment
+    6). Exposed as a parameter rather than hardcoded, for any future
+    non-recipe vision caller with different payload-size needs — the
+    default is chosen specifically to preserve this function's one real
+    caller's existing behavior unchanged, which WO#16's own acceptance
+    criteria require ("identical request... to what
+    agent_extract_recipe_from_image()'s original raw implementation
+    produced").
+    """
+    payload = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{
+            "parts": [
+                {"inlineData": {"mimeType": mime_type, "data": image_base64}},
+                {"text": prompt},
+            ]
+        }],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": schema,
+        },
+    }
+    data = post_with_retry(
+        _build_url(model), payload, retries,
+        provider_name="Gemini", resource_label=model,
+        timeout=timeout,
     )
     return data["candidates"][0]["content"]["parts"][0]["text"]
