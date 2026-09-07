@@ -1,4 +1,4 @@
-# airflow/dags/life_os_code_narrate.py
+# airflow/dags/code_intel/life_os_code_narrate.py
 """
 Code Narrator DAG — triggered from LifeOS Code Intelligence UI.
 Conf required: {"file_ids": [1, 2, 3], "project_id": 42}

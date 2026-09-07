@@ -1,4 +1,4 @@
-# airflow/dags/life_os_weekly_synthesis.py
+# airflow/dags/journal/life_os_weekly_synthesis.py
 """
 Weekly Synthesis DAG
 ─────────────────────────────────────────────────────────────────────────────

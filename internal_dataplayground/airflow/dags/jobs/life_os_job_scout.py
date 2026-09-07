@@ -1,4 +1,4 @@
-# airflow/dags/life_os_job_scout.py
+# airflow/dags/jobs/life_os_job_scout.py
 """
 Job Scout DAG
 ─────────────

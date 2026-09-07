@@ -1,4 +1,4 @@
-# airflow/dags/life_os_code_improve.py
+# airflow/dags/code_intel/life_os_code_improve.py
 """
 Code Improver DAG — triggered from LifeOS Code Intelligence UI.
 Conf required: {"file_ids": [1, 2, 3]}

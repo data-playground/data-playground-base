@@ -1,4 +1,4 @@
-# airflow/dags/life_os_daily_digest.py
+# airflow/dags/jobs/life_os_daily_digest.py
 """
 Daily Digest DAG — the first piece of what's meant to grow into a broader
 "newsletter of things that matter" across Life OS modules. For now it

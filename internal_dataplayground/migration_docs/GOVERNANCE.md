@@ -155,6 +155,13 @@ removal as its own small cleanup task per domain, not bundled into the
 migration work order itself (this keeps each migration's diff focused and
 its acceptance criteria clean).
 
+**Status: historical/closed.** WO#20 removed every remaining domain shim
+from root `models.py`, and WO#22 removed root `models.py` itself once a
+repo-wide grep confirmed it had no real consumers left — the
+mapper-registration guarantee this section originally relied on shims for
+now lives as an explicit import block in `database.py`. This section is
+kept for historical context; no further shim-removal work is expected.
+
 ### 2.5 Why DAGs Haven't Moved Yet
 DAG relocation (`airflow/dags/*.py` → `domains/*/dags/`) is deliberately
 **out of scope** for every migration work order so far. It requires a

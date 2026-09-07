@@ -1,4 +1,4 @@
-# airflow/dags/life_os_staging_promoter.py
+# airflow/dags/jobs/life_os_staging_promoter.py
 """
 Staging Promoter DAG
 ─────────────────────

@@ -1,4 +1,4 @@
-# airflow/dags/life_os_code_comment.py
+# airflow/dags/code_intel/life_os_code_comment.py
 """
 Code Commenter DAG — triggered from LifeOS Code Intelligence UI.
 Conf required: {"file_ids": [1, 2, 3]}

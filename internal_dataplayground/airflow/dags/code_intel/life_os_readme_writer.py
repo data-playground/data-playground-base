@@ -1,4 +1,4 @@
-# airflow/dags/life_os_readme_writer.py
+# airflow/dags/code_intel/life_os_readme_writer.py
 """
 README Writer DAG — triggered from LifeOS Code Intelligence UI.
 Conf required: {"project_id": 1}

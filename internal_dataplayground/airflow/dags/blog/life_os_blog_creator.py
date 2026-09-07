@@ -1,4 +1,4 @@
-# airflow/dags/life_os_blog_creator.py
+# airflow/dags/blog/life_os_blog_creator.py
 """
 Blog Creator DAG  (Trigger 1 of 2)
 ────────────────────────────────────

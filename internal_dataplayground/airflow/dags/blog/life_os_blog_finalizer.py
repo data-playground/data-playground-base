@@ -1,4 +1,4 @@
-# airflow/dags/life_os_blog_finalizer.py
+# airflow/dags/blog/life_os_blog_finalizer.py
 # ARCHITECTURAL RULE: This DAG file must never import from models.py,
 # database.py, or any FastAPI router. All database access uses dag_db.py.
 """

@@ -1,4 +1,4 @@
-# airflow/dags/life_os_generate_embeddings.py
+# airflow/dags/media/life_os_generate_embeddings.py
 """
 Embedding Generation DAG
 ─────────────────────────────────────────────────────────────────────────────

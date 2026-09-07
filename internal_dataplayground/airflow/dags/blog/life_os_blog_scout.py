@@ -1,4 +1,4 @@
-# airflow/dags/life_os_blog_scout.py
+# airflow/dags/blog/life_os_blog_scout.py
 """
 Blog Scout DAG
 ─────────────
@@ -9,7 +9,7 @@ Conf (optional, for manual triggers):
   {"interests": "override interests string"}
 """
 
-# airflow/dags/life_os_blog_scout.py
+# airflow/dags/blog/life_os_blog_scout.py
 """
 Blog Scout DAG
 ─────────────
