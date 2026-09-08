@@ -11,6 +11,17 @@ every fact this amendment states), `WO20-domains-migration-postmortem-shim-remov
 and `WO16-postmortem-OVERVIEW-and-program-closeout.md` (referenced in Part D
 below for the unrelated-but-adjacent Domain Migration / `models.py` track).
 
+> **Correction notice (post-delivery):** Part D.2, as first written,
+> described `models.py`'s end state as an open decision between two
+> options and recommended one of them (the registry approach). That's now
+> known to be stale: `GOVERNANCE.md` §2.4 was independently updated (in
+> parallel, outside this work order) with a note confirming **WO#22 has
+> already executed and deleted `models.py` entirely** — the other option,
+> not the one this document recommended. Part D.2 below has been rewritten
+> to state this as a confirmed fact rather than an open decision. Nothing
+> in Part A, Part B, or Part C changed — this correction is scoped
+> entirely to Part D.2 (and one line in D.0/D.4 kept consistent with it).
+
 ---
 
 ## Section 0 — How to read this document
@@ -267,7 +278,7 @@ repository (established across WO#14 §8, WO#16 §G.0):
 
 | Track | Covers | Status as of this document |
 |---|---|---|
-| **A — Domain Migration** | `models.py` (root + per-domain), routers, templates, static assets → `domains/<name>/` | WO#1–10 complete; shim-removal (WO#20) complete; final `configure_mappers()` verification still open (see D.2) |
+| **A — Domain Migration** | `models.py` (root + per-domain), routers, templates, static assets → `domains/<name>/` | WO#1–10 complete; shim-removal (WO#20) complete; root `models.py` deleted entirely (WO#22); final `configure_mappers()` verification still open (see D.2) |
 | **B — AI Service Layer** | `services/ai/`, `blog_agents.py` and sibling agent modules' provider calls | WO#11–16 complete per their own postmortems; several stub-file and live-verification items still open (out of scope for this document — see WO#15/#16's own Part G) |
 | **C — Frontend Consolidation** | Toast/sidebar JS dedup (WO#17) | Complete per its own postmortem |
 | **D — DAG Reorganization** | `airflow/dags/*.py` subfolder move (WO#18) + this WO#21's documentation follow-through | WO#18 complete; **this WO#21 closes the one documentation debt WO#18 itself flagged as outstanding** (§7.7, item 1) |
@@ -317,11 +328,12 @@ to reflect that this WO#21 has now closed item 1:
 **Read this if you were told to "adjust `models.py`, removing references
 from there" or similar** — this WO#21 didn't touch `models.py` and has no
 reason to, but since this document is meant to be a coalescing point,
-here's the current, real state as of the last time anyone in this program
-actually read that file (WO#20's own postmortem, later re-confirmed in
-WO#16 §G.2 and WO#15 §6.4):
+here's the current, real state, current as of the correction notice at
+the top of this document (confirmed directly against `GOVERNANCE.md`
+§2.4's own "Status: historical/closed" note — not inferred from any
+postmortem's recommendation):
 
-- **Root `models.py`'s shims are already removed.** WO#20 deleted the
+- **Root `models.py`'s shims were removed first.** WO#20 deleted the
   re-export shim block for all ten migrated domains (Jobs, Finance, Blog,
   Code Intel, Habits, Journal, Recipes, Workout, Media, Planning) and
   repointed `routers/dashboard.py` to import directly from each domain's
@@ -329,44 +341,58 @@ WO#16 §G.2 and WO#15 §6.4):
   Jobs, Finance, Blog, Habits, Journal). The other 5 needed no
   `dashboard.py` edit at all, since `dashboard.py` never referenced their
   classes.
-- **What's left in root `models.py` is dead weight, not dead-but-load-bearing
-  code:** a handful of now-unused header imports (`datetime`, `enum`,
-  `math`, `Decimal`, `Optional`, SQLAlchemy column/type imports,
-  `Mapped`/`mapped_column`/`relationship`, `BaseModel`). WO#20's own scope
-  deliberately stopped at shim removal and did not also clean up these
-  imports or decide the file's final shape — that decision was left open,
-  on purpose, as its own small follow-up (WO#20 Part 4 §4.2).
-- **Two options are already on the table, with a stated recommendation:**
-  (1) delete `models.py` entirely, moving the "every domain gets imported
-  before the first query" guarantee into `database.py`'s `init_db()`; or
-  (2) **(recommended)** reduce it to a ~15-line pure import-registry that
-  documents, in one place, every domain the app has. See WO#20 Part 4
-  §4.2 for the exact code for both options — don't re-derive this from
-  scratch.
+- **The decision this section used to describe as open has been made and
+  executed: `models.py` was deleted entirely.** This is **WO#20 Part 4
+  §4.2's Option 1**, not Option 2 (the ~15-line registry) — this document
+  previously recommended Option 2; that recommendation did not carry the
+  day, and this is now recorded as a correction, not re-argued. Per
+  `GOVERNANCE.md` §2.4's own note, the "every domain gets imported before
+  the first query" guarantee the shims used to provide now lives as an
+  **explicit import block in `database.py`** — exactly the mechanism
+  Option 1 always specified. If that block ever needs auditing against
+  the real file, WO#20 Part 4 §4.2 still documents what it should contain
+  (a `from domains.<name> import models as _<name>_models  # noqa: F401`
+  line per domain).
+- **What this does NOT confirm, and shouldn't be assumed to:**
+  `GOVERNANCE.md`'s note says `models.py` was deleted "once a repo-wide
+  grep confirmed it had no real consumers left" — that's the same
+  `from models import ...` grep sweep every prior postmortem in this
+  series has run, returning zero real hits. A clean grep proves nothing
+  still *imports* the old shim. It is **not** the same claim as a real
+  `sqlalchemy.orm.configure_mappers()` run, and shouldn't be read as
+  implicitly closing that separate check.
 - **The single most important item genuinely still open, across the whole
-  program, not just this document:** a real `sqlalchemy.orm.configure_mappers()`
-  check, run against every domain's actual `models.py` simultaneously, in
+  program, is unchanged by `models.py`'s deletion — it isn't retired by
+  this, it just moves where the thing being checked physically lives:** a
+  real `sqlalchemy.orm.configure_mappers()` check, run against every
+  domain's actual `models.py` simultaneously (now registered via
+  `database.py`'s import block rather than root `models.py`'s shims), in
   a real Python environment with the app's real dependencies installed.
-  No engagement in this entire series — including WO#20, the one that did
-  the shim removal — has ever had every domain's real model file available
-  at once to run this for real. It has been "the reason the `Base.metadata`
-  acceptance criterion stays ⚠️" in every postmortem since WO#2. See WO#20
-  Part 4 §4.4 for the exact commands to run and what a failure would mean
-  (almost certainly: add the missing domain to whichever registry
-  mechanism was chosen above — **not** bring back a per-domain shim).
-- **If a fresh grep against the real, live `models.py` and `dashboard.py`
-  ever turns up something WO#20 didn't account for**, treat that as a
-  genuine new finding worth its own note, not evidence that WO#20's own
-  report was wrong — re-verify against the live repo before concluding
-  either way, per the standing caveat every postmortem in this series
-  carries (no engagement in this program has ever had real filesystem
-  access).
+  No engagement in this entire series — including WO#20 and WO#22 — has
+  ever had every domain's real model file available at once to run this
+  for real. It has been "the reason the `Base.metadata` acceptance
+  criterion stays ⚠️" in every postmortem since WO#2, and deleting
+  `models.py` doesn't change that status. See WO#20 Part 4 §4.4 for the
+  exact commands to run and what a failure would mean (almost certainly:
+  add the missing domain to `database.py`'s import block — there's no
+  shim left to fall back on, so a gap here now has nowhere else to hide).
+- **If a fresh grep against the real, live `database.py` and
+  `dashboard.py` ever turns up something WO#20 or WO#22 didn't account
+  for**, treat that as a genuine new finding worth its own note, not
+  evidence that either report was wrong — re-verify against the live repo
+  before concluding either way, per the standing caveat every postmortem
+  in this series carries (no engagement in this program has ever had real
+  filesystem access).
 
 **Bottom line for this section:** if the instruction is specifically about
-`models.py`, the actual requirements are in WO#20 Part 4 (§4.1–§4.11), not
-here — this subsection exists only so a reader of *this* document isn't
-left thinking WO#21 has anything to do with it, and knows exactly which
-other document to open instead.
+`models.py`, the file no longer exists — the registration guarantee it
+used to provide now lives in `database.py`'s import block instead. The
+governing spec for what that block should contain is still WO#20 Part 4
+(§4.1–§4.11), read with the correction above in mind (Option 1 was chosen,
+not the Option 2 that document recommended). This subsection exists only
+so a reader of *this* document isn't left thinking WO#21 has anything to
+do with it, and knows exactly which other document and which real file
+to check instead.
 
 ### D.3 — Cross-track document hygiene (flagged, not fixed here)
 
@@ -407,7 +433,9 @@ exactly one line item on it:
 - [ ] Track D's remaining items — stale DAG header comments, live
       Airflow checks, `agents/*.py` reorg scoping (D.1 above).
 - [ ] Track A's remaining item — real `configure_mappers()` verification
-      against every domain's real `models.py` at once (D.2 above).
+      against every domain's real `models.py`, now registered via
+      `database.py`'s import block rather than a root `models.py` (which
+      no longer exists, per WO#22 — see D.2 above).
 - [ ] Track B's remaining items — see WO#15/#16's own closing sections;
       out of scope for this document.
 - [ ] `GOVERNANCE.md` §3.3 and `00_MASTER_INDEX.md` refreshed to reflect

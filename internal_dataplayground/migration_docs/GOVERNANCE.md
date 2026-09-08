@@ -109,9 +109,10 @@ work, but it is binding for all *new* code starting now.)
 - **DAGs never import `models.py`, `database.py`, or any router/service.**
   This rule predates this governance pass (`CONTRIBUTING.md`) and remains
   absolute. All DAG database access goes through `airflow/dag_db.py` raw
-  SQL helpers. DAG files stay in `airflow/dags/` (not yet relocated into
-  `domains/*/dags/` as of this writing — see §2.5 for why that move is
-  deliberately deferred).
+  SQL helpers. DAG files stay under `airflow/dags/`, organized into
+  per-domain subfolders (`airflow/dags/<domain>/`) rather than relocated
+  into `domains/*/dags/` — see §2.5, which documents this as the settled,
+  permanent approach (not a deferred step, per WO#18).
 
 ### 2.3 AI Service Layer (Target State — In Progress)
 **Current state (as of this document):** six independent implementations of
@@ -162,14 +163,55 @@ mapper-registration guarantee this section originally relied on shims for
 now lives as an explicit import block in `database.py`. This section is
 kept for historical context; no further shim-removal work is expected.
 
-### 2.5 Why DAGs Haven't Moved Yet
-DAG relocation (`airflow/dags/*.py` → `domains/*/dags/`) is deliberately
-**out of scope** for every migration work order so far. It requires a
-coordinated `docker-compose.yml` volume-mount change (the Airflow
-containers currently mount `./airflow/dags` directly), and getting that
-wrong breaks DAG scheduling silently rather than failing loudly like a
-FastAPI import error would. This is tracked as a distinct, later phase —
-do not fold it into a routine domain migration work order.
+### 2.5 DAG Organization — Resolved (see WO#18)
+Earlier versions of this document assumed relocating `airflow/dags/*.py`
+into domain-scoped subfolders would require a coordinated
+`docker-compose.yml` volume-mount change and carried real risk of DAGs
+failing to schedule silently. That assessment has been superseded by
+actual execution.
+
+**What's actually true, confirmed by WO#18:**
+- Airflow's DAG discovery recursively scans the configured `dags_folder`
+  for `.py` files containing DAG objects — subfolder depth doesn't matter.
+- `docker-compose.yml` already mounts `./airflow/dags:/opt/airflow/dags`
+  as a whole tree, so organizing into subfolders *within* that
+  already-mounted path requires **no volume-mount change** (confirmed via
+  an empty `docker-compose.yml` diff across the relocation).
+- Every DAG file resolves its own imports via absolute container paths
+  (`sys.path.insert(0, '/opt/airflow/project')`, `sys.path.insert(0,
+  '/opt/airflow/project/airflow')`), not paths relative to the DAG file's
+  own location — moving the file doesn't touch these.
+- Every DAG's `dag_id` is an explicit string literal, not derived from
+  file path — the scheduler, UI, run history, and
+  `services/airflow_service.py`'s `trigger_airflow(dag_id, ...)` helper
+  are all keyed on this string and are unaffected by relocation.
+
+**Current state:** 13 DAG files now live under `airflow/dags/<domain>/`
+subfolders (`blog/`, `code_intel/`, `jobs/`, `journal/`, `media/`). Two
+DAG files — `life_os_staging_promoter.py` and
+`life_os_refresh_streaming_availability.py` — remain at the flat
+`airflow/dags/` root by deliberate choice, not oversight (they postdate
+WO#18's own file list and were never in its scope). This was a pure
+relocation for the 13 that moved — zero code changes inside any DAG file,
+zero `docker-compose.yml` changes. See WO#18 and its postmortem for the
+full verification (byte-identical file diffs, `git log --follow` history
+preservation).
+
+**What this does NOT resolve:** moving the *agent modules* under
+`airflow/agents/*.py` into a similar structure is a different,
+higher-risk question, flagged but not yet assigned a work order (see
+WO#18's own postmortem, §7.5). Several of those files (`recipe_agents.py`,
+`weekly_agents.py`, `blog_agents.py`) are imported directly by FastAPI
+routers as well as (or instead of) DAGs — unlike DAG files, which nothing
+outside the Airflow layer imports — so the "pure relocation, zero code
+change" property does not automatically transfer. Don't assume it does;
+redo the same discovery/import/identity analysis WO#18 performed for
+DAGs, applied fresh to `agents/*.py`, before scoping that move.
+
+The original `domains/*/dags/` restructuring this section used to
+describe is no longer the plan — organizing within `airflow/dags/`
+achieved the actual goal (discoverability, being able to hand a scoped
+subfolder to an agent) without the domain-folder move's added risk.
 
 ### 2.6 Templating & Static Serving
 - **Templates:** `core/templating.py` holds one shared `Jinja2Templates`
