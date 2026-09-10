@@ -20,7 +20,7 @@ from domains.workout.routers import workout, workout_log, workout_plans_crud, wo
 from domains.media.routers import media, media_search, media_recommend, media_settings # WO9
 from domains.planning.routers import intent, weekly_plan, weekly_plan_generator, weekly_plan_shopping # WO10
 
-from domains.soccer.routers import soccer  # WO#34
+from domains.soccer.routers import soccer, soccer_settings # WO#34
 
 from routers import dashboard
 
@@ -94,6 +94,7 @@ app.include_router(intent.router)
 app.include_router(weekly_plan.router)
 
 app.include_router(soccer.router)
+app.include_router(soccer_settings.router)
 
 # ── Global 500 handler ─────────────────────────────────────────────────────────
 
