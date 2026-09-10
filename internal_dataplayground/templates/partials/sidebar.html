@@ -39,7 +39,6 @@
             <span class="sidebar-text">Workout</span>
         </a>
 
-        {# ── NEW: Recipes ── #}
         <a class="nav-item {% if active_module in ('recipes', 'pantry') %}active{% endif %}" href="/recipes">
             <i class="fas fa-utensils icon"></i>
             <span class="sidebar-text">Recipes</span>
@@ -53,6 +52,16 @@
         <a class="nav-item {% if active_module == 'blog' %}active{% endif %}" href="/blog">
             <i class="fas fa-pen-to-square icon"></i>
             <span class="sidebar-text">Blog Ideas</span>
+        </a>
+
+        <a class="nav-item {% if active_module in ('soccer', 'soccer_settings') %}active{% endif %}" href="/soccer">
+            <i class="fa-solid fa-futbol icon"></i>
+            <span class="sidebar-text">Soccer</span>
+        </a>
+
+        <a class="nav-item {% if active_module == 'nba' %}active{% endif %}" href="/nba">
+            <i class="fa-solid fa-basketball icon"></i>
+            <span class="sidebar-text">NBA</span>
         </a>
 
         <a class="nav-item {% if active_module == 'explorer' %}active{% endif %}" href="/explorer">
@@ -164,6 +173,15 @@
         {% if active_module in ('habits', 'habits_settings') %}
         <div class="nav-label">Habits</div>
         <a class="nav-item {% if active_module == 'habits_settings' %}active{% endif %}" href="/habits/settings">
+            <span class="icon">⚙</span>
+            <span class="sidebar-text">Settings</span>
+        </a>
+        {% endif %}
+
+        {# ── Soccer sub-nav ── #}
+        {% if active_module in ('soccer', 'soccer_settings') %}
+        <div class="nav-label">Soccer</div>
+        <a class="nav-item {% if active_module == 'soccer_settings' %}active{% endif %}" href="/soccer/settings">
             <span class="icon">⚙</span>
             <span class="sidebar-text">Settings</span>
         </a>
