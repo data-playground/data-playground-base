@@ -28,4 +28,5 @@ templates.env.loader = ChoiceLoader([
     FileSystemLoader("domains/planning/templates"),
     
     FileSystemLoader("domains/soccer/templates"),
+    FileSystemLoader("domains/nba/templates"),
 ])

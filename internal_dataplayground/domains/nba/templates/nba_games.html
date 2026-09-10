@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}NBA{% endblock %}
+{% block page_title %}NBA{% endblock %}
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);letter-spacing:.08em;">game log</span>
+{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto;padding:20px;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <a class="btn btn-sm" href="/nba?date={{ prev_date.isoformat() }}">← {{ prev_date.strftime('%b %-d') }}</a>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;">
+            {{ target_date.strftime('%A, %B %-d, %Y') }}
+        </div>
+        <a class="btn btn-sm" href="/nba?date={{ next_date.isoformat() }}">{{ next_date.strftime('%b %-d') }} →</a>
+    </div>
+
+    {% if games %}
+    <div style="display:flex;flex-direction:column;gap:8px;">
+        {% for game in games %}
+        <a href="/nba/game/{{ game.game_id }}" class="panel"
+           style="display:flex;align-items:center;justify-content:space-between;text-decoration:none;color:inherit;">
+            <div style="display:flex;align-items:center;gap:14px;">
+                <span class="badge badge-muted">{{ game.game_status_text or '—' }}</span>
+                <span style="font-size:12px;">
+                    {{ game.away_team.tricode if game.away_team else game.away_team_id }}
+                    <span style="color:var(--text-muted);">@</span>
+                    {{ game.home_team.tricode if game.home_team else game.home_team_id }}
+                </span>
+            </div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">
+                {% if game.away_score is not none and game.home_score is not none %}
+                    {{ game.away_score }} – {{ game.home_score }}
+                {% else %}
+                    <span style="color:var(--text-muted);font-weight:400;font-size:11px;">not yet played</span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">🏀</div>
+        <p>No games found for this date.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

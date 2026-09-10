@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ game.away_team.tricode if game.away_team else game.away_team_id }} @ {{ game.home_team.tricode if game.home_team else game.home_team_id }}{% endblock %}
+{% block page_title %}{{ game.away_team.tricode if game.away_team else game.away_team_id }} @ {{ game.home_team.tricode if game.home_team else game.home_team_id }}{% endblock %}
+{% block topbar_badges %}
+    <span class="badge badge-accent">{{ game.game_status_text or '—' }}</span>
+{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:20px;">
+
+    {# ── Game header ── #}
+    <div class="panel" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-around;text-align:center;">
+            <div>
+                <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px;">
+                    {{ game.away_team.tricode if game.away_team else game.away_team_id }}
+                </div>
+                <div style="font-size:26px;font-weight:700;">{{ game.away_score if game.away_score is not none else '–' }}</div>
+                <div style="font-size:9px;color:var(--text-muted);">{{ game.away_wins }}-{{ game.away_losses }}</div>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);">
+                {{ game.arena_name or '' }}{% if game.arena_city %} · {{ game.arena_city }}{% endif %}
+                {% if game.attendance %}<br>{{ "{:,}".format(game.attendance) }} attendance{% endif %}
+            </div>
+            <div>
+                <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px;">
+                    {{ game.home_team.tricode if game.home_team else game.home_team_id }}
+                </div>
+                <div style="font-size:26px;font-weight:700;">{{ game.home_score if game.home_score is not none else '–' }}</div>
+                <div style="font-size:9px;color:var(--text-muted);">{{ game.home_wins }}-{{ game.home_losses }}</div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Tabs ── #}
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="btn btn-sm btn-primary" id="tab-btn-box" onclick="showNbaTab('box')">Box Score</button>
+        <button class="btn btn-sm" id="tab-btn-pbp" onclick="showNbaTab('pbp')">Play-by-Play</button>
+    </div>
+
+    {# ── Box score tab ── #}
+    <div id="tab-box">
+        {% for label, rows in [
+            ("Away — " ~ (game.away_team.tricode if game.away_team else game.away_team_id), away_box),
+            ("Home — " ~ (game.home_team.tricode if game.home_team else game.home_team_id), home_box)
+        ] %}
+        <div class="panel" style="margin-bottom:12px;overflow-x:auto;">
+            <div class="panel-title">{{ label }}</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                <thead>
+                    <tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);">
+                        <th style="padding:4px 6px;">Player</th>
+                        <th style="padding:4px 6px;">Pos</th>
+                        <th style="padding:4px 6px;">Min</th>
+                        <th style="padding:4px 6px;">Pts</th>
+                        <th style="padding:4px 6px;">Reb</th>
+                        <th style="padding:4px 6px;">Ast</th>
+                        <th style="padding:4px 6px;">Stl</th>
+                        <th style="padding:4px 6px;">Blk</th>
+                        <th style="padding:4px 6px;">TO</th>
+                        <th style="padding:4px 6px;">FG</th>
+                        <th style="padding:4px 6px;">3P</th>
+                        <th style="padding:4px 6px;">FT</th>
+                        <th style="padding:4px 6px;">+/-</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bs, player in rows %}
+                    <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:4px 6px;">{{ player.full_name if player else 'Player #' ~ bs.person_id }}</td>
+                        <td style="padding:4px 6px;">{{ bs.position or '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.minutes or '—' }}</td>
+                        <td style="padding:4px 6px;font-weight:600;">{{ bs.points if bs.points is not none else '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.rebounds_total if bs.rebounds_total is not none else '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.assists if bs.assists is not none else '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.steals if bs.steals is not none else '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.blocks if bs.blocks is not none else '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.turnovers if bs.turnovers is not none else '—' }}</td>
+                        <td style="padding:4px 6px;">{{ bs.field_goals_made }}-{{ bs.field_goals_attempted }}</td>
+                        <td style="padding:4px 6px;">{{ bs.three_pointers_made }}-{{ bs.three_pointers_attempted }}</td>
+                        <td style="padding:4px 6px;">{{ bs.free_throws_made }}-{{ bs.free_throws_attempted }}</td>
+                        <td style="padding:4px 6px;">{{ bs.plus_minus if bs.plus_minus is not none else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ── Play-by-play tab ── #}
+    <div id="tab-pbp" style="display:none;">
+        <div class="panel" style="max-height:640px;overflow-y:auto;">
+            {% for ev in play_by_play %}
+            <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;">
+                <div style="width:70px;flex-shrink:0;color:var(--text-muted);">Q{{ ev.period }} · {{ ev.clock }}</div>
+                <div style="width:40px;flex-shrink:0;color:var(--text-secondary);">{{ ev.team_tricode or '' }}</div>
+                <div style="flex:1;">{{ ev.description or ev.action_type }}</div>
+                <div style="width:60px;flex-shrink:0;text-align:right;color:var(--text-muted);">
+                    {% if ev.score_home is not none %}{{ ev.score_away }}-{{ ev.score_home }}{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+
+<script>
+function showNbaTab(tab) {
+    document.getElementById('tab-box').style.display = tab === 'box' ? 'block' : 'none';
+    document.getElementById('tab-pbp').style.display = tab === 'pbp' ? 'block' : 'none';
+    document.getElementById('tab-btn-box').classList.toggle('btn-primary', tab === 'box');
+    document.getElementById('tab-btn-pbp').classList.toggle('btn-primary', tab === 'pbp');
+}
+</script>
+{% endblock %}
