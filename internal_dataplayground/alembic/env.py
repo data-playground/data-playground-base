@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # from database import get_key
 
 # 2. Point Alembic to your Base metadata
-from models import Base
+from core.base_model import Base
 
 target_metadata = Base.metadata
 
