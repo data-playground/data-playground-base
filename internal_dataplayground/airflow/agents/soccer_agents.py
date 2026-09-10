@@ -246,23 +246,63 @@ _MATCH_STATUS_MAP = {
 }
 
 
-def _extract_team_name(team_obj) -> Optional[str]:
+def _extract_localized_text(obj, key: str = "Name") -> Optional[str]:
     """
-    FIFA team objects are typically shaped like
-    {"Name": [{"Locale": "en-GB", "Description": "Brazil"}], ...} — pull
-    the English description defensively. Falls back to None rather than
-    raising if the shape doesn't match (see FIELD-NAME CAVEAT).
+    FIFA embeds lots of things this way — team names, stadium names, and
+    apparently others — as a localized list under `key`, shaped like
+    {"Name": [{"Locale": "en-GB", "Description": "Maracanã"}, ...]}.
+    This pulls the English entry out defensively.
+
+    CONFIRMED BUG (production, 2026-09-10): the original version of this
+    function only existed as `_extract_team_name()` and was applied to
+    HomeTeam/AwayTeam only. `Stadium.Name` turned out to use the exact
+    same localized-list shape, but venue_name was reading `stadium.get("Name")`
+    directly — so it stored the raw list-of-dicts instead of a string,
+    and pymysql crashed trying to escape a dict as a SQL parameter
+    ("TypeError: sequence item 0: expected str instance, dict found"),
+    failing the whole ingest_fixtures task. This function is now shared
+    by every caller (team names AND venue) specifically so this class of
+    bug can't recur field-by-field — and it NEVER returns anything but a
+    str or None, never the raw list/dict, as a second line of defense.
+    See also parse_match_summary()'s _scalar_or_none() guard below, which
+    catches the same failure mode for any field this function doesn't
+    cover.
     """
-    if not isinstance(team_obj, dict):
+    if not isinstance(obj, dict):
         return None
-    names = team_obj.get("Name")
-    if isinstance(names, list):
-        for entry in names:
+    values = obj.get(key)
+    if isinstance(values, list):
+        for entry in values:
             if isinstance(entry, dict) and str(entry.get("Locale", "")).startswith("en"):
-                return entry.get("Description")
-        if names and isinstance(names[0], dict):
-            return names[0].get("Description")
-    return team_obj.get("TeamName") or team_obj.get("Description")
+                desc = entry.get("Description")
+                return desc if isinstance(desc, str) else None
+        if values and isinstance(values[0], dict):
+            desc = values[0].get("Description")
+            return desc if isinstance(desc, str) else None
+        return None
+    if isinstance(values, str):
+        return values
+    # Team objects sometimes carry a flatter TeamName/Description field
+    # instead of the localized Name list.
+    fallback = obj.get("TeamName") or obj.get("Description")
+    return fallback if isinstance(fallback, str) else None
+
+
+def _scalar_or_none(value):
+    """
+    Last line of defense before a value goes into parse_match_summary()'s
+    return dict, which the DAG binds directly as SQL parameters (see
+    dag_db.py::execute()). If FIFA hands back a nested dict/list where a
+    plain string or number was expected — as venue_name did in
+    production before this fix — a MySQL driver can't escape that as a
+    parameter and the whole ingest task dies. Coercing to None instead
+    means a field-shape surprise degrades to a NULL column, not a failed
+    task. See _extract_localized_text()'s docstring for the incident this
+    is responding to.
+    """
+    if isinstance(value, (dict, list)):
+        return None
+    return value
 
 
 def parse_match_summary(raw_match: dict) -> dict:
@@ -271,7 +311,9 @@ def parse_match_summary(raw_match: dict) -> dict:
     calendar-endpoint match dict. Every field is read defensively — see
     the module docstring's FIELD-NAME CAVEAT. Missing fields resolve to
     None rather than raising, so a shape surprise degrades to a thinner
-    row instead of failing the whole ingest run.
+    row instead of failing the whole ingest run. Every field that should
+    be a plain scalar is also passed through _scalar_or_none() as a
+    second line of defense — see that function's docstring.
     """
     status_code = raw_match.get("MatchStatus")
     try:
@@ -279,20 +321,17 @@ def parse_match_summary(raw_match: dict) -> dict:
     except (TypeError, ValueError):
         status_code = None
 
-    stadium = raw_match.get("Stadium")
-    venue_name = stadium.get("Name") if isinstance(stadium, dict) else None
-
     return {
         "fifa_competition_id": str(raw_match.get("IdCompetition", "")),
         "fifa_season_id":      str(raw_match.get("IdSeason", "")),
         "fifa_stage_id":       str(raw_match.get("IdStage", "")),
         "fifa_match_id":       str(raw_match.get("IdMatch", "")),
-        "home_team_name":      _extract_team_name(raw_match.get("HomeTeam")),
-        "away_team_name":      _extract_team_name(raw_match.get("AwayTeam")),
-        "home_team_score":     raw_match.get("HomeTeamScore"),
-        "away_team_score":     raw_match.get("AwayTeamScore"),
+        "home_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("HomeTeam"))),
+        "away_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("AwayTeam"))),
+        "home_team_score":     _scalar_or_none(raw_match.get("HomeTeamScore")),
+        "away_team_score":     _scalar_or_none(raw_match.get("AwayTeamScore")),
         "kickoff_at":          raw_match.get("Date"),  # ISO string — DAG parses to datetime
         "fifa_match_status_code": status_code,
         "status_label":        _MATCH_STATUS_MAP.get(status_code, "unknown"),
-        "venue_name":          venue_name,
+        "venue_name":          _scalar_or_none(_extract_localized_text(raw_match.get("Stadium"))),
     }

@@ -180,11 +180,27 @@ def ingest_fixtures():
 
         _store_raw("matches", comp["fifa_competition_id"], None, raw_matches)
 
+        upserted = 0
         for raw_match in raw_matches:
-            parsed = parse_match_summary(raw_match)
-            _upsert_match(comp["id"], parsed)
+            try:
+                parsed = parse_match_summary(raw_match)
+                _upsert_match(comp["id"], parsed)
+                upserted += 1
+            except Exception as exc:
+                # A single malformed match (see soccer_agents.py's
+                # _extract_localized_text() docstring for the incident
+                # that motivated this) used to kill the whole task,
+                # discarding every other match already fetched this run.
+                # The raw payload for ALL matches was already committed
+                # above regardless, so nothing is lost either way — this
+                # just stops one bad row from blocking the other ~167.
+                log.error(
+                    "Failed to parse/upsert one match for %s (raw IdMatch=%s): %s",
+                    comp["name"], raw_match.get("IdMatch"), exc,
+                )
+                continue
 
-        log.info("Ingested %d matches for %s", len(raw_matches), comp["name"])
+        log.info("Ingested %d/%d matches for %s", upserted, len(raw_matches), comp["name"])
 
 
 # ── TASK 2 — MATCH DETAILS + PLAY-BY-PLAY (raw only) ─────────────────────────
