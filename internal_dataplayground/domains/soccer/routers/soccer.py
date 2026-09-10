@@ -1,0 +1,113 @@
+# domains/soccer/routers/soccer.py
+"""
+routers/soccer.py — Soccer domain browsing UI (WO#34).
+
+Fixtures/results browsing only for this first pass — see WO#34's Step 1
+answer on dashboard/sidebar integration ("future fast-follow"). This
+router is registered in main.py and reachable at /soccer, but it is
+deliberately NOT wired into routers/dashboard.py's cross-domain summary
+or the sidebar's Modules nav in this pass.
+
+Match-level detail rendering reads straight from soccer_raw_payloads
+(see domains/soccer/models.py's module docstring on why match_details/
+match_events aren't normalized yet) rather than a dedicated ORM model —
+the payload is displayed as formatted JSON rather than parsed into a
+template-friendly shape. This is a known limitation to revisit once
+FIFA's field names are verified against a live response (see
+airflow/agents/soccer_agents.py's FIELD-NAME CAVEAT).
+"""
+import json
+
+from fastapi import APIRouter, Depends, Request, Query
+from fastapi.responses import HTMLResponse
+from sqlalchemy import select, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from core.templating import templates
+from domains.soccer.models import SoccerCompetition, SoccerMatch, SoccerRawPayload
+
+router = APIRouter(prefix="/soccer", tags=["Soccer"])
+
+
+@router.get("", response_class=HTMLResponse)
+async def soccer_home(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    competition_id: int | None = Query(default=None),
+    status: str | None = Query(default=None, description="scheduled | live | finished"),
+):
+    """Fixtures/results list, filterable by competition and status."""
+    comp_result = await db.execute(
+        select(SoccerCompetition)
+        .where(SoccerCompetition.is_active.is_(True))
+        .order_by(SoccerCompetition.name)
+    )
+    competitions = comp_result.scalars().all()
+
+    query = select(SoccerMatch).order_by(desc(SoccerMatch.kickoff_at))
+    if competition_id:
+        query = query.where(SoccerMatch.competition_id == competition_id)
+    if status:
+        query = query.where(SoccerMatch.status_label == status)
+    query = query.limit(100)
+
+    match_result = await db.execute(query)
+    matches = match_result.scalars().all()
+
+    return templates.TemplateResponse("soccer.html", {
+        "request": request,
+        "active_module": "soccer",
+        "competitions": competitions,
+        "matches": matches,
+        "selected_competition_id": competition_id,
+        "selected_status": status,
+    })
+
+
+@router.get("/match/{match_id}", response_class=HTMLResponse)
+async def soccer_match_detail(request: Request, match_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Single match view. Shows normalized summary fields plus the most
+    recently fetched raw /live and /timelines payloads, formatted as
+    JSON — see module docstring on why these aren't parsed further yet.
+    """
+    match_result = await db.execute(select(SoccerMatch).where(SoccerMatch.id == match_id))
+    match = match_result.scalar_one_or_none()
+    if not match:
+        return templates.TemplateResponse(
+            "soccer.html",
+            {
+                "request": request, "active_module": "soccer",
+                "competitions": [], "matches": [],
+                "selected_competition_id": None, "selected_status": None,
+                "error": "Match not found.",
+            },
+            status_code=404,
+        )
+
+    details_result = await db.execute(
+        select(SoccerRawPayload)
+        .where(SoccerRawPayload.endpoint == "match_details")
+        .where(SoccerRawPayload.fifa_match_id == match.fifa_match_id)
+        .order_by(desc(SoccerRawPayload.fetched_at))
+        .limit(1)
+    )
+    details_row = details_result.scalar_one_or_none()
+
+    events_result = await db.execute(
+        select(SoccerRawPayload)
+        .where(SoccerRawPayload.endpoint == "match_events")
+        .where(SoccerRawPayload.fifa_match_id == match.fifa_match_id)
+        .order_by(desc(SoccerRawPayload.fetched_at))
+        .limit(1)
+    )
+    events_row = events_result.scalar_one_or_none()
+
+    return templates.TemplateResponse("soccer_match_detail.html", {
+        "request": request,
+        "active_module": "soccer",
+        "match": match,
+        "details_json": json.dumps(details_row.payload, indent=2) if details_row else None,
+        "events_json": json.dumps(events_row.payload, indent=2) if events_row else None,
+    })

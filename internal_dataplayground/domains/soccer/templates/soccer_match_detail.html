@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Match Detail{% endblock %}
+{% block page_title %}Soccer{% endblock %}
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);">{{ match.home_team_name }} vs {{ match.away_team_name }}</span>
+{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/soccer">← Back to fixtures</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:960px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px;">
+
+    <div class="panel">
+        <div class="panel-title">Match</div>
+        <div style="font-size:14px;">
+            {{ match.home_team_name or 'TBD' }}
+            {% if match.home_team_score is not none %}<strong>&nbsp;{{ match.home_team_score }}</strong>{% endif %}
+            <span style="color:var(--text-muted);">&nbsp;vs&nbsp;</span>
+            {% if match.away_team_score is not none %}<strong>{{ match.away_team_score }}&nbsp;</strong>{% endif %}
+            {{ match.away_team_name or 'TBD' }}
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">
+            {% if match.kickoff_at %}{{ match.kickoff_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+            · {{ match.status_label }}
+            {% if match.venue_name %} · {{ match.venue_name }}{% endif %}
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-title">Raw match details (unparsed — see WO#34 notes)</div>
+        {% if details_json %}
+        <pre style="font-size:10px;overflow-x:auto;white-space:pre-wrap;">{{ details_json }}</pre>
+        {% else %}
+        <div class="empty-state"><p>Not fetched yet.</p></div>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <div class="panel-title">Raw play-by-play events (unparsed)</div>
+        {% if events_json %}
+        <pre style="font-size:10px;overflow-x:auto;white-space:pre-wrap;">{{ events_json }}</pre>
+        {% else %}
+        <div class="empty-state"><p>Not fetched yet.</p></div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Soccer{% endblock %}
+{% block page_title %}Soccer{% endblock %}
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);letter-spacing:.08em;">fixtures &amp; results</span>
+{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/soccer/settings">⚙ Settings</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:960px;margin:0 auto;padding:20px;">
+
+    {% if error %}
+    <div class="panel" style="margin-bottom:16px;color:var(--red);">{{ error }}</div>
+    {% endif %}
+
+    <div class="panel" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+        <div>
+            <div class="form-label">Competition</div>
+            <select class="form-select" onchange="window.location = '/soccer' + (this.value ? '?competition_id=' + this.value : '')">
+                <option value="">All competitions</option>
+                {% for c in competitions %}
+                <option value="{{ c.id }}" {% if selected_competition_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <div class="form-label">Status</div>
+            <select class="form-select" onchange="window.location = '/soccer' + (this.value ? '?status=' + this.value : '')">
+                <option value="">All</option>
+                <option value="scheduled" {% if selected_status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                <option value="live" {% if selected_status == 'live' %}selected{% endif %}>Live</option>
+                <option value="finished" {% if selected_status == 'finished' %}selected{% endif %}>Finished</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-title">Matches</div>
+        {% if matches %}
+        <div style="display:flex;flex-direction:column;">
+            {% for m in matches %}
+            <a href="/soccer/match/{{ m.id }}" style="text-decoration:none;color:inherit;">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border);">
+                    <span class="badge {% if m.status_label == 'live' %}badge-red{% elif m.status_label == 'finished' %}badge-green{% else %}badge-muted{% endif %}" style="width:74px;text-align:center;flex-shrink:0;">
+                        {{ m.status_label }}
+                    </span>
+                    <div style="flex:1;font-size:12px;color:var(--text-primary);">
+                        {{ m.home_team_name or 'TBD' }}
+                        {% if m.home_team_score is not none %}<strong>&nbsp;{{ m.home_team_score }}</strong>{% endif %}
+                        <span style="color:var(--text-muted);">&nbsp;vs&nbsp;</span>
+                        {% if m.away_team_score is not none %}<strong>{{ m.away_team_score }}&nbsp;</strong>{% endif %}
+                        {{ m.away_team_name or 'TBD' }}
+                    </div>
+                    <div style="font-size:10px;color:var(--text-muted);flex-shrink:0;white-space:nowrap;">
+                        {% if m.kickoff_at %}{{ m.kickoff_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>
+                No matches found for this filter yet.<br>
+                The daily ingest DAG populates this table — it may not have run
+                yet for a newly added competition.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

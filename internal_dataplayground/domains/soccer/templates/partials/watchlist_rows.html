@@ -1,0 +1,58 @@
+{# templates/partials/watchlist_rows.html
+   Returned by: GET  /soccer/settings                          (included inline as the initial <tbody> contents)
+                POST /soccer/settings/competitions/{id}/toggle
+                POST /soccer/settings/competitions/{id}/delete
+                POST /soccer/settings/competitions/add
+   Expects: competitions (list of SoccerCompetition)
+   Swapped into: #watchlist-body (innerHTML)
+
+   Toast feedback is fired client-side via hx-on:htmx:after-request on
+   each action element below, rather than the shared data-toast/afterSwap
+   mechanism in base.js — that mechanism keys off an attribute on the
+   swap TARGET (#watchlist-body itself), which this partial (the target's
+   new innerHTML) has no way to set from inside itself.
+
+   Every mutating endpoint returns THIS SAME partial on both success and
+   failure (see soccer_settings.py's _render_watchlist_rows docstring),
+   varying only the HTTP status code — so each hx-on below checks
+   event.detail.successful to pick the right wording rather than
+   assuming the request always worked.
+#}
+{% for c in competitions %}
+<tr style="border-bottom:1px solid var(--border);">
+    <td style="padding:8px 4px;">{{ c.name }}</td>
+    <td style="padding:8px 4px;color:var(--text-muted);">{{ c.fifa_competition_id }}</td>
+    <td style="padding:8px 4px;">
+        <span class="badge {% if c.is_active %}badge-green{% else %}badge-muted{% endif %}">
+            {{ 'active' if c.is_active else 'inactive' }}
+        </span>
+    </td>
+    <td style="padding:8px 4px;text-align:right;white-space:nowrap;">
+        <button
+            class="btn btn-sm"
+            hx-post="/soccer/settings/competitions/{{ c.id }}/toggle"
+            hx-target="#watchlist-body"
+            hx-swap="innerHTML"
+            hx-on:htmx:after-request="event.detail.successful ? showToast('{{ c.name }} {{ 'deactivated' if c.is_active else 'activated' }}') : showToast('Could not update {{ c.name }}', true)"
+        >
+            {{ 'Deactivate' if c.is_active else 'Activate' }}
+        </button>
+        <button
+            class="btn btn-sm btn-danger"
+            hx-post="/soccer/settings/competitions/{{ c.id }}/delete"
+            hx-target="#watchlist-body"
+            hx-swap="innerHTML"
+            hx-confirm="Remove {{ c.name }} from the watch list?"
+            hx-on:htmx:after-request="event.detail.successful ? showToast('Removed {{ c.name }}') : showToast('Could not remove {{ c.name }} — it already has matches. Deactivate instead.', true)"
+        >
+            Remove
+        </button>
+    </td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="4" style="padding:16px 4px;color:var(--text-muted);text-align:center;">
+        No competitions watched yet. Use "Add a Competition" below.
+    </td>
+</tr>
+{% endfor %}

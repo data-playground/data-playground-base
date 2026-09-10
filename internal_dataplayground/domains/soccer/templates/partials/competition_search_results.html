@@ -1,0 +1,44 @@
+{# templates/partials/competition_search_results.html
+   Returned by: GET /soccer/settings/competitions/search?q=...
+   Expects: results (list of {"competitionId": str, "name": str}),
+            watched_ids (set of fifa_competition_id already watched),
+            query (the search string, may be empty)
+   Swapped into: #competition-search-results
+
+   Each unwatched result's "Add" button POSTs to
+   /soccer/settings/competitions/add and targets #watchlist-body (NOT
+   this container) — a successful add should update the watch-list
+   table, not this search-results list. The button reflects success/
+   failure via hx-on:htmx:after-request the same way watchlist_rows.html
+   does, since /add can return a 409 (already watched) on this same
+   #watchlist-body target — see soccer_settings.py's add_competition.
+#}
+{% if results %}
+<div style="font-size:9px;color:var(--text-muted);margin-bottom:4px;">
+    Showing {{ results|length }} result{{ 's' if results|length != 1 else '' }}{% if query %} for "{{ query }}"{% endif %}
+    — FIFA's full list runs 200+, narrow with a search term.
+</div>
+{% for c in results %}
+<div style="display:flex;align-items:center;gap:10px;padding:6px 4px;border-bottom:1px solid var(--border);">
+    <div style="flex:1;font-size:11px;">{{ c.name }}</div>
+    <div style="font-size:9px;color:var(--text-muted);width:120px;">ID: {{ c.competitionId }}</div>
+    {% if c.competitionId in watched_ids %}
+    <span class="badge badge-muted" style="width:90px;text-align:center;">In watch list</span>
+    {% else %}
+    <form
+        hx-post="/soccer/settings/competitions/add"
+        hx-target="#watchlist-body"
+        hx-swap="innerHTML"
+        hx-on:htmx:after-request="event.detail.successful ? showToast('Added {{ c.name }} to watch list') : showToast('{{ c.name }} is already in the watch list', true)"
+        style="margin:0;"
+    >
+        <input type="hidden" name="fifa_competition_id" value="{{ c.competitionId }}">
+        <input type="hidden" name="name" value="{{ c.name }}">
+        <button class="btn btn-sm btn-green" type="submit" style="width:90px;">+ Add</button>
+    </form>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state"><p>No competitions matched{% if query %} "{{ query }}"{% endif %}.</p></div>
+{% endif %}

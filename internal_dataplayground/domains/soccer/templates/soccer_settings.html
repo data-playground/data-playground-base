@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Soccer Settings{% endblock %}
+{% block page_title %}Soccer{% endblock %}
+{% block topbar_meta %}
+    <span style="font-size:10px;color:var(--text-muted);letter-spacing:.08em;">settings</span>
+{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/soccer">← Back to fixtures</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:820px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px;">
+
+    {% if request.query_params.get('msg') %}
+    <div class="panel" style="color:var(--green);font-size:11px;">{{ request.query_params.get('msg') }}</div>
+    {% endif %}
+
+    {# ── INGEST WINDOW ── #}
+    <div class="panel">
+        <div class="panel-title">Daily Ingest Window</div>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px;line-height:1.6;">
+            How far back and forward the daily DAG pulls fixtures/results for each
+            watched competition, once it already has at least one match on file for it.
+            A brand-new competition still uses its own backfill start date the first time,
+            regardless of this window.
+        </p>
+        <form method="post" action="/soccer/settings/window" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+            <div>
+                <div class="form-label">Days in the past</div>
+                <input class="form-input" type="number" name="window_past_days" min="0" max="365"
+                       value="{{ settings.window_past_days }}" style="width:120px;">
+            </div>
+            <div>
+                <div class="form-label">Days in the future</div>
+                <input class="form-input" type="number" name="window_future_days" min="1" max="365"
+                       value="{{ settings.window_future_days }}" style="width:120px;">
+            </div>
+            <button class="btn btn-primary" type="submit">Save</button>
+        </form>
+    </div>
+
+    {# ── WATCH LIST ── #}
+    <div class="panel">
+        <div class="panel-title">Watched Competitions</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+                <tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em;">
+                    <th style="padding:6px 4px;">Name</th>
+                    <th style="padding:6px 4px;">FIFA ID</th>
+                    <th style="padding:6px 4px;">Status</th>
+                    <th style="padding:6px 4px;text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="watchlist-body">
+                {% include "partials/watchlist_rows.html" %}
+            </tbody>
+        </table>
+    </div>
+
+    {# ── ADD FROM FIFA ── #}
+    <div class="panel">
+        <div class="panel-title">Add a Competition</div>
+        <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+            Search FIFA's live competitions list (200+ available) and add any of them
+            to the watch list — no code change or redeploy needed.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+            <button
+                class="btn btn-primary"
+                type="button"
+                hx-get="/soccer/settings/competitions/search"
+                hx-target="#competition-search-results"
+                hx-indicator="#search-spinner"
+            >
+                ⟳ Fetch competitions from FIFA
+            </button>
+            <input
+                class="form-input"
+                type="text"
+                name="q"
+                placeholder="Filter by name (e.g. 'Olympic', 'MLS', 'Bundesliga')…"
+                hx-get="/soccer/settings/competitions/search"
+                hx-trigger="keyup changed delay:400ms"
+                hx-target="#competition-search-results"
+                hx-indicator="#search-spinner"
+                style="flex:1;min-width:220px;"
+            >
+        </div>
+        <div id="search-spinner" class="htmx-indicator" style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">
+            Talking to FIFA…
+        </div>
+        <div id="competition-search-results" style="display:flex;flex-direction:column;gap:2px;">
+            <div class="empty-state"><p>Click "Fetch competitions from FIFA" or start typing to search.</p></div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
+</style>
+{% endblock %}
