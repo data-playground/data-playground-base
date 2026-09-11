@@ -95,13 +95,13 @@ def _throttle() -> None:
     _last_request_at = time.monotonic()
 
 
-def _fetch_json(url: str, headers: dict, retries: int = 3) -> dict:
-    """GET with the throttle above, plus basic retry/backoff on 429/503."""
+def _fetch_json(url: str, headers: dict, retries: int = 3, timeout: float = 20.0) -> dict:
+    """GET with the throttle above, plus basic retry/backoff on 429/503/timeouts."""
     last_exc: Exception | None = None
     for attempt in range(retries):
         _throttle()
         try:
-            resp = requests.get(url, headers=headers, timeout=20)
+            resp = requests.get(url, headers=headers, timeout=timeout)
             if resp.status_code in (429, 503):
                 wait = (attempt + 1) * 5
                 log.warning("NBA API HTTP %s on attempt %d/%d — waiting %ds",
@@ -112,8 +112,10 @@ def _fetch_json(url: str, headers: dict, retries: int = 3) -> dict:
             return resp.json()
         except requests.RequestException as exc:
             last_exc = exc
-            log.warning("NBA API request failed (attempt %d/%d): %s", attempt + 1, retries, exc)
-            time.sleep(2 * (attempt + 1))
+            wait = 10 * (attempt + 1)
+            log.warning("NBA API request failed (attempt %d/%d): %s — waiting %ds",
+                        attempt + 1, retries, exc, wait)
+            time.sleep(wait)
     raise RuntimeError(f"NBA API unavailable after {retries} retries: {last_exc}")
 
 
@@ -320,6 +322,12 @@ ENDPOINTS: dict[str, dict] = {
         "version": 2,
         "table_name": "CommonAllPlayers",
         "fields": ["PERSON_ID", "DISPLAY_FIRST_LAST", "ROSTERSTATUS", "FROM_YEAR", "TO_YEAR", "TEAM_ID"],
+        # commonallplayers with IsOnlyCurrentSeason=0 (every player since
+        # 1946, several thousand rows) reliably read-timed-out at 20s from
+        # our Airflow host in production — bumped well past what the
+        # current-season-only call (fetch_all_players()'s default) needs,
+        # as headroom for the rare full-history sync too.
+        "timeout": 45.0,
     },
     "GAMES": {
         "endpoint": "https://stats.nba.com/stats/leaguegamefinder?",
@@ -401,14 +409,21 @@ def fetch_endpoint(key: str, params: dict):
     url_params = "&".join(f"{k}={v}" for k, v in params.items())
     url = f"{spec['endpoint']}{url_params}"
     headers = CORE_API_HEADERS if key == "GAME_DATA" else STATS_HEADERS
-    data = _fetch_json(url, headers)
+    data = _fetch_json(url, headers, timeout=spec.get("timeout", 20.0))
 
     if spec["version"] == 3:
         return _filter_data_to_skeleton(data[spec["table_name"]], spec["fields"])
     if spec["version"] == 2:
         return _filter_results_by_list(data["resultSets"], spec["fields"], spec["table_name"])
     if spec["version"] == 4:
-        return _get_items_in_list_of_dicts(data["modules"][0]["cards"], spec["fields"], spec["rename_fields"])
+        # "modules" is legitimately an empty list on any date with zero
+        # scheduled games — not a rare edge case: off-days, All-Star break,
+        # and the entire offseason (this bit Airflow the first time it ran,
+        # in September, months before tip-off) all return this shape. Treat
+        # it as "no games today," not an error.
+        modules = data.get("modules") or []
+        cards = modules[0].get("cards", []) if modules else []
+        return _get_items_in_list_of_dicts(cards, spec["fields"], spec["rename_fields"])
     raise ValueError(f"Unknown endpoint version for {key!r}")
 
 
@@ -486,8 +501,26 @@ def fetch_play_by_play(game_id: str) -> dict:
     return fetch_endpoint("PBP", {"GameID": game_id, "StartPeriod": "1", "EndPeriod": "4"})
 
 
-def fetch_all_players() -> list[dict]:
-    rows = fetch_endpoint("PLAYERS", {"LeagueID": "00", "IsOnlyCurrentSeason": "0"})
+def fetch_all_players(only_current_season: bool = True) -> list[dict]:
+    """
+    Defaults to the current season's roster only (a few hundred rows),
+    not the full multi-decade historical list (several thousand rows,
+    including players retired since the 1940s) — the latter is what the
+    original script requested unconditionally (IsOnlyCurrentSeason=0),
+    and it reliably read-timed-out from our Airflow host in production
+    even with a generous timeout, most likely NBA's servers being slow
+    to assemble that much history rather than anything specific to us.
+    v1's only use for this data is naming players in recent box
+    scores/play-by-play, which the current-season roster fully covers.
+
+    Pass only_current_season=False for a one-off full historical backfill
+    (e.g. before backfilling old seasons' box scores) — expect it to be
+    slow and possibly need retrying; it is not run on the weekly schedule.
+    """
+    rows = fetch_endpoint("PLAYERS", {
+        "LeagueID": "00",
+        "IsOnlyCurrentSeason": "0" if not only_current_season else "1",
+    })
     out = []
     for r in rows:
         out.append({
