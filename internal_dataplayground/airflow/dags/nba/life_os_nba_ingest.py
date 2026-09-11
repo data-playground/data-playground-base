@@ -2,9 +2,7 @@
 """
 Daily ingestion DAG for the NBA domain (WO#33).
 
-Discovers a day's games (defaults to "yesterday" — replaying
-nba_game_summary.py's own default — or a specific date passed via
-dag_run.conf), then for every discovered game pulls:
+Discovers a day's games, then for every discovered game pulls:
   - box score summary (game metadata: scores, arena, attendance, status)
   - all ten box score variants — traditional gets a dedicated table with a
     v1 UI; the other nine are ingested into normalized tables too, but are
@@ -19,14 +17,56 @@ through airflow/dag_db.py's raw-SQL helpers. All NBA-API-shape knowledge
 which has no DB code of its own; this DAG is the only thing that writes
 what nba_agents.py returns into MariaDB.
 
-Backfill: this task processes one date per run. To backfill a range,
-trigger this DAG once per date with `{"game_date": "YYYY-MM-DD"}` in the
-run's conf — either from the Airflow UI's "Trigger DAG w/ config", or by
-POSTing to the same dagRuns endpoint services/airflow_service.py already
-wraps, once per date. A loop that fires many runs in a tight burst risks
-the same rate-limiting nba_agents.py's throttle exists to avoid — space
-backfill runs out (e.g. a few seconds apart) rather than firing them all
-at once.
+Which date(s) a run processes — three ways, all going through the same
+_ingest_date() per date, so there's exactly one code path regardless of
+how it was triggered:
+
+  1. Normal daily schedule: no conf, so _resolve_dates() falls back to
+     this run's own Airflow logical date (context["ds"]) — for a run
+     actually executing on day D at 9am, that's D-1, replaying
+     nba_game_summary.py's own "yesterday" default. This is also exactly
+     what Airflow's own `airflow dags backfill -s START -e END
+     life_os_nba_ingest` command relies on, so that command works
+     out of the box with zero extra code here.
+
+  2. dag_run.conf = {"game_date": "YYYY-MM-DD"} — single-date override,
+     e.g. from the Airflow UI's "Trigger DAG w/ config".
+
+  3. dag_run.conf = {"start_date": "...", "end_date": "..."} — a range,
+     processed as a sequential loop *within this one task run*, one date
+     at a time, upserting after each date (not batched across the whole
+     range) so a multi-month backfill makes durable progress the whole
+     way through rather than risking it all on one final write. Re-running
+     is always safe — every write is an idempotent upsert (see _upsert()).
+
+     A large range is a genuinely long-running task: ~12 HTTP requests per
+     game (summary + 9 box-score variants + matchup + play-by-play) against
+     nba_agents.py's throttle means roughly 8-10 seconds per game, so a
+     full season (~1,200+ games) is realistically several hours. Consider
+     backfilling a month or two at a time instead of an entire season in
+     one run, both for visibility into progress and to keep a single task
+     from tying up a worker slot for that long.
+
+  4. Direct CLI, bypassing Airflow entirely — useful for watching a
+     backfill's output live, or if you'd rather not build a conf JSON blob:
+
+         python airflow/dags/nba/life_os_nba_ingest.py --date 2025-10-01
+         python airflow/dags/nba/life_os_nba_ingest.py \
+             --start-date 2025-10-01 --end-date 2025-10-31
+
+     Same _ingest_date() call the DAG task makes — no separate code path
+     to drift out of sync. Run it from wherever `agents` and `dag_db` are
+     already importable (e.g. inside the Airflow container, same as the
+     sys.path setup below assumes).
+
+No settings page for this — deliberately. A one-time historical backfill
+isn't a recurring workflow the way, say, finance CSV import settings are;
+the Airflow UI's own "Trigger DAG w/ config" already covers option 2/3
+above with no new code, and the CLI covers the same ground for anyone who'd
+rather use a terminal. Revisit if this turns out to be something you
+reach for often rather than a handful of times while backfilling history —
+services/airflow_service.py's trigger_airflow(dag_id, conf) already exists
+if a future settings page ever wants to fire this from a button.
 """
 from __future__ import annotations
 
@@ -123,20 +163,45 @@ def _ensure_players_exist(person_ids: set[int]) -> None:
     log.info("Ensured %d player row(s) exist (placeholder where not yet synced)", len(person_ids))
 
 
-def _target_date(conf: dict) -> datetime.date:
+def _date_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
+    if end < start:
+        raise ValueError(f"end date ({end}) is before start date ({start})")
+    days = (end - start).days
+    return [start + datetime.timedelta(days=i) for i in range(days + 1)]
+
+
+def _resolve_dates(conf: dict, ds: str | None) -> list[datetime.date]:
+    """
+    Figures out which date(s) this run processes. Checked in order:
+    explicit range, explicit single date, this run's own Airflow logical
+    date (normal schedule + native `airflow dags backfill` both flow
+    through here), then a bare today-1 fallback for the rare case this is
+    invoked with no Airflow context at all.
+    """
+    if conf.get("start_date") and conf.get("end_date"):
+        start = datetime.date.fromisoformat(conf["start_date"])
+        end = datetime.date.fromisoformat(conf["end_date"])
+        return _date_range(start, end)
     if conf.get("game_date"):
-        return datetime.date.fromisoformat(conf["game_date"])
-    return datetime.date.today() - datetime.timedelta(days=1)
+        return [datetime.date.fromisoformat(conf["game_date"])]
+    if ds:
+        return [datetime.date.fromisoformat(ds)]
+    return [datetime.date.today() - datetime.timedelta(days=1)]
 
 
-def task_ingest_games(**context) -> None:
-    conf = (context.get("dag_run").conf if context.get("dag_run") else None) or {}
-    target_date = _target_date(conf)
-
+def _ingest_date(target_date: datetime.date) -> int:
+    """
+    Full ingest for exactly one date: discover -> fetch -> upsert. Returns
+    the number of games ingested (0 on an off-day — not an error; see
+    nba_agents.py's discover_games_for_date, which returns [] rather than
+    raising when nothing's scheduled). The only function both the DAG task
+    and the CLI entry point at the bottom of this file call — there is no
+    second, parallel "backfill" implementation to drift out of sync.
+    """
     game_ids = discover_games_for_date(target_date)
     log.info("Discovered %d game(s) for %s", len(game_ids), target_date)
     if not game_ids:
-        return
+        return 0
 
     game_rows = []
     box_rows_by_key: dict[str, list[dict]] = {k: [] for k in BOX_SCORE_TABLES}
@@ -198,6 +263,20 @@ def task_ingest_games(**context) -> None:
     _upsert("nba_play_by_play", pbp_rows, key_cols=["game_id", "action_number"])
 
     log.info("Ingest complete for %s: %d game(s)", target_date, len(game_ids))
+    return len(game_ids)
+
+
+def task_ingest_games(**context) -> None:
+    conf = (context.get("dag_run").conf if context.get("dag_run") else None) or {}
+    dates = _resolve_dates(conf, context.get("ds"))
+
+    if len(dates) > 1:
+        log.info("Backfill range: %s date(s), %s .. %s", len(dates), dates[0], dates[-1])
+
+    for i, d in enumerate(dates, start=1):
+        if len(dates) > 1:
+            log.info("[%d/%d] ingesting %s", i, len(dates), d)
+        _ingest_date(d)
 
 
 default_args = {
@@ -218,3 +297,34 @@ with DAG(
         task_id="ingest_games",
         python_callable=task_ingest_games,
     )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Manually ingest NBA games for one date or a date range. "
+                     "Same _ingest_date() the scheduled DAG task calls — safe "
+                     "to re-run, every write is an idempotent upsert."
+    )
+    parser.add_argument("--date", help="Single date, YYYY-MM-DD.")
+    parser.add_argument("--start-date", help="Range start (inclusive), YYYY-MM-DD.")
+    parser.add_argument("--end-date", help="Range end (inclusive), YYYY-MM-DD.")
+    args = parser.parse_args()
+
+    if args.date:
+        cli_dates = [datetime.date.fromisoformat(args.date)]
+    elif args.start_date and args.end_date:
+        cli_dates = _date_range(
+            datetime.date.fromisoformat(args.start_date),
+            datetime.date.fromisoformat(args.end_date),
+        )
+    else:
+        parser.error("Pass either --date, or both --start-date and --end-date.")
+
+    print(f"Backfilling {len(cli_dates)} date(s): {cli_dates[0]} .. {cli_dates[-1]}")
+    for idx, day in enumerate(cli_dates, start=1):
+        print(f"[{idx}/{len(cli_dates)}] {day} ...", flush=True)
+        n = _ingest_date(day)
+        print(f"    {n} game(s) ingested" if n else "    no games scheduled")
+    print("Done.")
