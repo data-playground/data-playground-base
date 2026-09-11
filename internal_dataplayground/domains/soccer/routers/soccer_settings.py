@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date
 
 from database import get_db
 from core.templating import templates
@@ -152,14 +153,38 @@ async def add_competition(
     db: AsyncSession = Depends(get_db),
     fifa_competition_id: str = Form(...),
     name: str = Form(...),
+    backfill_from_date: str = Form(default=""),
 ):
+    """
+    Adds a competition to the watch list. backfill_from_date is optional
+    and only meaningful once, right now — see SoccerCompetition's model
+    docstring: it only affects ingest_fixtures() the very first time this
+    competition has zero matches on file. Leaving it blank means the
+    competition starts tracking from the ordinary rolling window (recent
+    past + near-term future) with no history pull. This field used to be
+    a hardcoded per-competition value in the DAG's own seed list — moved
+    here so backfill depth is a per-competition choice made when adding
+    it, not a code change.
+    """
     existing = await db.execute(
         select(SoccerCompetition).where(SoccerCompetition.fifa_competition_id == fifa_competition_id)
     )
     if existing.scalar_one_or_none():
         return await _render_watchlist_rows(request, db, status_code=409)
 
-    db.add(SoccerCompetition(fifa_competition_id=fifa_competition_id, name=name, is_active=True))
+    parsed_backfill = None
+    if backfill_from_date:
+        try:
+            parsed_backfill = date.fromisoformat(backfill_from_date)
+        except ValueError:
+            return await _render_watchlist_rows(request, db, status_code=422)
+
+    db.add(SoccerCompetition(
+        fifa_competition_id=fifa_competition_id,
+        name=name,
+        is_active=True,
+        backfill_from_date=parsed_backfill,
+    ))
     await db.commit()
 
     return await _render_watchlist_rows(request, db)

@@ -30,11 +30,18 @@
         hx-target="#watchlist-body"
         hx-swap="innerHTML"
         hx-on:htmx:after-request="event.detail.successful ? showToast('Added {{ c.name }} to watch list') : showToast('{{ c.name }} is already in the watch list', true)"
-        style="margin:0;"
+        style="margin:0;display:flex;align-items:center;gap:6px;"
     >
         <input type="hidden" name="fifa_competition_id" value="{{ c.competitionId }}">
         <input type="hidden" name="name" value="{{ c.name }}">
-        <button class="btn btn-sm btn-green" type="submit" style="width:90px;">+ Add</button>
+        <input
+            class="form-input"
+            type="date"
+            name="backfill_from_date"
+            title="Optional: pull history back to this date on first ingest. Leave blank to only track from now forward."
+            style="width:130px;padding:4px 6px;font-size:9px;"
+        >
+        <button class="btn btn-sm btn-green" type="submit" style="width:70px;flex-shrink:0;">+ Add</button>
     </form>
     {% endif %}
 </div>

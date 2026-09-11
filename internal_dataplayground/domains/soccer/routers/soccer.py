@@ -15,12 +15,20 @@ the payload is displayed as formatted JSON rather than parsed into a
 template-friendly shape. This is a known limitation to revisit once
 FIFA's field names are verified against a live response (see
 airflow/agents/soccer_agents.py's FIELD-NAME CAVEAT).
+
+`since` defaults to yesterday: competitions can carry years of backfilled
+history (World Cup 2022 onward, for example), and a fixtures list with no
+default date floor would be dominated by that archive rather than
+anything actually relevant right now. Passing an old `since` value (the
+"Show full history" link) bypasses the filter rather than introducing a
+second UI concept for it.
 """
 import json
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, desc
+from sqlalchemy import select, asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -35,9 +43,18 @@ async def soccer_home(
     request: Request,
     db: AsyncSession = Depends(get_db),
     competition_id: int | None = Query(default=None),
-    status: str | None = Query(default=None, description="scheduled | live | finished"),
+    status: str | None = Query(default=None, description="scheduled | live | postponed | finished"),
+    since: str | None = Query(default=None, description="YYYY-MM-DD — only show matches from this date forward. Defaults to yesterday."),
 ):
-    """Fixtures/results list, filterable by competition and status."""
+    """Fixtures/results list, filterable by competition, status, and a date floor (defaults to yesterday)."""
+    if since:
+        try:
+            since_date = date.fromisoformat(since)
+        except ValueError:
+            since_date = date.today() - timedelta(days=1)
+    else:
+        since_date = date.today() - timedelta(days=1)
+
     comp_result = await db.execute(
         select(SoccerCompetition)
         .where(SoccerCompetition.is_active.is_(True))
@@ -45,11 +62,18 @@ async def soccer_home(
     )
     competitions = comp_result.scalars().all()
 
-    query = select(SoccerMatch).order_by(desc(SoccerMatch.kickoff_at))
+    # Ascending, not descending — once the default view is "yesterday
+    # onward" this reads as an actual upcoming-fixtures list (soonest
+    # first) rather than surfacing the single furthest-out future match.
+    query = select(SoccerMatch).order_by(asc(SoccerMatch.kickoff_at))
     if competition_id:
         query = query.where(SoccerMatch.competition_id == competition_id)
     if status:
         query = query.where(SoccerMatch.status_label == status)
+    query = query.where(
+        (SoccerMatch.kickoff_at >= datetime.combine(since_date, datetime.min.time()))
+        | (SoccerMatch.kickoff_at.is_(None))
+    )
     query = query.limit(100)
 
     match_result = await db.execute(query)
@@ -62,6 +86,7 @@ async def soccer_home(
         "matches": matches,
         "selected_competition_id": competition_id,
         "selected_status": status,
+        "since": since_date.isoformat(),
     })
 
 
@@ -81,7 +106,7 @@ async def soccer_match_detail(request: Request, match_id: int, db: AsyncSession 
                 "request": request, "active_module": "soccer",
                 "competitions": [], "matches": [],
                 "selected_competition_id": None, "selected_status": None,
-                "error": "Match not found.",
+                "since": "", "error": "Match not found.",
             },
             status_code=404,
         )

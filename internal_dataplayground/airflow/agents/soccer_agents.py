@@ -229,20 +229,36 @@ def fetch_match_events(competition_id: str, season_id: str, stage_id: str, match
 
 # ── PARSING HELPERS (defensive — see module docstring's FIELD-NAME CAVEAT) ──
 
-# Best-effort FIFA MatchStatus -> label mapping. UNVERIFIED against a
-# live response (see module docstring). Codes not listed here fall
-# through to "unknown" rather than raising, so an unrecognized code never
-# blocks ingestion — worst case is a match stuck at
-# status_label="unknown" until this map is corrected against real data.
+# FIFA MatchStatus -> label mapping.
+#
+# Confirmed by project owner (2026-09-10) against their own reference:
+#   0 -> Completed
+#   1 -> Scheduled
+#   3 -> Decided on Penalties  (a completed match — bucketed as "finished",
+#        not "live"; a previous version of this map guessed 3 -> "live"
+#        with zero evidence, which this now corrects)
+#   7 -> Postponed             (distinct from "scheduled" — no longer
+#        expected at its listed kickoff time, but not resolved either)
+#   9 -> Forfeited/Suspended   (bucketed as "finished" so the details/
+#        events backfill task treats it as terminal and stops re-fetching
+#        it forever. Caveat: "Suspended" specifically could mean a match
+#        was stopped mid-play and may resume later, which "finished"
+#        would get wrong — no separate code was given to distinguish that
+#        case from a genuine forfeit, so this is a known, accepted
+#        imprecision rather than an oversight.)
+#
+# No code for "currently in progress" has been confirmed yet. Every code
+# not listed here — including any of 2/4/5/6/8, and any future code FIFA
+# might use — falls through to "unknown" rather than a guess. A previous
+# version of this map confidently guessed labels for untested codes; that
+# was wrong and is exactly the failure mode this map is now written to
+# avoid.
 _MATCH_STATUS_MAP = {
-    0: "scheduled",
-    1: "live",      # first half
-    2: "live",      # half-time
-    3: "live",      # second half
-    5: "finished",
-    6: "finished",  # abandoned — treated as finished so it stops re-fetching
-    7: "scheduled", # postponed
-    8: "finished",  # cancelled — treated as finished so it stops re-fetching
+    0: "finished",
+    1: "scheduled",
+    3: "finished",
+    7: "postponed",
+    9: "finished",
 }
 
 
@@ -253,21 +269,34 @@ def _extract_localized_text(obj, key: str = "Name") -> Optional[str]:
     {"Name": [{"Locale": "en-GB", "Description": "Maracanã"}, ...]}.
     This pulls the English entry out defensively.
 
-    CONFIRMED BUG (production, 2026-09-10): the original version of this
-    function only existed as `_extract_team_name()` and was applied to
-    HomeTeam/AwayTeam only. `Stadium.Name` turned out to use the exact
+    CONFIRMED BUG #1 (production, 2026-09-10): the original version of
+    this function only existed as `_extract_team_name()` and was applied
+    to HomeTeam/AwayTeam only. `Stadium.Name` turned out to use the exact
     same localized-list shape, but venue_name was reading `stadium.get("Name")`
     directly — so it stored the raw list-of-dicts instead of a string,
-    and pymysql crashed trying to escape a dict as a SQL parameter
-    ("TypeError: sequence item 0: expected str instance, dict found"),
-    failing the whole ingest_fixtures task. This function is now shared
-    by every caller (team names AND venue) specifically so this class of
-    bug can't recur field-by-field — and it NEVER returns anything but a
-    str or None, never the raw list/dict, as a second line of defense.
-    See also parse_match_summary()'s _scalar_or_none() guard below, which
-    catches the same failure mode for any field this function doesn't
-    cover.
+    and pymysql crashed trying to escape a dict as a SQL parameter. Fixed
+    by sharing this one function across every caller.
+
+    CONFIRMED BUG #2 (production, 2026-09-10, same day): every
+    HomeTeam/AwayTeam on the calendar/matches endpoint came back as
+    "TBD" in the UI — i.e. this function returned None for all of them —
+    while HomeTeamScore/AwayTeamScore populated correctly as plain
+    integers. That strongly suggests FIFA's calendar-list endpoint gives
+    team (and likely stadium) names as PLAIN STRINGS, not the nested
+    localized-list object this function originally assumed everywhere
+    (that nested shape may be real, but only on the richer /live detail
+    endpoint, not this summary one). The `isinstance(obj, str)` branch
+    below handles that directly. This is inferred from behavior, not
+    from a captured sample — if it's still wrong, pull one raw match
+    object from soccer_raw_payloads and we'll fix it against real data
+    instead of a third guess.
+
+    Never returns anything but a str or None — never the raw list/dict —
+    as a defense-in-depth measure; see parse_match_summary()'s
+    _scalar_or_none() guard for the same protection applied generically.
     """
+    if isinstance(obj, str):
+        return obj
     if not isinstance(obj, dict):
         return None
     values = obj.get(key)

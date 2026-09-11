@@ -18,7 +18,14 @@
     <div class="panel" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
         <div>
             <div class="form-label">Competition</div>
-            <select class="form-select" onchange="window.location = '/soccer' + (this.value ? '?competition_id=' + this.value : '')">
+            <select
+                class="form-select"
+                onchange="
+                    const p = new URLSearchParams(window.location.search);
+                    if (this.value) { p.set('competition_id', this.value); } else { p.delete('competition_id'); }
+                    window.location = '/soccer?' + p.toString();
+                "
+            >
                 <option value="">All competitions</option>
                 {% for c in competitions %}
                 <option value="{{ c.id }}" {% if selected_competition_id == c.id %}selected{% endif %}>{{ c.name }}</option>
@@ -27,14 +34,44 @@
         </div>
         <div>
             <div class="form-label">Status</div>
-            <select class="form-select" onchange="window.location = '/soccer' + (this.value ? '?status=' + this.value : '')">
+            <select
+                class="form-select"
+                onchange="
+                    const p = new URLSearchParams(window.location.search);
+                    if (this.value) { p.set('status', this.value); } else { p.delete('status'); }
+                    window.location = '/soccer?' + p.toString();
+                "
+            >
                 <option value="">All</option>
                 <option value="scheduled" {% if selected_status == 'scheduled' %}selected{% endif %}>Scheduled</option>
                 <option value="live" {% if selected_status == 'live' %}selected{% endif %}>Live</option>
+                <option value="postponed" {% if selected_status == 'postponed' %}selected{% endif %}>Postponed</option>
                 <option value="finished" {% if selected_status == 'finished' %}selected{% endif %}>Finished</option>
             </select>
         </div>
+        <div>
+            <div class="form-label">Since</div>
+            <input
+                class="form-input"
+                type="date"
+                value="{{ since }}"
+                style="width:150px;"
+                onchange="
+                    const p = new URLSearchParams(window.location.search);
+                    p.set('since', this.value);
+                    window.location = '/soccer?' + p.toString();
+                "
+            >
+        </div>
     </div>
+
+    {% if matches %}
+    <div style="font-size:9px;color:var(--text-muted);margin-bottom:8px;">
+        Showing matches from {{ since }} onward.
+        <a href="/soccer?since=1900-01-01{% if selected_competition_id %}&competition_id={{ selected_competition_id }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+           style="color:var(--accent);text-decoration:none;">Show full history →</a>
+    </div>
+    {% endif %}
 
     <div class="panel">
         <div class="panel-title">Matches</div>

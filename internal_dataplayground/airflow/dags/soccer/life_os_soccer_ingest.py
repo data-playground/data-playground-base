@@ -34,22 +34,6 @@ log = logging.getLogger(__name__)
 
 DAG_ID = "life_os_soccer_ingest"
 
-# ── WATCH LIST SEED ───────────────────────────────────────────────────────────
-# The project's tracked interests (per WO#34's own text) plus the World
-# Cup, which the source script used as its own test case. Adding a
-# competition later is a DB insert (see fetch_competitions() in
-# soccer_agents.py for IDs), not a code change — this list only controls
-# what gets seeded on a fresh install. backfill_from_date is a rough
-# "start of the period worth having history for" per competition, not
-# meant to be precise — it only matters for the very first run.
-_SEED_COMPETITIONS = [
-    {"fifa_competition_id": "17",         "name": "FIFA World Cup",                "backfill_from_date": "2022-01-01"},
-    {"fifa_competition_id": "2000001032", "name": "UEFA Champions League",         "backfill_from_date": "2024-07-01"},
-    {"fifa_competition_id": "2000000000", "name": "Barclays Premier League",       "backfill_from_date": "2024-07-01"},
-    {"fifa_competition_id": "2000000078", "name": "Campeonato Brasileiro Série A", "backfill_from_date": "2024-01-01"},
-    {"fifa_competition_id": "2000001035", "name": "Copa Libertadores",             "backfill_from_date": "2024-01-01"},
-]
-
 # Rolling window applied on every run after a competition's first
 # (keeps the daily job cheap — recent-result corrections + near-term
 # schedule, not a full re-pull of history every day). These are only the
@@ -75,24 +59,6 @@ def _get_window_days() -> tuple[int, int]:
     if row:
         return row["window_past_days"], row["window_future_days"]
     return ROLLING_WINDOW_PAST_DAYS, ROLLING_WINDOW_FUTURE_DAYS
-
-
-def seed_watched_competitions():
-    """Idempotently ensures every _SEED_COMPETITIONS row exists. Safe to run daily."""
-    for comp in _SEED_COMPETITIONS:
-        existing = fetch_one(
-            "SELECT id FROM soccer_competitions WHERE fifa_competition_id = %s",
-            (comp["fifa_competition_id"],),
-        )
-        if existing:
-            continue
-        execute(
-            "INSERT INTO soccer_competitions "
-            "(fifa_competition_id, name, is_active, backfill_from_date) "
-            "VALUES (%s, %s, 1, %s)",
-            (comp["fifa_competition_id"], comp["name"], comp["backfill_from_date"]),
-        )
-        log.info("Seeded watched competition: %s (%s)", comp["name"], comp["fifa_competition_id"])
 
 
 def _store_raw(endpoint: str, fifa_competition_id, fifa_match_id, payload):
@@ -151,9 +117,18 @@ def _upsert_match(competition_row_id: int, parsed: dict):
 # ── TASK 1 — FIXTURES / RESULTS ───────────────────────────────────────────────
 
 def ingest_fixtures():
-    """Pulls fixtures/results for every active watched competition."""
-    seed_watched_competitions()
+    """
+    Pulls fixtures/results for every active watched competition.
 
+    The watch list itself is NOT seeded or managed here anymore — it
+    used to be (see git history / the WO#34 conversation for why that
+    was removed). soccer_competitions is seeded once by the
+    s0cc3r_d0ma1n001 migration on initial install, and from there is
+    entirely self-service via /soccer/settings (search FIFA's live
+    competitions list and add/remove/deactivate). This DAG's only job is
+    to iterate over whatever's active in that table — it has no opinion
+    about which competitions "should" be watched.
+    """
     competitions = fetch_all(
         "SELECT id, fifa_competition_id, name, backfill_from_date "
         "FROM soccer_competitions WHERE is_active = 1"
