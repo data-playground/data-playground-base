@@ -442,7 +442,15 @@ def derive_season_from_game_id(game_id: str) -> str | None:
 
 
 def discover_games_for_date(game_date: date) -> list[str]:
-    rows = fetch_endpoint("GAME_DATA", {"GameDate": game_date.isoformat(), "platform": "web"})
+    # Param name and date format confirmed against a live nba.com request
+    # (core-api.nba.com/cp/api/.../gamecardfeed?gamedate=MM/DD/YYYY&platform=web)
+    # — this endpoint had apparently been tolerating our previous
+    # ISO-format/differently-cased "GameDate" param, but matching what
+    # nba.com's own frontend actually sends removes any doubt about that.
+    rows = fetch_endpoint("GAME_DATA", {
+        "gamedate": game_date.strftime("%m/%d/%Y"),
+        "platform": "web",
+    })
     return [r["GAME_ID"] for r in rows]
 
 
