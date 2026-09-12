@@ -468,7 +468,17 @@ def discover_games_for_season(season: str) -> list[str]:
 
 
 def fetch_game_summary(game_id: str) -> dict:
-    """Normalized flat dict — ready to become an nba_games row."""
+    """
+    Original source: BS_SUMMARY (stats.nba.com/boxscoresummaryv3). Currently
+    UNUSED by the ingest DAG — superseded by fetch_game_details_header()
+    below, which gets the same game-metadata job done from core-api.nba.com,
+    a host that has stayed reachable throughout the stats.nba.com blocking
+    (see the WO#33 conversation history). Left in place, not deleted, in
+    case stats.nba.com access is restored later (a proxy, etc.) and arena/
+    attendance/game-label data — which the core-api.nba.com replacement
+    below does not provide — becomes worth fetching from here again as a
+    supplementary call.
+    """
     raw = fetch_endpoint("BS_SUMMARY", {"GameID": game_id})
     game_date = None
     if raw.get("gameEt"):
@@ -497,6 +507,65 @@ def fetch_game_summary(game_id: str) -> dict:
         "away_score": away.get("score"),
         "away_wins": away.get("teamWins"),
         "away_losses": away.get("teamLosses"),
+    }
+
+
+_GAME_DETAILS_URL = "https://core-api.nba.com/cp/api/v1.9/gameDetails"
+
+
+def fetch_game_details_header(game_id: str) -> dict:
+    """
+    Replaces fetch_game_summary() as the ingest DAG's actual source for
+    game metadata — same core-api.nba.com host discover_games_for_date()
+    already uses, confirmed reachable throughout the stats.nba.com
+    blocking (unlike BS_SUMMARY above).
+
+    Trade-off, not a bug: this endpoint's "header" tab does not include
+    arena name/city/state, attendance, or the playoff game_label/
+    game_sub_label/series_text fields BS_SUMMARY provided — those come
+    back None here. Every consumer (models.py, the DAG, the templates)
+    already treats those columns as nullable, so this doesn't break
+    anything; it just means those fields go empty for games ingested
+    through this path until/unless a replacement source is found.
+
+    Also returns "share_url" (e.g. "https://www.nba.com/game/cle-vs-nyk-
+    0022500003") — not persisted to nba_games (no schema change for this
+    yet), but the exact URL prefix needed to reach that game's box-score
+    pages (append "/box-score?type=advanced" etc.), which is the next
+    piece of this puzzle once that page's data shape is confirmed.
+    """
+    url = f"{_GAME_DETAILS_URL}?gameid={game_id}&leagueid=00&platform=web&tabs=header"
+    data = _fetch_json(url, CORE_API_HEADERS)
+    card = (data.get("header") or {}).get("cardData") or {}
+    home = card.get("homeTeam") or {}
+    away = card.get("awayTeam") or {}
+
+    game_date = None
+    if card.get("gameTimeEastern"):
+        game_date = datetime.strptime(card["gameTimeEastern"][:10], "%Y-%m-%d").date()
+
+    return {
+        "game_date": game_date,
+        "game_status": card.get("gameStatus"),
+        "game_status_text": card.get("gameStatusText"),
+        "period": card.get("period"),
+        "duration": None,       # not present on this tab (gameDurationSeconds is seconds, not "M:SS" — convert if ever wanted)
+        "attendance": None,     # not present on this tab
+        "game_label": None,     # not present on this tab
+        "game_sub_label": None, # not present on this tab
+        "series_text": None,    # not present on this tab
+        "arena_name": None,     # not present on this tab
+        "arena_city": None,     # not present on this tab
+        "arena_state": None,    # not present on this tab
+        "home_team_id": home.get("teamId"),
+        "home_score": home.get("score"),
+        "home_wins": home.get("wins"),
+        "home_losses": home.get("losses"),
+        "away_team_id": away.get("teamId"),
+        "away_score": away.get("score"),
+        "away_wins": away.get("wins"),
+        "away_losses": away.get("losses"),
+        "share_url": card.get("shareUrl"),
     }
 
 

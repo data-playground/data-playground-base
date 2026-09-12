@@ -87,7 +87,7 @@ from agents.nba_agents import (
     derive_season_from_game_id,
     discover_games_for_date,
     fetch_box_score,
-    fetch_game_summary,
+    fetch_game_details_header,
     fetch_play_by_play,
     flatten_matchup_box_score,
     flatten_play_by_play,
@@ -189,7 +189,7 @@ def _resolve_dates(conf: dict, ds: str | None) -> list[datetime.date]:
     return [datetime.date.today() - datetime.timedelta(days=1)]
 
 
-def _ingest_date(target_date: datetime.date) -> int:
+def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False) -> int:
     """
     Full ingest for exactly one date: discover -> fetch -> upsert. Returns
     the number of games ingested (0 on an off-day — not an error; see
@@ -197,6 +197,18 @@ def _ingest_date(target_date: datetime.date) -> int:
     raising when nothing's scheduled). The only function both the DAG task
     and the CLI entry point at the bottom of this file call — there is no
     second, parallel "backfill" implementation to drift out of sync.
+
+    fetch_advanced_stats: when True, also fetches the 9 box-score variants,
+    matchups, and play-by-play — all still sourced from stats.nba.com,
+    which is currently blocking/timing out requests from this deployment
+    (see the WO#33 conversation history — this isn't specific to our code).
+    Defaults to False so a run — including a big backfill — populates
+    nba_games (scores, status, records) quickly via
+    fetch_game_details_header(), which uses core-api.nba.com and has
+    stayed reachable throughout, rather than burning ~10 minutes per game
+    on 11 calls known to fail. Flip back on once stats.nba.com access is
+    restored (proxy, etc.) or those calls are replaced with an
+    nba.com-scraping equivalent (in progress).
     """
     game_ids = discover_games_for_date(target_date)
     log.info("Discovered %d game(s) for %s", len(game_ids), target_date)
@@ -209,7 +221,7 @@ def _ingest_date(target_date: datetime.date) -> int:
     pbp_rows: list[dict] = []
 
     for game_id in game_ids:
-        summary = fetch_game_summary(game_id)
+        summary = fetch_game_details_header(game_id)
 
         game_rows.append({
             "game_id": game_id,
@@ -236,6 +248,9 @@ def _ingest_date(target_date: datetime.date) -> int:
             "series_text": summary["series_text"],
         })
 
+        if not fetch_advanced_stats:
+            continue
+
         for endpoint_key in BOX_SCORE_TABLES:
             parsed = fetch_box_score(endpoint_key, game_id)
             box_rows_by_key[endpoint_key].extend(
@@ -250,25 +265,28 @@ def _ingest_date(target_date: datetime.date) -> int:
 
     _upsert("nba_games", game_rows, key_cols=["game_id"])
 
-    person_ids = {row["person_id"] for rows in box_rows_by_key.values() for row in rows if row.get("person_id")}
-    person_ids |= {row["defender_person_id"] for row in matchup_rows if row.get("defender_person_id")}
-    person_ids |= {row["offensive_person_id"] for row in matchup_rows if row.get("offensive_person_id")}
-    person_ids |= {row["person_id"] for row in pbp_rows if row.get("person_id")}
-    _ensure_players_exist(person_ids)
+    if fetch_advanced_stats:
+        person_ids = {row["person_id"] for rows in box_rows_by_key.values() for row in rows if row.get("person_id")}
+        person_ids |= {row["defender_person_id"] for row in matchup_rows if row.get("defender_person_id")}
+        person_ids |= {row["offensive_person_id"] for row in matchup_rows if row.get("offensive_person_id")}
+        person_ids |= {row["person_id"] for row in pbp_rows if row.get("person_id")}
+        _ensure_players_exist(person_ids)
 
-    for endpoint_key, table in BOX_SCORE_TABLES.items():
-        _upsert(table, box_rows_by_key[endpoint_key], key_cols=["game_id", "person_id"])
-    _upsert("nba_box_score_matchup", matchup_rows,
-            key_cols=["game_id", "defender_person_id", "offensive_person_id"])
-    _upsert("nba_play_by_play", pbp_rows, key_cols=["game_id", "action_number"])
+        for endpoint_key, table in BOX_SCORE_TABLES.items():
+            _upsert(table, box_rows_by_key[endpoint_key], key_cols=["game_id", "person_id"])
+        _upsert("nba_box_score_matchup", matchup_rows,
+                key_cols=["game_id", "defender_person_id", "offensive_person_id"])
+        _upsert("nba_play_by_play", pbp_rows, key_cols=["game_id", "action_number"])
 
-    log.info("Ingest complete for %s: %d game(s)", target_date, len(game_ids))
+    log.info("Ingest complete for %s: %d game(s) (advanced stats %s)",
+              target_date, len(game_ids), "included" if fetch_advanced_stats else "skipped")
     return len(game_ids)
 
 
 def task_ingest_games(**context) -> None:
     conf = (context.get("dag_run").conf if context.get("dag_run") else None) or {}
     dates = _resolve_dates(conf, context.get("ds"))
+    fetch_advanced_stats = bool(conf.get("fetch_advanced_stats", False))
 
     if len(dates) > 1:
         log.info("Backfill range: %s date(s), %s .. %s", len(dates), dates[0], dates[-1])
@@ -276,7 +294,7 @@ def task_ingest_games(**context) -> None:
     for i, d in enumerate(dates, start=1):
         if len(dates) > 1:
             log.info("[%d/%d] ingesting %s", i, len(dates), d)
-        _ingest_date(d)
+        _ingest_date(d, fetch_advanced_stats=fetch_advanced_stats)
 
 
 default_args = {
@@ -285,19 +303,36 @@ default_args = {
     "retry_delay": datetime.timedelta(minutes=5),
 }
 
-with DAG(
-    dag_id="life_os_nba_ingest",
-    default_args=default_args,
-    schedule_interval="0 9 * * *",  # 9am UTC — after all US games have finished
-    start_date=datetime.datetime(2024, 10, 1),
-    catchup=False,
-    tags=["nba", "ingestion"],
-) as dag:
-    PythonOperator(
-        task_id="ingest_games",
-        python_callable=task_ingest_games,
-    )
 
+def _register_dag() -> DAG:
+    """
+    Builds the actual Airflow DAG object. Called only when this file is
+    imported by Airflow's own DAG processor/scheduler (see the bottom of
+    this file) — never when run directly as a CLI backfill script. A
+    manual run has no reason to construct Airflow scaffolding at all, and
+    doing so inside the same container the live scheduler runs in risks
+    contending with it over this exact dag_id's metadata row, which is
+    almost certainly why a direct `python3 life_os_nba_ingest.py` run can
+    appear to hang before printing anything: it's stuck constructing a
+    DAG object nothing is actually waiting on, not stuck on network I/O.
+    """
+    with DAG(
+        dag_id="life_os_nba_ingest",
+        default_args=default_args,
+        schedule="0 9 * * *",  # 9am UTC — after all US games have finished. (Airflow 3 renamed schedule_interval -> schedule.)
+        start_date=datetime.datetime(2024, 10, 1),
+        catchup=False,
+        tags=["nba", "ingestion"],
+    ) as dag:
+        PythonOperator(
+            task_id="ingest_games",
+            python_callable=task_ingest_games,
+        )
+    return dag
+
+
+if __name__ != "__main__":
+    dag = _register_dag()
 
 if __name__ == "__main__":
     import argparse
@@ -310,6 +345,12 @@ if __name__ == "__main__":
     parser.add_argument("--date", help="Single date, YYYY-MM-DD.")
     parser.add_argument("--start-date", help="Range start (inclusive), YYYY-MM-DD.")
     parser.add_argument("--end-date", help="Range end (inclusive), YYYY-MM-DD.")
+    parser.add_argument(
+        "--with-advanced-stats", action="store_true",
+        help="Also fetch the 9 box-score variants, matchups, and play-by-play "
+             "(stats.nba.com — currently blocked for us; off by default so a "
+             "backfill isn't stuck burning ~10 min/game on calls known to fail).",
+    )
     args = parser.parse_args()
 
     if args.date:
@@ -325,6 +366,6 @@ if __name__ == "__main__":
     print(f"Backfilling {len(cli_dates)} date(s): {cli_dates[0]} .. {cli_dates[-1]}")
     for idx, day in enumerate(cli_dates, start=1):
         print(f"[{idx}/{len(cli_dates)}] {day} ...", flush=True)
-        n = _ingest_date(day)
+        n = _ingest_date(day, fetch_advanced_stats=args.with_advanced_stats)
         print(f"    {n} game(s) ingested" if n else "    no games scheduled")
     print("Done.")
