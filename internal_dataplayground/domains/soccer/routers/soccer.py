@@ -19,9 +19,13 @@ airflow/agents/soccer_agents.py's FIELD-NAME CAVEAT).
 `since` defaults to yesterday: competitions can carry years of backfilled
 history (World Cup 2022 onward, for example), and a fixtures list with no
 default date floor would be dominated by that archive rather than
-anything actually relevant right now. Passing an old `since` value (the
-"Show full history" link) bypasses the filter rather than introducing a
-second UI concept for it.
+anything actually relevant right now. `until` defaults to tomorrow for
+the same reason on the future side — with matches backfilled and
+scheduled potentially years out, an unbounded upper edge is rarely what
+someone actually wants to see by default. "Show full history" (in
+soccer.html) explicitly overrides BOTH bounds to a wide sentinel range
+rather than omitting them — since omitting them now just falls back to
+the yesterday/tomorrow defaults instead of "no filter."
 """
 import json
 from datetime import date, datetime, timedelta
@@ -45,8 +49,9 @@ async def soccer_home(
     competition_id: int | None = Query(default=None),
     status: str | None = Query(default=None, description="scheduled | live | postponed | finished"),
     since: str | None = Query(default=None, description="YYYY-MM-DD — only show matches from this date forward. Defaults to yesterday."),
+    until: str | None = Query(default=None, description="YYYY-MM-DD — only show matches up to and including this date. Defaults to tomorrow."),
 ):
-    """Fixtures/results list, filterable by competition, status, and a date floor (defaults to yesterday)."""
+    """Fixtures/results list, filterable by competition, status, and a date range (defaults to yesterday through tomorrow)."""
     if since:
         try:
             since_date = date.fromisoformat(since)
@@ -54,6 +59,14 @@ async def soccer_home(
             since_date = date.today() - timedelta(days=1)
     else:
         since_date = date.today() - timedelta(days=1)
+
+    if until:
+        try:
+            until_date = date.fromisoformat(until)
+        except ValueError:
+            until_date = date.today() + timedelta(days=1)
+    else:
+        until_date = date.today() + timedelta(days=1)
 
     comp_result = await db.execute(
         select(SoccerCompetition)
@@ -74,6 +87,12 @@ async def soccer_home(
         (SoccerMatch.kickoff_at >= datetime.combine(since_date, datetime.min.time()))
         | (SoccerMatch.kickoff_at.is_(None))
     )
+    # end-of-day bound so a match kicking off later on until_date itself
+    # is still included, not excluded by an exact-midnight cutoff
+    query = query.where(
+        (SoccerMatch.kickoff_at <= datetime.combine(until_date, datetime.max.time()))
+        | (SoccerMatch.kickoff_at.is_(None))
+    )
     query = query.limit(100)
 
     match_result = await db.execute(query)
@@ -87,6 +106,7 @@ async def soccer_home(
         "selected_competition_id": competition_id,
         "selected_status": status,
         "since": since_date.isoformat(),
+        "until": until_date.isoformat(),
     })
 
 
@@ -106,7 +126,7 @@ async def soccer_match_detail(request: Request, match_id: int, db: AsyncSession 
                 "request": request, "active_module": "soccer",
                 "competitions": [], "matches": [],
                 "selected_competition_id": None, "selected_status": None,
-                "since": "", "error": "Match not found.",
+                "since": "", "until": "", "error": "Match not found.",
             },
             status_code=404,
         )

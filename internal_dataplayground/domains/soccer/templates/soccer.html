@@ -63,12 +63,26 @@
                 "
             >
         </div>
+        <div>
+            <div class="form-label">Until</div>
+            <input
+                class="form-input"
+                type="date"
+                value="{{ until }}"
+                style="width:150px;"
+                onchange="
+                    const p = new URLSearchParams(window.location.search);
+                    if (this.value) { p.set('until', this.value); } else { p.delete('until'); }
+                    window.location = '/soccer?' + p.toString();
+                "
+            >
+        </div>
     </div>
 
     {% if matches %}
     <div style="font-size:9px;color:var(--text-muted);margin-bottom:8px;">
-        Showing matches from {{ since }} onward.
-        <a href="/soccer?since=1900-01-01{% if selected_competition_id %}&competition_id={{ selected_competition_id }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+        Showing matches from {{ since }} through {{ until }}.
+        <a href="/soccer?since=1900-01-01&until=2100-01-01{% if selected_competition_id %}&competition_id={{ selected_competition_id }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}"
            style="color:var(--accent);text-decoration:none;">Show full history →</a>
     </div>
     {% endif %}
