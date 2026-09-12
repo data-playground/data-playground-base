@@ -26,18 +26,25 @@ dependency on models.py, database.py, or any FastAPI router/service, in
 line with the DAG/FastAPI boundary rule in CONTRIBUTING.md /
 GOVERNANCE.md §2.2.
 
-FIELD-NAME CAVEAT (same spirit as media_agents.py's original caveat
-before its WO#13 diff-and-fix pass): the source script never captured a
-sample match/detail/event JSON body, so the field names this module
-reads off calendar-endpoint results (Date, HomeTeam, AwayTeam,
-MatchStatus, etc. — see parse_match_summary()) are inferred from general
-knowledge of FIFA's public API shape, not verified against a captured
-response. Every read is defensive (dict.get(), never direct indexing)
-specifically because of this. VERIFY AGAINST A LIVE RESPONSE before
-trusting status_label/scores in production — see _MATCH_STATUS_MAP's own
-docstring. Nothing here blocks ingestion if a field is missing or a
-status code is unrecognized: worst case, a match row gets NULL scores or
-status_label="unknown", and the full raw JSON is still preserved in
+FIELD-NAME CAVEAT — UPDATE (2026-09-10): the original version of this
+module was written from general knowledge of FIFA's public API shape,
+not a captured sample, and it guessed wrong on the calendar endpoint's
+team fields specifically (guessed HomeTeam/AwayTeam with a nested `Name`
+list; the real fields are `Home`/`Away` with a nested `TeamName` list —
+see parse_match_summary() and _extract_localized_text()'s call sites,
+now fixed against a real captured Qatar-vs-Ecuador World Cup match).
+MatchStatus's meaning was also initially guessed backwards and has since
+been corrected against the project owner's own reference mapping — see
+_MATCH_STATUS_MAP's docstring. Scores (HomeTeamScore/AwayTeamScore) and
+Stadium.Name were right from the start and needed no correction.
+Everything below is still read defensively (dict.get(), never direct
+indexing) as a matter of course, but "defensive" only protects against
+missing/malformed data — it does not substitute for checking field names
+against a real response, which is what actually should have caught the
+Home/Away mistake sooner than it did. Nothing here blocks ingestion if a
+field is missing or a status code is unrecognized: worst case, a match
+row gets NULL scores or status_label="unknown", and the full raw JSON is
+still preserved in
 soccer_raw_payloads for reprocessing later once the real field names/
 codes are confirmed.
 """
@@ -355,8 +362,8 @@ def parse_match_summary(raw_match: dict) -> dict:
         "fifa_season_id":      str(raw_match.get("IdSeason", "")),
         "fifa_stage_id":       str(raw_match.get("IdStage", "")),
         "fifa_match_id":       str(raw_match.get("IdMatch", "")),
-        "home_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("HomeTeam"))),
-        "away_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("AwayTeam"))),
+        "home_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("Home"), key="TeamName")),
+        "away_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("Away"), key="TeamName")),
         "home_team_score":     _scalar_or_none(raw_match.get("HomeTeamScore")),
         "away_team_score":     _scalar_or_none(raw_match.get("AwayTeamScore")),
         "kickoff_at":          raw_match.get("Date"),  # ISO string — DAG parses to datetime

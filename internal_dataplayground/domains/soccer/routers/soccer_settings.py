@@ -111,6 +111,38 @@ async def update_window(
     return RedirectResponse(url="/soccer/settings?msg=Window+updated", status_code=303)
 
 
+@router.post("/competitions/{competition_id}/backfill", response_class=HTMLResponse)
+async def update_backfill_date(
+    request: Request,
+    competition_id: int,
+    db: AsyncSession = Depends(get_db),
+    backfill_from_date: str = Form(default=""),
+):
+    """
+    Edits an existing competition's backfill_from_date after the fact.
+    Unlike at add-time, this can genuinely change ingest behavior even
+    after matches already exist — see
+    life_os_soccer_ingest.py::_needs_backfill(), which compares this
+    value against the earliest match currently on file and pulls a wider
+    range on the next run if it now reaches further back.
+    """
+    result = await db.execute(select(SoccerCompetition).where(SoccerCompetition.id == competition_id))
+    comp = result.scalar_one_or_none()
+    if not comp:
+        return await _render_watchlist_rows(request, db, status_code=404)
+
+    if backfill_from_date:
+        try:
+            comp.backfill_from_date = date.fromisoformat(backfill_from_date)
+        except ValueError:
+            return await _render_watchlist_rows(request, db, status_code=422)
+    else:
+        comp.backfill_from_date = None
+
+    await db.commit()
+    return await _render_watchlist_rows(request, db)
+
+
 @router.post("/competitions/{competition_id}/toggle", response_class=HTMLResponse)
 async def toggle_competition(request: Request, competition_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(SoccerCompetition).where(SoccerCompetition.id == competition_id))

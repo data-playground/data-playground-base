@@ -68,6 +68,16 @@ class SoccerCompetition(Base):
     # future window instead. Lets a newly-added competition backfill its
     # season/tournament without every daily run for every OTHER
     # competition also re-pulling from this same far-back date.
+    #
+    # UPDATED (2026-09-10): this is now also editable after the fact from
+    # /soccer/settings, to go further back than the original backfill
+    # covered. See life_os_soccer_ingest.py::_needs_backfill() — the DAG
+    # re-checks this value against the earliest match currently on file
+    # for the competition on every run, not just "does it have zero
+    # matches." So setting this to an earlier date on an already-ingested
+    # competition genuinely triggers a wider pull on the next run (a
+    # one-time larger fetch until the gap closes, then it settles back to
+    # the cheap rolling window).
     backfill_from_date = Column(Date, nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())

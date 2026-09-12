@@ -61,6 +61,38 @@ def _get_window_days() -> tuple[int, int]:
     return ROLLING_WINDOW_PAST_DAYS, ROLLING_WINDOW_FUTURE_DAYS
 
 
+def _needs_backfill(comp: dict) -> bool:
+    """
+    True if this competition's configured backfill_from_date reaches
+    further back than the earliest match currently on file for it — i.e.
+    there's a gap to fill.
+
+    This is re-checked on EVERY run, not just "does this competition have
+    zero matches yet" (the original, simpler rule). That distinction
+    matters: backfill_from_date is now editable after the fact from
+    /soccer/settings (e.g. "actually, pull World Cup history back to
+    2018 too"), and the old rule would have silently ignored that edit
+    forever once a competition already had at least one match. With this
+    rule, editing it to an earlier date means the very next run notices
+    the gap and pulls the wider range — a one-time larger fetch until the
+    gap closes, then it settles back to the cheap rolling window on
+    subsequent runs since the earliest match on file will then already
+    reach back to (or past) backfill_from_date.
+    """
+    backfill = comp["backfill_from_date"]
+    if not backfill:
+        return False
+    earliest_row = fetch_one(
+        "SELECT MIN(kickoff_at) AS earliest FROM soccer_matches WHERE competition_id = %s",
+        (comp["id"],),
+    )
+    earliest = earliest_row["earliest"] if earliest_row else None
+    if earliest is None:
+        return True
+    earliest_date = earliest.date() if hasattr(earliest, "date") else earliest
+    return earliest_date > backfill
+
+
 def _store_raw(endpoint: str, fifa_competition_id, fifa_match_id, payload):
     execute(
         "INSERT INTO soccer_raw_payloads (endpoint, fifa_competition_id, fifa_match_id, payload) "
@@ -135,12 +167,14 @@ def ingest_fixtures():
     )
     today = date.today()
     past_days, future_days = _get_window_days()
+    log.info(
+        "Ingest window this run: %d days past, %d days future "
+        "(from soccer_settings if that row exists, else the module fallback constants)",
+        past_days, future_days,
+    )
 
     for comp in competitions:
-        has_matches = fetch_one(
-            "SELECT id FROM soccer_matches WHERE competition_id = %s LIMIT 1", (comp["id"],)
-        )
-        if not has_matches and comp["backfill_from_date"]:
+        if _needs_backfill(comp):
             backfill = comp["backfill_from_date"]
             from_date = backfill.isoformat() if hasattr(backfill, "isoformat") else str(backfill)[:10]
         else:

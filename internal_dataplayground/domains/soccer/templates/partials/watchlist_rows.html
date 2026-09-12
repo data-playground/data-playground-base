@@ -1,5 +1,6 @@
 {# templates/partials/watchlist_rows.html
    Returned by: GET  /soccer/settings                          (included inline as the initial <tbody> contents)
+                POST /soccer/settings/competitions/{id}/backfill
                 POST /soccer/settings/competitions/{id}/toggle
                 POST /soccer/settings/competitions/{id}/delete
                 POST /soccer/settings/competitions/add
@@ -27,8 +28,24 @@
             {{ 'active' if c.is_active else 'inactive' }}
         </span>
     </td>
-    <td style="padding:8px 4px;color:var(--text-muted);">
-        {{ c.backfill_from_date.strftime('%Y-%m-%d') if c.backfill_from_date else '—' }}
+    <td style="padding:8px 4px;">
+        <form
+            hx-post="/soccer/settings/competitions/{{ c.id }}/backfill"
+            hx-target="#watchlist-body"
+            hx-swap="innerHTML"
+            hx-on:htmx:after-request="event.detail.successful ? showToast('Updated backfill date for {{ c.name }}' + (this.querySelector('input').value ? ' — will pull further back on the next run if needed' : '')) : showToast('Could not update backfill date for {{ c.name }}', true)"
+            style="margin:0;display:flex;align-items:center;gap:4px;"
+        >
+            <input
+                class="form-input"
+                type="date"
+                name="backfill_from_date"
+                value="{{ c.backfill_from_date.strftime('%Y-%m-%d') if c.backfill_from_date else '' }}"
+                title="Set or clear this competition's backfill start date. Setting it earlier than the oldest match already on file triggers a deeper pull on the next ingest run."
+                style="width:126px;padding:3px 6px;font-size:9px;"
+            >
+            <button class="btn btn-sm" type="submit" title="Save">✓</button>
+        </form>
     </td>
     <td style="padding:8px 4px;text-align:right;white-space:nowrap;">
         <button
