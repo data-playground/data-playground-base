@@ -5,8 +5,10 @@ Daily FIFA data ingest for the soccer domain (WO#34).
 Pulls fixtures/results for every watched competition in
 soccer_competitions, upserts them into soccer_matches, and backfills
 match detail + play-by-play payloads (raw only — see
-domains/soccer/models.py's module docstring) for matches that have gone
-live or finished since the last run.
+domains/soccer/models.py's module docstring) for matches near kickoff or
+already finished — see ingest_match_details()'s own docstring for the
+two different re-fetch policies and the 2026-09-12 fix to how "already
+fetched" is determined.
 
 Per CONTRIBUTING.md / GOVERNANCE.md §2.2: this DAG never imports
 models.py, database.py, or any router/service. All DB access goes
@@ -102,7 +104,22 @@ def _store_raw(endpoint: str, fifa_competition_id, fifa_match_id, payload):
 
 
 def _upsert_match(competition_row_id: int, parsed: dict):
-    """Insert-or-update one match by its FIFA composite identity."""
+    """
+    Insert-or-update one match by its FIFA composite identity.
+
+    On UPDATE, details_fetched_at is cleared back to NULL whenever the
+    freshly-parsed status is anything other than 'finished' — keeping
+    that column's meaning unambiguous ("non-null == this match is
+    CURRENTLY finished and we've captured its final detail snapshot").
+    Without this, a match that was ever incorrectly locked in as
+    'finished' (as happened under the pre-2026-09-10 MatchStatus map bug
+    — see ingest_match_details()'s docstring) would keep showing a stale,
+    confusing details_fetched_at timestamp indefinitely even after
+    status_label self-corrects back to 'scheduled'. It's harmless either
+    way — ingest_match_details()'s query doesn't consult
+    details_fetched_at at all for non-finished matches — but leaving it
+    stale serves no purpose and is confusing to read directly.
+    """
     if not parsed["fifa_match_id"]:
         return
 
@@ -124,12 +141,13 @@ def _upsert_match(competition_row_id: int, parsed: dict):
         execute(
             "UPDATE soccer_matches SET home_team_name=%s, away_team_name=%s, "
             "home_team_score=%s, away_team_score=%s, kickoff_at=%s, "
-            "fifa_match_status_code=%s, status_label=%s, venue_name=%s "
+            "fifa_match_status_code=%s, status_label=%s, venue_name=%s, "
+            "details_fetched_at = CASE WHEN %s = 'finished' THEN details_fetched_at ELSE NULL END "
             "WHERE id=%s",
             (parsed["home_team_name"], parsed["away_team_name"],
              parsed["home_team_score"], parsed["away_team_score"], kickoff_at,
              parsed["fifa_match_status_code"], parsed["status_label"],
-             parsed["venue_name"], existing["id"]),
+             parsed["venue_name"], parsed["status_label"], existing["id"]),
         )
     else:
         execute(
@@ -214,13 +232,56 @@ def ingest_fixtures():
 
 # ── TASK 2 — MATCH DETAILS + PLAY-BY-PLAY (raw only) ─────────────────────────
 
+# How close to kickoff a non-finished match has to be before it's worth
+# re-checking /live and /timelines on every run. Lineups get announced
+# shortly before kickoff and events happen during the match, so this data
+# is only worth repeatedly polling right around matchday — not for a
+# fixture three months out. Not yet exposed on /soccer/settings (unlike
+# the fixtures window), but could be if it turns out to need tuning.
+DETAIL_FETCH_PROXIMITY_DAYS = 1
+
+
 def ingest_match_details():
-    """Backfills /live + /timelines (raw only) for live/finished matches not yet fetched."""
+    """
+    Backfills /live + /timelines (raw only).
+
+    Two different re-fetch policies depending on match state:
+      - FINISHED matches are fetched exactly once (details_fetched_at
+        gates this) — the result is final and won't change.
+      - Anything else (scheduled, postponed, or a not-yet-confirmed
+        "live" state) is refetched on EVERY run, but only within
+        +/- DETAIL_FETCH_PROXIMITY_DAYS of kickoff. details_fetched_at is
+        deliberately left NULL for these fetches — only a fetch that
+        lands on a genuinely 'finished' match locks it in for good.
+
+    CONTEXT (2026-09-12): this replaces the original rule of
+    "status_label IN ('live','finished') AND details_fetched_at IS NULL".
+    Under the ORIGINAL (buggy) MatchStatus map, MatchStatus code 1 —
+    which actually means "Scheduled" — was mistakenly mapped to "live".
+    Any still-scheduled match sitting at that code got a premature /live
+    fetch, which correctly came back with empty Players/Goals/Bookings/
+    Substitutions (the match hadn't started — FIFA had nothing to report
+    yet), and then details_fetched_at got permanently set, freezing that
+    match on an empty snapshot forever even after the status map was
+    corrected. The new rule fixes this going forward AND self-heals it:
+    since details_fetched_at is now only trusted for matches that are
+    CURRENTLY 'finished', any match wrongly locked in while still
+    scheduled becomes eligible for refetch again as soon as it's within
+    the proximity window, regardless of what details_fetched_at was set
+    to under the old logic.
+    """
     pending = fetch_all(
-        "SELECT id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id "
-        "FROM soccer_matches WHERE status_label IN ('live', 'finished') AND details_fetched_at IS NULL"
+        """
+        SELECT id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id, status_label
+        FROM soccer_matches
+        WHERE (status_label = 'finished' AND details_fetched_at IS NULL)
+           OR (status_label != 'finished'
+               AND kickoff_at BETWEEN (NOW() - INTERVAL %s DAY) AND (NOW() + INTERVAL %s DAY))
+        """,
+        (DETAIL_FETCH_PROXIMITY_DAYS, DETAIL_FETCH_PROXIMITY_DAYS),
     )
 
+    fetched = 0
     for match in pending:
         try:
             details = fetch_match_details(
@@ -234,16 +295,23 @@ def ingest_match_details():
                 match["fifa_stage_id"], match["fifa_match_id"],
             )
             _store_raw("match_events", match["fifa_competition_id"], match["fifa_match_id"], events)
+            fetched += 1
 
-            execute(
-                "UPDATE soccer_matches SET details_fetched_at = %s WHERE id = %s",
-                (datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), match["id"]),
-            )
+            # Only lock this match in as "done forever" once it's
+            # CURRENTLY finished (per soccer_matches.status_label, freshly
+            # updated by ingest_fixtures earlier in this same DAG run —
+            # fixtures_task runs before details_task). Anything else stays
+            # eligible for refetch every run within the proximity window.
+            if match["status_label"] == "finished":
+                execute(
+                    "UPDATE soccer_matches SET details_fetched_at = %s WHERE id = %s",
+                    (datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), match["id"]),
+                )
         except Exception as exc:
             log.error("Detail/events fetch failed for match %s: %s", match["fifa_match_id"], exc)
             continue
 
-    log.info("Processed detail/events backfill for %d candidate matches", len(pending))
+    log.info("Fetched details/events for %d/%d candidate matches", fetched, len(pending))
 
 
 # ── DAG DEFINITION ─────────────────────────────────────────────────────────────
