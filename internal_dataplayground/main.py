@@ -1,53 +1,31 @@
 from contextlib import asynccontextmanager
 
-from database import init_db
-from domains.blog.routers import blog  # WO2
-from domains.code_intel.routers import ci_files, ci_projects, ci_readme  # WO2
-from domains.explorer.routers import explorer  # WO4
-from domains.finance.routers import (  # WO5
-    finance_ledger,
-    finance_settings,
-    finance_summary,
-    finance_upload,
-)
-
-# ── Routers ────────────────────────────────────────────────────────────────────
-from domains.habits.routers import habits  # WO1
-from domains.jobs.routers import ats, job_config, jobs, staging  # WO3
-from domains.journal.routers import journal  # WO6
-from domains.media.routers import (  # WO9
-    media,
-    media_recommend,
-    media_search,
-    media_settings,
-)
-from domains.medium.routers import medium_feed, medium_settings  # WO#34
-from domains.nba.routers import nba_games  # WO#33
-from domains.planning.routers import (  # WO10
-    intent,
-    weekly_plan,
-    weekly_plan_generator,
-    weekly_plan_shopping,
-)
-from domains.recipes.routers import (  # WO7
-    pantry,
-    recipe_discovery,
-    recipe_extract,
-    recipes,
-)
-from domains.soccer.routers import soccer, soccer_settings  # WO#34
-from domains.workout.routers import (  # WO8
-    workout,
-    workout_log,
-    workout_plan_ai_generator,
-    workout_plans_crud,
-    workout_settings,
-)
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+from database import init_db
+
+# ── Routers ────────────────────────────────────────────────────────────────────
+from domains.habits.routers import habits # WO1
+from domains.blog.routers import blog # WO2
+from domains.code_intel.routers import ci_projects, ci_files, ci_readme # WO2
+from domains.jobs.routers import jobs, ats, staging, job_config # WO3
+from domains.explorer.routers import explorer # WO4
+from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
+from domains.journal.routers import journal # WO6
+from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes # WO7
+from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
+from domains.media.routers import media, media_search, media_recommend, media_settings # WO9
+from domains.planning.routers import intent, weekly_plan, weekly_plan_generator, weekly_plan_shopping # WO10
+
+from domains.nba.routers import nba_games # WO#33
+from domains.soccer.routers import soccer, soccer_settings # WO#34
+from domains.medium.routers import medium_feed, medium_settings # WO#35
+
 from routers import dashboard
+
 
 templates = Jinja2Templates(directory="templates")
 
@@ -154,7 +132,6 @@ async def not_found_handler(request: Request, exc: Exception):
 
 # ── Root redirect ──────────────────────────────────────────────────────────────
 from fastapi.responses import RedirectResponse
-
 
 @app.get("/")
 async def root():
