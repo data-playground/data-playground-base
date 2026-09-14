@@ -37,8 +37,7 @@ async def articles_page(request: Request, db: AsyncSession = Depends(get_db)):
     rows = result.scalars().all()
 
     articles = [_present(row) for row in rows]
-    return templates.TemplateResponse(
-        "medium/articles.html",
+    return templates.TemplateResponse("articles.html",
         {
             "request": request,
             "articles": articles,

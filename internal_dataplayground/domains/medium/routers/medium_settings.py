@@ -107,7 +107,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     rows = result.scalars().all()
     sources = [{"row": row, "feed_url": _preview_url(row)} for row in rows]
     return templates.TemplateResponse(
-        "medium/settings.html",
+        "settings.html",
         {
             "request": request,
             "sources": sources,
