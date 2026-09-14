@@ -49,6 +49,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from core.templating import templates
 from domains.medium.models import MediumFeedSource
 from domains.medium.rss_ingest import FeedSource as RssFeedSource
 from domains.medium.rss_ingest import FeedSourceType, build_feed_url
@@ -57,7 +58,7 @@ from services.airflow_service import trigger_airflow
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/medium/settings", tags=["medium-settings"])
-templates = Jinja2Templates(directory="templates")
+# templates = Jinja2Templates(directory="templates")
 
 
 def _preview_url(row: MediumFeedSource) -> str | None:

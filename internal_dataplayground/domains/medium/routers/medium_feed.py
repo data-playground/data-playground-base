@@ -18,11 +18,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from core.templating import templates
 from domains.medium.formatting import estimate_read_minutes, relative_time
 from domains.medium.models import MediumArticle
 
 router = APIRouter(prefix="/medium", tags=["medium"])
-templates = Jinja2Templates(directory="templates")
+# templates = Jinja2Templates(directory="templates")
 
 _LATEST_COUNT = 5  # how many articles get full feed-style rows in the default "mixed" view
 _PAGE_LIMIT = 60   # articles pulled per request — no pagination yet, revisit once volume warrants it

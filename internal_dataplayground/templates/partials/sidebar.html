@@ -64,6 +64,11 @@
             <span class="sidebar-text">NBA</span>
         </a>
 
+        <a class="nav-item {% if active_module == 'medium' %}active{% endif %}" href="/medium">
+            <i class="fa-solid fa-newspaper icon"></i>
+            <span class="sidebar-text">Medium</span>
+        </a>
+
         <a class="nav-item {% if active_module == 'explorer' %}active{% endif %}" href="/explorer">
             <i class="fas fa-database icon"></i>
             <span class="sidebar-text">SQL Explorer</span>
@@ -182,6 +187,15 @@
         {% if active_module in ('soccer', 'soccer_settings') %}
         <div class="nav-label">Soccer</div>
         <a class="nav-item {% if active_module == 'soccer_settings' %}active{% endif %}" href="/soccer/settings">
+            <span class="icon">⚙</span>
+            <span class="sidebar-text">Settings</span>
+        </a>
+        {% endif %}
+
+        {# ── Medium sub-nav ── #}
+        {% if active_module in ('medium', 'medium_settings') %}
+        <div class="nav-label">Medium</div>
+        <a class="nav-item {% if active_module == 'medium_settings' %}active{% endif %}" href="/medium/settings">
             <span class="icon">⚙</span>
             <span class="sidebar-text">Settings</span>
         </a>
