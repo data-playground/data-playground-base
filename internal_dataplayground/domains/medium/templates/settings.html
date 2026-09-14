@@ -1,101 +1,102 @@
 {% extends "base.html" %}
-{# NOTE: verify "content" is the actual block name in your real base.html —
-   this repo's base.html wasn't available to check against directly. #}
-
-{% block title %}Medium Feed Sources{% endblock %}
+{% block title %}Life OS — Medium Settings{% endblock %}
+{% block page_title %}Medium Settings{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/medium">← Back to Articles</a>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/medium/css/medium.css">{% endblock %}
 
 {% block content %}
-<h1>Medium Feed Sources</h1>
-<p>Profiles, publications, topics, and custom domains tracked by the daily RSS ingest.</p>
+<main class="main-content">
+<div class="settings-wrap">
 
-{% if banner %}
-<p style="padding: 10px 14px; border-radius: 6px; {{ 'background:#e6f4ea; color:#1a7f37;' if banner.kind == 'success' else 'background:#fdecea; color:#b3261e;' }}">
-  {{ banner.message }}
-</p>
-{% endif %}
+    {% if banner %}
+    <div class="banner {{ banner.kind }}">{{ banner.message }}</div>
+    {% endif %}
 
-<h2>Add a source</h2>
-<p>Paste the link you'd normally visit — a profile, a publication, a topic page, or even a specific article's URL. It'll figure out which feed shape fits.</p>
-<form method="post" action="/medium/settings/sources/detect">
-  <label>
-    Medium link
-    <input type="text" name="medium_url" required
-           placeholder="https://medium.com/@username, a publication, a tag page, or blog.example.com">
-  </label>
-
-  <label>
-    Label (optional)
-    <input type="text" name="label" placeholder="Friendly name">
-  </label>
-
-  <button type="submit">Detect &amp; add</button>
-</form>
-
-<details>
-  <summary>Add manually instead (pick the type yourself)</summary>
-  <form method="post" action="/medium/settings/sources">
-    <label>
-      Type
-      <select name="source_type" required>
-        {% for t in source_types %}
-        <option value="{{ t }}">{{ t }}</option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <label>
-      Identifier
-      <input type="text" name="identifier" required
-             placeholder="@username, publication-slug, tag-slug, or blog.example.com">
-    </label>
-
-    <label>
-      Label (optional)
-      <input type="text" name="label" placeholder="Friendly name">
-    </label>
-
-    <button type="submit">Add source</button>
-  </form>
-</details>
-
-<h2>Tracked sources</h2>
-
-<table>
-  <thead>
-    <tr>
-      <th>Type</th>
-      <th>Identifier</th>
-      <th>Label</th>
-      <th>Feed URL</th>
-      <th>Active</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for entry in sources %}
-    <tr>
-      <td>{{ entry.row.source_type }}</td>
-      <td>{{ entry.row.identifier }}</td>
-      <td>{{ entry.row.label or "" }}</td>
-      <td>
-        {% if entry.feed_url %}
-        <a href="{{ entry.feed_url }}" target="_blank" rel="noopener">{{ entry.feed_url }}</a>
-        {% else %}—{% endif %}
-      </td>
-      <td>{{ "Yes" if entry.row.is_active else "No" }}</td>
-      <td>
-        <form method="post" action="/medium/settings/sources/{{ entry.row.id }}/toggle" style="display:inline">
-          <button type="submit">{{ "Disable" if entry.row.is_active else "Enable" }}</button>
+    {# ── ADD SOURCE (AUTO-DETECT) ── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Add a Source</div>
+        <p style="font-size:11px;color:var(--text-secondary);margin:-6px 0 14px;">
+            Paste the link you'd normally visit — a profile, a publication, a topic page, or a specific article's URL.
+            It'll figure out which feed shape fits.
+        </p>
+        <form action="/medium/settings/sources/detect" method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="form-group" style="flex:2;min-width:220px;">
+                <label class="form-label">Medium Link</label>
+                <input class="form-input" type="text" name="medium_url" required
+                       placeholder="https://medium.com/@username, a publication, or blog.example.com" style="width:100%;">
+            </div>
+            <div class="form-group" style="flex:1;min-width:140px;">
+                <label class="form-label">Label (optional)</label>
+                <input class="form-input" type="text" name="label" placeholder="Friendly name" style="width:100%;">
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="visibility:hidden;">·</label>
+                <button type="submit" class="btn btn-primary">Detect &amp; Add</button>
+            </div>
         </form>
-        <form method="post" action="/medium/settings/sources/{{ entry.row.id }}/delete" style="display:inline"
-              onsubmit="return confirm('Remove this source?');">
-          <button type="submit">Remove</button>
+    </div>
+
+    {# ── ADD SOURCE (MANUAL FALLBACK) ── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Add Manually</div>
+        <form action="/medium/settings/sources" method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-select" name="source_type" required>
+                    {% for t in source_types %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="flex:1;min-width:180px;">
+                <label class="form-label">Identifier</label>
+                <input class="form-input" type="text" name="identifier" required
+                       placeholder="@username, publication-slug, tag-slug, or blog.example.com" style="width:100%;">
+            </div>
+            <div class="form-group" style="flex:1;min-width:140px;">
+                <label class="form-label">Label (optional)</label>
+                <input class="form-input" type="text" name="label" placeholder="Friendly name" style="width:100%;">
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="visibility:hidden;">·</label>
+                <button type="submit" class="btn btn-primary">+ Add</button>
+            </div>
         </form>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="6">No sources yet — add one above.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </div>
+
+    {# ── TRACKED SOURCES ── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Tracked Sources</div>
+        <div class="source-list">
+            {% for entry in sources %}
+            <div class="source-row {% if not entry.row.is_active %}inactive{% endif %}">
+                <span class="source-type-badge">{{ entry.row.source_type }}</span>
+                <div style="flex:1;min-width:0;">
+                    <div class="source-name">{{ entry.row.label or entry.row.identifier }}</div>
+                    <div class="source-meta">
+                        {{ entry.row.identifier }}{% if entry.feed_url %} &middot; <a href="{{ entry.feed_url }}" target="_blank" rel="noopener">feed</a>{% endif %}
+                    </div>
+                </div>
+                <div class="source-actions">
+                    <form method="post" action="/medium/settings/sources/{{ entry.row.id }}/toggle" style="display:inline">
+                        <button type="submit" class="toggle-active-btn {{ 'active' if entry.row.is_active else 'inactive' }}">
+                            {{ "Active" if entry.row.is_active else "Inactive" }}
+                        </button>
+                    </form>
+                    <form method="post" action="/medium/settings/sources/{{ entry.row.id }}/delete" style="display:inline"
+                          onsubmit="return confirm('Remove this source?');">
+                        <button type="submit" class="action-btn danger" title="Remove source">✕</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <p style="font-size:11px;color:var(--text-muted);padding:8px 0;">No sources yet — add one above.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+</main>
 {% endblock %}

@@ -44,7 +44,6 @@ from urllib.parse import quote
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,7 +57,6 @@ from services.airflow_service import trigger_airflow
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/medium/settings", tags=["medium-settings"])
-# templates = Jinja2Templates(directory="templates")
 
 
 def _preview_url(row: MediumFeedSource) -> str | None:
@@ -110,6 +108,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         "settings.html",
         {
             "request": request,
+            "active_module": "medium_settings",
             "sources": sources,
             "source_types": [t.value for t in FeedSourceType],
             "banner": _banner_from_query(request),

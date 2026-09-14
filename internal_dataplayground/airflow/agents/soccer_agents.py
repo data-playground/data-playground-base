@@ -371,3 +371,158 @@ def parse_match_summary(raw_match: dict) -> dict:
         "status_label":        _MATCH_STATUS_MAP.get(status_code, "unknown"),
         "venue_name":          _scalar_or_none(_extract_localized_text(raw_match.get("Stadium"))),
     }
+
+
+# ── ENDPOINT 3 PARSER — LINEUPS, GOALS, BOOKINGS, SUBS, COACHES ──────────────
+#
+# Everything below is parsed from the /live detail endpoint (NOT the
+# calendar endpoint above — note the different top-level key,
+# HomeTeam/AwayTeam here vs Home/Away on the calendar endpoint; FIFA is
+# genuinely inconsistent between its own endpoints, confirmed by direct
+# comparison of real payloads from both).
+#
+# Unlike parse_match_summary() above, this parser is built against a
+# real, fully-populated, finished match (Bournemouth 2-2 Brentford,
+# 2026-09-12) rather than guessed field shapes — every field name below
+# is confirmed, not inferred by analogy. Two things are still genuinely
+# unconfirmed and flagged where relevant: the red-card Bookings.Card
+# code (only yellow, code 1, was observed), and Coaches.Role's exact
+# meaning (0/1 pattern held for both teams independently, which is
+# decent evidence, but it's two data points, not a spec).
+
+def _first_locale_text(locale_list) -> Optional[str]:
+    """
+    Same idea as _extract_localized_text(), but for fields that are
+    directly a locale list themselves (e.g. PlayerName), not a dict
+    wrapping one under a named key. FIFA mixes "en-GB" and "en-gb"
+    casing across different parts of the same payload — confirmed in
+    this exact match's data — so the locale match is case-insensitive.
+    """
+    if not isinstance(locale_list, list):
+        return None
+    for entry in locale_list:
+        if isinstance(entry, dict) and str(entry.get("Locale", "")).lower().startswith("en"):
+            desc = entry.get("Description")
+            if isinstance(desc, str):
+                return desc
+    if locale_list and isinstance(locale_list[0], dict):
+        desc = locale_list[0].get("Description")
+        return desc if isinstance(desc, str) else None
+    return None
+
+
+def _parse_minute(minute_str: Optional[str]) -> Optional[int]:
+    """
+    "45'+4'" -> 49, "38'" -> 38. Stoppage time is added to the base
+    minute for a single sortable/placeable number — the verbatim string
+    is kept separately (minute_display) for on-screen display, since
+    "49'" would misrepresent a stoppage-time goal as a 49th-minute one.
+    """
+    if not minute_str:
+        return None
+    cleaned = minute_str.replace("'", "")
+    parts = [p for p in cleaned.split("+") if p.strip()]
+    try:
+        return sum(int(p) for p in parts)
+    except ValueError:
+        return None
+
+
+def parse_match_lineup_data(raw_details: dict) -> dict:
+    """
+    Parses a /live match-detail payload into normalized lineup/goal/
+    booking/substitution/coach rows, plus a handful of scalar match
+    fields (formation, possession, attendance). Intended to be called
+    only once a match is confirmed 'finished' — see
+    life_os_soccer_ingest.py::parse_finished_match_details().
+
+    Returns a dict with keys: home_formation, away_formation,
+    possession_home, possession_away, attendance, lineups, goals,
+    bookings, substitutions, coaches — the last five are lists of dicts
+    ready to bind as SQL parameters.
+    """
+    home = raw_details.get("HomeTeam") or {}
+    away = raw_details.get("AwayTeam") or {}
+    possession = raw_details.get("BallPossession") or {}
+
+    def _players(team: dict, side: str) -> list[dict]:
+        rows = []
+        for p in (team.get("Players") or []):
+            rows.append({
+                "team_side": side,
+                "fifa_player_id": str(p.get("IdPlayer", "")),
+                "shirt_number": _scalar_or_none(p.get("ShirtNumber")),
+                "player_name": _first_locale_text(p.get("PlayerName")),
+                # Confirmed: 0=GK, 1=DEF, 2=AM/wide, 3=FWD, 6=DM.
+                "position_code": _scalar_or_none(p.get("Position")),
+                "is_starter": p.get("Status") == 1,
+                "is_captain": bool(p.get("Captain")),
+                "on_field_at_finish": p.get("FieldStatus") == 1,
+            })
+        return rows
+
+    def _goals(team: dict, side: str) -> list[dict]:
+        rows = []
+        for g in (team.get("Goals") or []):
+            rows.append({
+                "team_side": side,
+                "fifa_player_id": str(g.get("IdPlayer", "")) if g.get("IdPlayer") else None,
+                "fifa_assist_player_id": str(g["IdAssistPlayer"]) if g.get("IdAssistPlayer") else None,
+                "minute_display": g.get("Minute"),
+                "minute_numeric": _parse_minute(g.get("Minute")),
+                "period": _scalar_or_none(g.get("Period")),
+            })
+        return rows
+
+    def _bookings(team: dict, side: str) -> list[dict]:
+        rows = []
+        for b in (team.get("Bookings") or []):
+            rows.append({
+                "team_side": side,
+                "fifa_player_id": str(b.get("IdPlayer", "")) if b.get("IdPlayer") else None,
+                "card_type_code": _scalar_or_none(b.get("Card")),
+                "minute_display": b.get("Minute"),
+                "minute_numeric": _parse_minute(b.get("Minute")),
+                "period": _scalar_or_none(b.get("Period")),
+                "reason": b.get("Reason") if isinstance(b.get("Reason"), str) else None,
+            })
+        return rows
+
+    def _subs(team: dict, side: str) -> list[dict]:
+        rows = []
+        for s in (team.get("Substitutions") or []):
+            rows.append({
+                "team_side": side,
+                "fifa_player_off_id": str(s.get("IdPlayerOff", "")) if s.get("IdPlayerOff") else None,
+                "fifa_player_on_id": str(s.get("IdPlayerOn", "")) if s.get("IdPlayerOn") else None,
+                "player_off_name": _first_locale_text(s.get("PlayerOffName")),
+                "player_on_name": _first_locale_text(s.get("PlayerOnName")),
+                "minute_display": s.get("Minute"),
+                "minute_numeric": _parse_minute(s.get("Minute")),
+                "period": _scalar_or_none(s.get("Period")),
+            })
+        return rows
+
+    def _coaches(team: dict, side: str) -> list[dict]:
+        rows = []
+        for c in (team.get("Coaches") or []):
+            rows.append({
+                "team_side": side,
+                "fifa_coach_id": str(c.get("IdCoach", "")) if c.get("IdCoach") else None,
+                "name": _first_locale_text(c.get("Name")),
+                "role_code": _scalar_or_none(c.get("Role")),
+            })
+        return rows
+
+    return {
+        "home_formation": _scalar_or_none(home.get("Tactics")),
+        "away_formation": _scalar_or_none(away.get("Tactics")),
+        "possession_home": _scalar_or_none(possession.get("OverallHome")),
+        "possession_away": _scalar_or_none(possession.get("OverallAway")),
+        "attendance": _scalar_or_none(raw_details.get("Attendance")),
+        "lineups": _players(home, "home") + _players(away, "away"),
+        "goals": _goals(home, "home") + _goals(away, "away"),
+        "bookings": _bookings(home, "home") + _bookings(away, "away"),
+        "substitutions": _subs(home, "home") + _subs(away, "away"),
+        "coaches": _coaches(home, "home") + _coaches(away, "away"),
+    }

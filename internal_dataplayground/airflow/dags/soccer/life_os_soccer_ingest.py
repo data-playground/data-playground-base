@@ -27,9 +27,10 @@ sys.path.insert(0, '/opt/airflow/project/airflow')
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from dag_db import fetch_all, fetch_one, execute
+from dag_db import fetch_all, fetch_one, execute, execute_many
 from agents.soccer_agents import (
     fetch_matches, fetch_match_details, fetch_match_events, parse_match_summary,
+    parse_match_lineup_data,
 )
 
 log = logging.getLogger(__name__)
@@ -314,6 +315,125 @@ def ingest_match_details():
     log.info("Fetched details/events for %d/%d candidate matches", fetched, len(pending))
 
 
+# ── TASK 3 — PARSE LINEUPS/GOALS/BOOKINGS/SUBS/COACHES (idempotent) ──────────
+
+def parse_finished_match_details():
+    """
+    Parses the raw /live payload already sitting in soccer_raw_payloads
+    into the normalized soccer_match_lineups / soccer_goals /
+    soccer_bookings / soccer_substitutions / soccer_coaches tables, for
+    every finished match that doesn't have lineup rows yet.
+
+    Deliberately makes NO FIFA API calls — it only reads what
+    ingest_match_details() already stored. This is what makes it both
+    the ongoing ingest step AND the backfill mechanism for every match
+    that was fetched before this parser existed: the NOT EXISTS guard
+    below doesn't care when a match's raw payload was captured, only
+    whether it's been parsed yet. No separate one-off backfill script is
+    needed — this task catches everything, forever, just by running
+    daily alongside the other two.
+
+    Guarded by soccer_match_lineups specifically (not a separate
+    "parsed" flag column) — and safe to re-run if it ever partially
+    fails, since all the INSERTs for one match go through a single
+    execute_many() call, which dag_db.py runs as one transaction. A
+    partial failure leaves soccer_match_lineups empty for that match, so
+    the NOT EXISTS guard picks it up again next run rather than treating
+    it as done.
+    """
+    pending = fetch_all(
+        """
+        SELECT sm.id, sm.fifa_match_id
+        FROM soccer_matches sm
+        WHERE sm.status_label = 'finished'
+          AND NOT EXISTS (SELECT 1 FROM soccer_match_lineups WHERE match_id = sm.id)
+        """
+    )
+
+    parsed_count = 0
+    for match in pending:
+        raw_row = fetch_one(
+            "SELECT payload FROM soccer_raw_payloads "
+            "WHERE endpoint = 'match_details' AND fifa_match_id = %s "
+            "ORDER BY fetched_at DESC LIMIT 1",
+            (match["fifa_match_id"],),
+        )
+        if not raw_row:
+            # Fetched-but-not-yet-detailed edge case: status is
+            # 'finished' but ingest_match_details() hasn't run for it
+            # yet this cycle (or ever). Nothing to parse yet — it'll be
+            # picked up once a match_details row exists.
+            continue
+
+        try:
+            payload = raw_row["payload"]
+            raw_details = json.loads(payload) if isinstance(payload, str) else payload
+            parsed = parse_match_lineup_data(raw_details)
+        except Exception as exc:
+            log.error("Failed to parse match_details for %s: %s", match["fifa_match_id"], exc)
+            continue
+
+        execute(
+            "UPDATE soccer_matches SET home_formation=%s, away_formation=%s, "
+            "possession_home=%s, possession_away=%s, attendance=%s WHERE id=%s",
+            (parsed["home_formation"], parsed["away_formation"],
+             parsed["possession_home"], parsed["possession_away"],
+             parsed["attendance"], match["id"]),
+        )
+
+        statements = []
+        for row in parsed["lineups"]:
+            statements.append((
+                "INSERT INTO soccer_match_lineups "
+                "(match_id, team_side, fifa_player_id, shirt_number, player_name, "
+                "position_code, is_starter, is_captain, on_field_at_finish) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (match["id"], row["team_side"], row["fifa_player_id"], row["shirt_number"],
+                 row["player_name"], row["position_code"], row["is_starter"],
+                 row["is_captain"], row["on_field_at_finish"]),
+            ))
+        for row in parsed["goals"]:
+            statements.append((
+                "INSERT INTO soccer_goals "
+                "(match_id, team_side, fifa_player_id, fifa_assist_player_id, "
+                "minute_display, minute_numeric, period) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (match["id"], row["team_side"], row["fifa_player_id"], row["fifa_assist_player_id"],
+                 row["minute_display"], row["minute_numeric"], row["period"]),
+            ))
+        for row in parsed["bookings"]:
+            statements.append((
+                "INSERT INTO soccer_bookings "
+                "(match_id, team_side, fifa_player_id, card_type_code, "
+                "minute_display, minute_numeric, period, reason) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (match["id"], row["team_side"], row["fifa_player_id"], row["card_type_code"],
+                 row["minute_display"], row["minute_numeric"], row["period"], row["reason"]),
+            ))
+        for row in parsed["substitutions"]:
+            statements.append((
+                "INSERT INTO soccer_substitutions "
+                "(match_id, team_side, fifa_player_off_id, fifa_player_on_id, "
+                "player_off_name, player_on_name, minute_display, minute_numeric, period) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (match["id"], row["team_side"], row["fifa_player_off_id"], row["fifa_player_on_id"],
+                 row["player_off_name"], row["player_on_name"], row["minute_display"],
+                 row["minute_numeric"], row["period"]),
+            ))
+        for row in parsed["coaches"]:
+            statements.append((
+                "INSERT INTO soccer_coaches (match_id, team_side, fifa_coach_id, name, role_code) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (match["id"], row["team_side"], row["fifa_coach_id"], row["name"], row["role_code"]),
+            ))
+
+        if statements:
+            execute_many(statements)
+
+        parsed_count += 1
+
+    log.info("Parsed lineup/event data for %d/%d finished matches", parsed_count, len(pending))
+
+
 # ── DAG DEFINITION ─────────────────────────────────────────────────────────────
 
 default_args = {
@@ -342,4 +462,9 @@ with DAG(
         python_callable=ingest_match_details,
     )
 
-    fixtures_task >> details_task
+    lineups_task = PythonOperator(
+        task_id="parse_finished_match_details",
+        python_callable=parse_finished_match_details,
+    )
+
+    fixtures_task >> details_task >> lineups_task

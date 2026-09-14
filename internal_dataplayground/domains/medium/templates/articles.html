@@ -1,57 +1,14 @@
 {% extends "base.html" %}
-{# NOTE: verify "content" is the actual block name in your real base.html —
-   this repo's base.html wasn't available to check against directly. #}
-
-{% block title %}Medium articles{% endblock %}
-
-{% block content %}
-<style>
-  .medium-page {
-    --mp-text: #1a1a1a;
-    --mp-text-secondary: #6b7280;
-    --mp-text-muted: #9ca3af;
-    --mp-border: #e5e7eb;
-    --mp-surface: #f7f7f8;
-    --mp-radius: 8px;
-  }
-  /* Swap these five variables for your own site's palette if it has one —
-     this page doesn't assume any existing design system. */
-  .medium-page a { color: inherit; text-decoration: none; }
-  .medium-page a:hover { text-decoration: underline; }
-  .medium-view { display: none; }
-  .medium-view.active { display: block; }
-  .medium-thumb {
-    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-    background: var(--mp-surface); border-radius: var(--mp-radius); color: var(--mp-text-muted);
-  }
-  .medium-tabbar { display: flex; gap: 8px; margin-bottom: 1.5rem; }
-  .medium-tabbar button {
-    padding: 6px 14px; border: 1px solid var(--mp-border); border-radius: 999px;
-    background: #fff; cursor: pointer; font-size: 14px; color: var(--mp-text-secondary);
-  }
-  .medium-tabbar button.active { background: var(--mp-text); color: #fff; border-color: var(--mp-text); }
-  .feed-row { display: flex; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--mp-border); }
-  .feed-row:last-child { border-bottom: none; }
-  .feed-thumb { width: 112px; height: 112px; flex-shrink: 0; }
-  .feed-tag {
-    font-size: 12px; padding: 2px 8px; border-radius: 6px;
-    background: var(--mp-surface); color: var(--mp-text-secondary); margin-right: 6px;
-  }
-  .compact-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--mp-border); font-size: 14px; }
-  .compact-row:last-child { border-bottom: none; }
-  .compact-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-  .compact-meta { color: var(--mp-text-muted); font-size: 12px; white-space: nowrap; }
-  .grid-wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
-  .grid-card { background: #fff; border: 1px solid var(--mp-border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .grid-thumb { height: 110px; }
-  .grid-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
-  .section-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mp-text-muted); margin: 1.5rem 0 0.5rem; }
-  .empty-state { padding: 3rem 1rem; text-align: center; color: var(--mp-text-secondary); }
-</style>
+{% block title %}Life OS — Medium{% endblock %}
+{% block page_title %}Medium{% endblock %}
+{% block topbar_actions %}
+    <a class="btn" href="/medium/settings">⚙ Settings</a>
+{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/medium/css/medium.css">{% endblock %}
 
 {% macro thumb() %}
 <div class="medium-thumb">
-  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5">
     <rect x="4" y="3" width="16" height="18" rx="2"></rect>
     <line x1="8" y1="8" x2="16" y2="8"></line>
     <line x1="8" y1="12" x2="16" y2="12"></line>
@@ -62,16 +19,14 @@
 
 {% macro feed_row(a) %}
 <div class="feed-row">
-  <div style="flex: 1; min-width: 0;">
-    <div style="font-size: 13px; color: var(--mp-text-secondary); margin-bottom: 6px;">
+  <div style="flex:1;min-width:0;">
+    <div class="feed-meta">
       {{ a.source_label }}{% if a.author %} &middot; {{ a.author }}{% endif %}{% if a.published_relative %} &middot; {{ a.published_relative }}{% endif %}
     </div>
-    <h3 style="margin: 0 0 6px; font-size: 18px; line-height: 1.3;">
-      <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
-    </h3>
+    <h3 class="feed-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></h3>
     <div>
       {% for tag in a.tags[:3] %}<span class="feed-tag">{{ tag }}</span>{% endfor %}
-      <span style="font-size: 12px; color: var(--mp-text-muted);">{{ a.read_minutes }} min read</span>
+      <span class="feed-read-time">{{ a.read_minutes }} min read</span>
     </div>
   </div>
   <div class="feed-thumb">{{ thumb() }}</div>
@@ -82,13 +37,9 @@
 <div class="grid-card">
   <div class="grid-thumb">{{ thumb() }}</div>
   <div class="grid-body">
-    <span style="font-size: 11px; color: var(--mp-text-muted);">{{ a.source_label }}</span>
-    <h4 style="margin: 0; font-size: 14px; line-height: 1.35;">
-      <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
-    </h4>
-    <div style="margin-top: auto; display: flex; justify-content: space-between; font-size: 11px; color: var(--mp-text-muted);">
-      <span>{{ a.author }}</span><span>{{ a.read_minutes }} min</span>
-    </div>
+    <span class="grid-source">{{ a.source_label }}</span>
+    <h4 class="grid-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></h4>
+    <div class="grid-footer"><span>{{ a.author }}</span><span>{{ a.read_minutes }} min</span></div>
   </div>
 </div>
 {% endmacro %}
@@ -97,74 +48,73 @@
 <div class="compact-row">
   <span class="compact-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></span>
   <span class="compact-meta">{{ a.source_label }}</span>
-  <span class="compact-meta" style="width: 52px; text-align: right;">{{ a.read_minutes }} min</span>
-  <span class="compact-meta" style="width: 36px; text-align: right;">{{ a.published_relative }}</span>
+  <span class="compact-meta" style="width:48px;text-align:right;">{{ a.read_minutes }} min</span>
+  <span class="compact-meta" style="width:32px;text-align:right;">{{ a.published_relative }}</span>
 </div>
 {% endmacro %}
 
-<div class="medium-page">
-  <h1>Medium articles</h1>
+{% block content %}
+<main class="main-content" id="main-content">
 
-  <div class="medium-tabbar" role="tablist" aria-label="Article view">
-    <button type="button" class="active" data-view="mixed">Latest</button>
-    <button type="button" data-view="feed">Feed</button>
-    <button type="button" data-view="grid">Card grid</button>
-    <button type="button" data-view="compact">Compact</button>
-  </div>
-
-  {% if not articles %}
-  <div class="empty-state">
-    <p>No articles yet. Once the daily RSS ingest runs, new articles will show up here.</p>
-  </div>
-  {% else %}
-
-  <div id="view-mixed" class="medium-view active">
-    {% for a in latest %}{{ feed_row(a) }}{% endfor %}
-    {% if more %}
-      <p class="section-label">Earlier</p>
-      {% for a in more %}{{ compact_row(a) }}{% endfor %}
-    {% endif %}
-  </div>
-
-  <div id="view-feed" class="medium-view">
-    {% for a in articles %}{{ feed_row(a) }}{% endfor %}
-  </div>
-
-  <div id="view-grid" class="medium-view">
-    <div class="grid-wrap">
-      {% for a in articles %}{{ grid_card(a) }}{% endfor %}
+    <div class="medium-tabbar" role="tablist" aria-label="Article view">
+        <button type="button" class="active" data-view="mixed">Latest</button>
+        <button type="button" data-view="feed">Feed</button>
+        <button type="button" data-view="grid">Card grid</button>
+        <button type="button" data-view="compact">Compact</button>
     </div>
-  </div>
 
-  <div id="view-compact" class="medium-view">
-    {% for a in articles %}{{ compact_row(a) }}{% endfor %}
-  </div>
+    {% if not articles %}
+    <div class="empty-state">No articles yet. Once the daily RSS ingest runs, new articles will show up here.</div>
+    {% else %}
 
-  {% endif %}
-</div>
+    <div id="view-mixed" class="medium-view active">
+        {% for a in latest %}{{ feed_row(a) }}{% endfor %}
+        {% if more %}
+            <div class="section-label">Earlier</div>
+            {% for a in more %}{{ compact_row(a) }}{% endfor %}
+        {% endif %}
+    </div>
+
+    <div id="view-feed" class="medium-view">
+        {% for a in articles %}{{ feed_row(a) }}{% endfor %}
+    </div>
+
+    <div id="view-grid" class="medium-view">
+        <div class="grid-wrap">
+            {% for a in articles %}{{ grid_card(a) }}{% endfor %}
+        </div>
+    </div>
+
+    <div id="view-compact" class="medium-view">
+        {% for a in articles %}{{ compact_row(a) }}{% endfor %}
+    </div>
+
+    {% endif %}
+
+</main>
 
 <script>
 (function () {
-  var tabbar = document.querySelector('.medium-tabbar');
-  if (!tabbar) return;
-  var buttons = tabbar.querySelectorAll('button');
-  var views = {
-    mixed: document.getElementById('view-mixed'),
-    feed: document.getElementById('view-feed'),
-    grid: document.getElementById('view-grid'),
-    compact: document.getElementById('view-compact')
-  };
-  function setView(view) {
-    Object.keys(views).forEach(function (key) {
-      if (views[key]) views[key].classList.toggle('active', key === view);
-    });
+    var tabbar = document.querySelector('.medium-tabbar');
+    if (!tabbar) return;
+    var buttons = tabbar.querySelectorAll('button');
+    var views = {
+        mixed: document.getElementById('view-mixed'),
+        feed: document.getElementById('view-feed'),
+        grid: document.getElementById('view-grid'),
+        compact: document.getElementById('view-compact')
+    };
+    function setView(view) {
+        Object.keys(views).forEach(function (key) {
+            if (views[key]) views[key].classList.toggle('active', key === view);
+        });
+        buttons.forEach(function (btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-view') === view);
+        });
+    }
     buttons.forEach(function (btn) {
-      btn.classList.toggle('active', btn.getAttribute('data-view') === view);
+        btn.addEventListener('click', function () { setView(btn.getAttribute('data-view')); });
     });
-  }
-  buttons.forEach(function (btn) {
-    btn.addEventListener('click', function () { setView(btn.getAttribute('data-view')); });
-  });
 })();
 </script>
 {% endblock %}

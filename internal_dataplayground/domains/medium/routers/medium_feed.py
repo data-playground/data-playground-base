@@ -13,7 +13,6 @@ is instant with no reload and no extra request.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +22,6 @@ from domains.medium.formatting import estimate_read_minutes, relative_time
 from domains.medium.models import MediumArticle
 
 router = APIRouter(prefix="/medium", tags=["medium"])
-# templates = Jinja2Templates(directory="templates")
 
 _LATEST_COUNT = 5  # how many articles get full feed-style rows in the default "mixed" view
 _PAGE_LIMIT = 60   # articles pulled per request — no pagination yet, revisit once volume warrants it
@@ -37,9 +35,11 @@ async def articles_page(request: Request, db: AsyncSession = Depends(get_db)):
     rows = result.scalars().all()
 
     articles = [_present(row) for row in rows]
-    return templates.TemplateResponse("articles.html",
+    return templates.TemplateResponse(
+        "articles.html",
         {
             "request": request,
+            "active_module": "medium",
             "articles": articles,
             "latest": articles[:_LATEST_COUNT],
             "more": articles[_LATEST_COUNT:],
