@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Example Publication - Medium</title>
+    <link>https://medium.com/example-publication</link>
+    <description>Fictional feed used only to test rss_ingest.py's parsing logic offline.</description>
+    <item>
+      <title>Understanding Distributed Consensus</title>
+      <link>https://medium.com/example-publication/understanding-distributed-consensus-abc123</link>
+      <guid isPermaLink="false">https://medium.com/p/abc123</guid>
+      <pubDate>Fri, 12 Sep 2025 14:30:00 GMT</pubDate>
+      <dc:creator>Jordan Rivera</dc:creator>
+      <category>distributed-systems</category>
+      <category>engineering</category>
+      <content:encoded><![CDATA[<p>Placeholder body text for testing paragraph one.</p><p>Placeholder body text for testing paragraph two.</p>]]></content:encoded>
+      <description>Placeholder summary for testing.</description>
+    </item>
+    <item>
+      <title>A Field Guide to Naming Things</title>
+      <link>https://medium.com/example-publication/a-field-guide-to-naming-things-def456</link>
+      <guid isPermaLink="false">https://medium.com/p/def456</guid>
+      <pubDate>Wed, 10 Sep 2025 09:15:00 GMT</pubDate>
+      <dc:creator>Sam Okafor</dc:creator>
+      <category>software-engineering</category>
+      <content:encoded><![CDATA[<p>Placeholder body text for a second fictional test article.</p>]]></content:encoded>
+      <description>Placeholder summary for testing.</description>
+    </item>
+  </channel>
+</rss>

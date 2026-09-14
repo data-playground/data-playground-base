@@ -1,5 +1,5 @@
-from jinja2 import ChoiceLoader, FileSystemLoader
 from fastapi.templating import Jinja2Templates
+from jinja2 import ChoiceLoader, FileSystemLoader
 
 # Shared Jinja2Templates instance for the whole app.
 #
@@ -29,4 +29,5 @@ templates.env.loader = ChoiceLoader([
     
     FileSystemLoader("domains/soccer/templates"),
     FileSystemLoader("domains/nba/templates"),
+    FileSystemLoader("domains/medium/templates"),
 ])
