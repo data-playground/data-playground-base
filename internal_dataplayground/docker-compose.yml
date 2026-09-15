@@ -46,6 +46,7 @@ services:
       - PYTHON_ANYWHERE=${PYTHON_ANYWHERE}
       - YOUTUBE_API=${YOUTUBE_API}
       - MARIA_DB=${MARIA_DB}
+      - AIRFLOW_SECRET_KEY=${AIRFLOW_SECRET_KEY}
     volumes:
       - .:/app
 
