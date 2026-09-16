@@ -101,7 +101,20 @@ def build_feed_url(source: FeedSource) -> str:
     if source.type is FeedSourceType.TOPIC:
         return f"https://medium.com/feed/tag/{source.identifier}"
     if source.type is FeedSourceType.CUSTOM_DOMAIN:
-        return f"https://{source.identifier.rstrip('/')}/feed"
+        # Defensive against an identifier that already has a scheme —
+        # e.g. someone typed "https://blog.example.com/" into the manual
+        # "Add Manually" form's Identifier field (which expects a bare
+        # domain) instead of just "blog.example.com". Without this,
+        # a stored identifier of "https://blog.example.com/" produces
+        # "https://https://blog.example.com/feed" — a real bug this
+        # fixes, both for new entries (medium_settings.py's add_source()
+        # now also normalizes on the way in) and for any row already
+        # sitting in the DB with the scheme baked in from before this fix.
+        domain = source.identifier
+        if "://" in domain:
+            domain = domain.split("://", 1)[1]
+        domain = domain.rstrip("/")
+        return f"https://{domain}/feed"
     raise ValueError(f"Unsupported feed source type: {source.type!r}")
 
 

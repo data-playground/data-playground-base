@@ -67,17 +67,19 @@ def _preview_url(row: MediumFeedSource) -> str | None:
 
 
 def _banner_from_query(request: Request) -> dict | None:
-    """Turns the redirect-carried query params from /sources/detect into
-    a template-ready banner. Query-param flash messages rather than
-    sessions/cookies — simplest thing that works for a single-user app.
+    """Turns the redirect-carried query params from /sources/detect and
+    /run-ingest into a template-ready banner. Query-param flash messages
+    rather than sessions/cookies — simplest thing that works for a
+    single-user app.
 
-    Only two states now that detection itself runs in Airflow, not
-    here: the trigger call to Airflow either succeeded (queued) or
-    couldn't be made at all (trigger_error). Whether detection itself
-    then succeeds or fails is Airflow's story, not this function's."""
+    Both endpoints only ever report whether the trigger call to Airflow
+    itself succeeded (queued) or couldn't be made at all (trigger_error)
+    — what happens after that (detection succeeding, the ingest run
+    finishing) is Airflow's story, not this function's."""
     qp = request.query_params
 
-    if qp.get("queued"):
+    queued = qp.get("queued")
+    if queued == "detect":
         return {
             "kind": "success",
             "message": (
@@ -86,13 +88,28 @@ def _banner_from_query(request: Request) -> dict | None:
                 "failure shows up as a failed task with the reason in its log."
             ),
         }
-    if qp.get("trigger_error"):
+    if queued == "ingest":
+        return {
+            "kind": "success",
+            "message": (
+                f'Queued a full ingest run (Airflow run {qp.get("run_id", "")}). '
+                "New or updated articles will show up on the Medium page once it finishes."
+            ),
+        }
+
+    error = qp.get("trigger_error")
+    if error == "detect":
         return {
             "kind": "error",
             "message": (
                 f'Could not reach Airflow to queue detection for "{qp.get("value", "")}". '
                 "Check the Airflow webserver, then try again."
             ),
+        }
+    if error == "ingest":
+        return {
+            "kind": "error",
+            "message": "Could not reach Airflow to queue the ingest run. Check the Airflow webserver, then try again.",
         }
     return None
 
@@ -132,12 +149,29 @@ async def detect_and_add_source(
     except httpx.HTTPError as exc:
         log.error("Failed to trigger life_os_medium_detect_source for %r: %s", medium_url, exc)
         return RedirectResponse(
-            url=f"/medium/settings?trigger_error=1&value={quote(medium_url)}",
+            url=f"/medium/settings?trigger_error=detect&value={quote(medium_url)}",
             status_code=303,
         )
 
     return RedirectResponse(
-        url=f"/medium/settings?queued=1&value={quote(medium_url)}&run_id={quote(run_id)}",
+        url=f"/medium/settings?queued=detect&value={quote(medium_url)}&run_id={quote(run_id)}",
+        status_code=303,
+    )
+
+
+@router.post("/run-ingest")
+async def run_ingest():
+    """Fires the daily life_os_medium_ingest DAG on demand — same trigger
+    mechanism as detect, no conf payload needed since the DAG reads its
+    own source list from medium_feed_sources at run time."""
+    try:
+        run_id = await trigger_airflow("life_os_medium_ingest", conf={})
+    except httpx.HTTPError as exc:
+        log.error("Failed to trigger life_os_medium_ingest: %s", exc)
+        return RedirectResponse(url="/medium/settings?trigger_error=ingest", status_code=303)
+
+    return RedirectResponse(
+        url=f"/medium/settings?queued=ingest&run_id={quote(run_id)}",
         status_code=303,
     )
 
@@ -150,6 +184,9 @@ async def add_source(
     db: AsyncSession = Depends(get_db),
 ):
     identifier = identifier.strip()
+    if "://" in identifier:  # someone pasted a full URL where a bare identifier was expected
+        identifier = identifier.split("://", 1)[1]
+    identifier = identifier.rstrip("/")
     if source_type is FeedSourceType.PROFILE:
         identifier = identifier.lstrip("@")
     if not identifier:

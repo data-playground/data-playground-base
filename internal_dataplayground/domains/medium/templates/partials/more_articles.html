@@ -1,0 +1,40 @@
+{# templates/partials/more_articles.html
+   Returned by GET /medium/more (HTMX "Show More" click).
+
+   Context:
+     articles    = list of presenter dicts (this batch only)
+     has_more    = bool
+     next_offset = int
+     sources     = list of selected source identifiers (str), for building
+                   the next "Show More" URL with the filter preserved
+
+   Reuses the exact same macros articles.html renders with, imported
+   rather than duplicated, so a paginated batch can never drift out of
+   sync with the initial page's markup.
+
+   Four out-of-band targets because all four views (mixed/feed/grid/
+   compact) hold the full article list simultaneously in the DOM at
+   once — that's what makes switching between them instant with no
+   request. One "Show More" click has to keep all four in sync, not
+   just whichever one is currently visible, or switching views after
+   paginating would show a shorter list than the one you were just on.
+#}
+{% from "articles.html" import feed_row, grid_card, compact_row, show_more_button %}
+
+<div hx-swap-oob="beforeend:#feed-items">
+    {% for a in articles %}{{ feed_row(a) }}{% endfor %}
+</div>
+
+<div hx-swap-oob="beforeend:#grid-items">
+    {% for a in articles %}{{ grid_card(a) }}{% endfor %}
+</div>
+
+<div hx-swap-oob="beforeend:#compact-items">
+    {% for a in articles %}{{ compact_row(a) }}{% endfor %}
+</div>
+
+<div hx-swap-oob="beforeend:#mixed-more-items">
+    {% for a in articles %}{{ compact_row(a) }}{% endfor %}
+</div>
+
+{{ show_more_button(has_more, next_offset, sources) }}

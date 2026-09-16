@@ -71,6 +71,35 @@
 /* ── EMPTY STATE ── */
 .empty-state { padding:48px 16px; text-align:center; color:var(--text-secondary); font-size:12px; }
 
+/* ── LINKS ── */
+/* No underline anywhere in this domain — default browser underline read
+   as awkward against these tight, small-type rows and cards. */
+.feed-title a, .grid-title a, .compact-title a, .source-meta a {
+    text-decoration: none;
+}
+.feed-title a:hover, .grid-title a:hover, .compact-title a:hover, .source-meta a:hover {
+    text-decoration: none;
+}
+
+/* ── SOURCE FILTER ── */
+.source-filter-form { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+
+/* ── SHOW MORE ── */
+.show-more-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 7px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.show-more-btn:hover { border-color: var(--accent); color: var(--accent); }
+.show-more-btn.htmx-request { opacity: 0.5; pointer-events: none; }
+
+
 /* ── SETTINGS PAGE ── */
 .settings-wrap { max-width:680px; }
 .settings-section { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:16px; box-shadow:var(--shadow); }

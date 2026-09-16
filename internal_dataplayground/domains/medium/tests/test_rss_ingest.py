@@ -15,11 +15,20 @@ def test_build_feed_url():
          "https://medium.com/feed/tag/distributed-systems"),
         (FeedSource(FeedSourceType.CUSTOM_DOMAIN, "blog.example.com"),
          "https://blog.example.com/feed"),
+        # Regression: a CUSTOM_DOMAIN identifier that already has a scheme
+        # baked in (e.g. pasted as a full URL into the manual-entry form)
+        # must not produce "https://https://..." — see WO#35 bug report.
+        (FeedSource(FeedSourceType.CUSTOM_DOMAIN, "https://blog.example.com"),
+         "https://blog.example.com/feed"),
+        (FeedSource(FeedSourceType.CUSTOM_DOMAIN, "https://blog.example.com/"),
+         "https://blog.example.com/feed"),
+        (FeedSource(FeedSourceType.CUSTOM_DOMAIN, "http://blog.example.com"),
+         "https://blog.example.com/feed"),
     ]
     for source, expected in cases:
         got = build_feed_url(source)
         assert got == expected, f"{source} -> {got!r}, expected {expected!r}"
-    print("build_feed_url: OK (5/5 source types)")
+    print(f"build_feed_url: OK ({len(cases)}/{len(cases)} cases)")
 
 
 def test_parse_sample_feed():

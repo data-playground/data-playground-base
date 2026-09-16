@@ -53,8 +53,36 @@
 </div>
 {% endmacro %}
 
+{% macro show_more_button(has_more, next_offset, sources) %}
+{% if has_more %}
+<button type="button" class="show-more-btn"
+        hx-get="/medium/more?offset={{ next_offset }}{% for s in sources %}&sources={{ s | urlencode }}{% endfor %}"
+        hx-target="this" hx-swap="outerHTML">
+  Show more
+</button>
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <main class="main-content" id="main-content">
+
+    <form method="get" action="/medium" class="source-filter-form">
+      <div class="form-group">
+        <label class="form-label" for="source-filter">Filter by source</label>
+        <select id="source-filter" name="sources" class="form-select" multiple size="5"
+                onchange="this.form.submit()" style="min-width:220px;">
+          {% for opt in source_options %}
+          <option value="{{ opt.value }}" {% if opt.value in selected_sources %}selected{% endif %}>{{ opt.label }}</option>
+          {% else %}
+          <option value="" disabled>No tracked sources yet</option>
+          {% endfor %}
+        </select>
+        <span style="font-size:9px;color:var(--text-muted);">Hold Cmd/Ctrl to select more than one</span>
+      </div>
+      {% if selected_sources %}
+      <a href="/medium" class="action-btn" style="align-self:flex-start;">Clear filter</a>
+      {% endif %}
+    </form>
 
     <div class="medium-tabbar" role="tablist" aria-label="Article view">
         <button type="button" class="active" data-view="mixed">Latest</button>
@@ -64,32 +92,44 @@
     </div>
 
     {% if not articles %}
-    <div class="empty-state">No articles yet. Once the daily RSS ingest runs, new articles will show up here.</div>
+    <div class="empty-state">
+        {% if selected_sources %}No articles match this filter.{% else %}No articles yet. Once the daily RSS ingest runs, new articles will show up here.{% endif %}
+    </div>
     {% else %}
 
     <div id="view-mixed" class="medium-view active">
         {% for a in latest %}{{ feed_row(a) }}{% endfor %}
         {% if more %}
             <div class="section-label">Earlier</div>
-            {% for a in more %}{{ compact_row(a) }}{% endfor %}
+            <div id="mixed-more-items">
+                {% for a in more %}{{ compact_row(a) }}{% endfor %}
+            </div>
         {% endif %}
     </div>
 
     <div id="view-feed" class="medium-view">
-        {% for a in articles %}{{ feed_row(a) }}{% endfor %}
+        <div id="feed-items">
+            {% for a in articles %}{{ feed_row(a) }}{% endfor %}
+        </div>
     </div>
 
     <div id="view-grid" class="medium-view">
-        <div class="grid-wrap">
+        <div class="grid-wrap" id="grid-items">
             {% for a in articles %}{{ grid_card(a) }}{% endfor %}
         </div>
     </div>
 
     <div id="view-compact" class="medium-view">
-        {% for a in articles %}{{ compact_row(a) }}{% endfor %}
+        <div id="compact-items">
+            {% for a in articles %}{{ compact_row(a) }}{% endfor %}
+        </div>
     </div>
 
     {% endif %}
+
+    <div id="show-more-container" style="margin-top:20px; text-align:center;">
+        {{ show_more_button(has_more, next_offset, selected_sources) }}
+    </div>
 
 </main>
 

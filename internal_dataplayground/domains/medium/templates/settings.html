@@ -2,6 +2,9 @@
 {% block title %}Life OS — Medium Settings{% endblock %}
 {% block page_title %}Medium Settings{% endblock %}
 {% block topbar_actions %}
+    <form method="post" action="/medium/settings/run-ingest" style="display:inline;">
+        <button type="submit" class="btn">↻ Run Ingest</button>
+    </form>
     <a class="btn" href="/medium">← Back to Articles</a>
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="/static/medium/css/medium.css">{% endblock %}
