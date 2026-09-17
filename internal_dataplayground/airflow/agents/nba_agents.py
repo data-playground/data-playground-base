@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import time
 from datetime import date, datetime
 
@@ -567,6 +568,164 @@ def fetch_game_details_header(game_id: str) -> dict:
         "away_losses": away.get("losses"),
         "share_url": card.get("shareUrl"),
     }
+
+
+def _parse_iso_minutes(iso_duration: str | None) -> str | None:
+    """Converts "PT37M30.00S" -> "37:30". Returns None for falsy/empty input (DNP players)."""
+    if not iso_duration:
+        return None
+    match = re.match(r"PT(\d+)M([\d.]+)S", iso_duration)
+    if not match:
+        return None
+    minutes = int(match.group(1))
+    seconds = int(float(match.group(2)))
+    return f"{minutes}:{seconds:02d}"
+
+
+def _find_card(modules: list[dict] | None, card_type: str) -> dict | None:
+    """Finds the first card of a given cardType across a tab's modules list."""
+    for module in modules or []:
+        for card in (module.get("cards") or []):
+            if card.get("cardType") == card_type:
+                return card.get("cardData") or {}
+    return None
+
+
+def fetch_game_details_full(game_id: str) -> dict:
+    """
+    Single core-api.nba.com call replacing THREE former stats.nba.com calls
+    (BS_SUMMARY + BS_TRAD + PBP) — confirmed by hand that
+    tabs=header,summary,pbp,boxscore returns everything those three used to
+    provide, from the host that's stayed reachable throughout the
+    stats.nba.com blocking (see the WO#33 conversation history).
+
+    A few shape quirks worth documenting, since they're easy to get wrong
+    silently:
+      - boxscore.homeTeam/awayTeam.score is always 0 in this tab — the real
+        score lives in header.cardData.homeTeam/awayTeam.score instead.
+      - boxscore.arena has empty arenaCity/arenaState — the populated arena
+        (name/city/state) lives in a "gameInfo" card buried in summary's
+        modules list, found via _find_card() since module order/count
+        isn't guaranteed stable across games.
+      - pbp scoreHome/scoreAway are strings ("0", "2", ...), not ints.
+      - pbp shot coordinates are "x"/"y", not the stats.nba.com "xLegacy"/
+        "yLegacy" names — same meaning, different keys.
+      - pbp has no per-action "actionId" field in this shape (only
+        actionNumber) — that column stays null for rows from this source.
+      - "minutes" here is an ISO-8601 duration ("PT37M30.00S"), not the
+        "MM:SS" string stats.nba.com used — converted via _parse_iso_minutes().
+
+    Returns {"summary": {...}, "traditional_rows": [...], "pbp_rows": [...]}.
+    Any of these can legitimately come back empty for a given game (not
+    every game has every tab populated) — treat that as "no data," not an
+    error; callers should not assume a non-empty result.
+    """
+    url = f"{_GAME_DETAILS_URL}?gameid={game_id}&leagueid=00&platform=web&tabs=header,summary,pbp,boxscore"
+    data = _fetch_json(url, CORE_API_HEADERS)
+
+    card = (data.get("header") or {}).get("cardData") or {}
+    home = card.get("homeTeam") or {}
+    away = card.get("awayTeam") or {}
+
+    game_date = None
+    if card.get("gameTimeEastern"):
+        game_date = datetime.strptime(card["gameTimeEastern"][:10], "%Y-%m-%d").date()
+
+    boxscore = data.get("boxscore") or {}
+    game_info = _find_card((data.get("summary") or {}).get("modules"), "gameInfo") or {}
+    arena = game_info.get("arena") or {}
+
+    summary = {
+        "game_date": game_date,
+        "game_status": card.get("gameStatus"),
+        "game_status_text": card.get("gameStatusText"),
+        "period": card.get("period"),
+        "duration": None,       # not present in any of these tabs in "M:SS" form
+        "attendance": boxscore.get("attendance"),
+        "game_label": None,     # not present in these tabs
+        "game_sub_label": None,
+        "series_text": None,
+        "arena_name": arena.get("arenaName") or None,
+        "arena_city": arena.get("arenaCity") or None,
+        "arena_state": arena.get("arenaState") or None,
+        "home_team_id": home.get("teamId"),
+        "home_score": home.get("score"),
+        "home_wins": home.get("wins"),
+        "home_losses": home.get("losses"),
+        "away_team_id": away.get("teamId"),
+        "away_score": away.get("score"),
+        "away_wins": away.get("wins"),
+        "away_losses": away.get("losses"),
+        "share_url": card.get("shareUrl"),
+    }
+
+    traditional_rows = []
+    for side in ("homeTeam", "awayTeam"):
+        team = boxscore.get(side) or {}
+        team_id = team.get("teamId")
+        for p in team.get("players") or []:
+            if p.get("personId") is None:
+                continue
+            stats = p.get("statistics") or {}
+            traditional_rows.append({
+                "game_id": game_id,
+                "team_id": team_id,
+                "person_id": p.get("personId"),
+                "position": p.get("position") or None,
+                "minutes": _parse_iso_minutes(stats.get("minutes")),
+                "field_goals_made": stats.get("fieldGoalsMade"),
+                "field_goals_attempted": stats.get("fieldGoalsAttempted"),
+                "field_goal_percentage": stats.get("fieldGoalsPercentage"),
+                "three_pointers_made": stats.get("threePointersMade"),
+                "three_pointers_attempted": stats.get("threePointersAttempted"),
+                "three_pointer_percentage": stats.get("threePointersPercentage"),
+                "free_throws_made": stats.get("freeThrowsMade"),
+                "free_throws_attempted": stats.get("freeThrowsAttempted"),
+                "free_throw_percentage": stats.get("freeThrowsPercentage"),
+                "rebounds_offensive": stats.get("reboundsOffensive"),
+                "rebounds_defensive": stats.get("reboundsDefensive"),
+                "rebounds_total": stats.get("reboundsTotal"),
+                "assists": stats.get("assists"),
+                "steals": stats.get("steals"),
+                "blocks": stats.get("blocks"),
+                "turnovers": stats.get("turnovers"),
+                "fouls_personal": stats.get("foulsPersonal"),
+                "points": stats.get("points"),
+                "plus_minus": stats.get("plusMinusPoints"),
+            })
+
+    pbp_rows = []
+    for a in (data.get("pbp") or {}).get("actions") or []:
+        is_fg = a.get("isFieldGoal")
+        score_home = a.get("scoreHome")
+        score_away = a.get("scoreAway")
+        action_type = a.get("actionType")
+        pbp_rows.append({
+            "game_id": game_id,
+            "action_number": a.get("actionNumber"),
+            "action_id": None,  # no equivalent field in this response shape
+            "period": a.get("period"),
+            "clock": a.get("clock"),
+            "team_id": a.get("teamId"),
+            "team_tricode": a.get("teamTricode"),
+            "person_id": a.get("personId"),
+            "player_name": a.get("playerName") or None,
+            "action_type": action_type,
+            "sub_type": a.get("subType"),
+            "description": a.get("description"),
+            "score_home": int(score_home) if score_home is not None else None,
+            "score_away": int(score_away) if score_away is not None else None,
+            "points_total": a.get("pointsTotal"),
+            "shot_distance": round(a["shotDistance"]) if a.get("shotDistance") is not None else None,
+            "shot_result": a.get("shotResult"),
+            "shot_value": {"2pt": 2, "3pt": 3}.get(action_type),
+            "is_field_goal": bool(is_fg) if is_fg is not None else None,
+            "location": a.get("location") or None,
+            "shot_x": a.get("x"),
+            "shot_y": a.get("y"),
+        })
+
+    return {"summary": summary, "traditional_rows": traditional_rows, "pbp_rows": pbp_rows}
 
 
 def fetch_box_score(endpoint_key: str, game_id: str) -> dict:

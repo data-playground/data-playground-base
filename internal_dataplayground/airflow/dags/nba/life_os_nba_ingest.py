@@ -87,20 +87,21 @@ from agents.nba_agents import (
     derive_season_from_game_id,
     discover_games_for_date,
     fetch_box_score,
-    fetch_game_details_header,
-    fetch_play_by_play,
+    fetch_game_details_full,
     flatten_matchup_box_score,
-    flatten_play_by_play,
     flatten_player_box_score,
 )
 
 log = logging.getLogger(__name__)
 
-# Endpoint key -> target table. BS_MATCH is handled separately below (its
-# flatten shape doesn't fit the generic per-player pattern the other nine
-# share — see nba_agents.flatten_matchup_box_score).
+# Endpoint key -> target table, for the nine box-score variants still
+# sourced from stats.nba.com (blocked; see fetch_advanced_stats below).
+# Traditional and play-by-play are NOT here anymore — both now come from
+# fetch_game_details_full()'s single core-api.nba.com call, always run
+# regardless of fetch_advanced_stats. BS_MATCH is handled separately below
+# (its flatten shape doesn't fit the generic per-player pattern the other
+# nine share — see nba_agents.flatten_matchup_box_score).
 BOX_SCORE_TABLES = {
-    "BS_TRAD":   "nba_box_score_traditional",
     "BS_ADV":    "nba_box_score_advanced",
     "BS_MISC":   "nba_box_score_misc",
     "BS_SCORE":  "nba_box_score_scoring",
@@ -198,17 +199,19 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
     and the CLI entry point at the bottom of this file call — there is no
     second, parallel "backfill" implementation to drift out of sync.
 
-    fetch_advanced_stats: when True, also fetches the 9 box-score variants,
-    matchups, and play-by-play — all still sourced from stats.nba.com,
-    which is currently blocking/timing out requests from this deployment
-    (see the WO#33 conversation history — this isn't specific to our code).
-    Defaults to False so a run — including a big backfill — populates
-    nba_games (scores, status, records) quickly via
-    fetch_game_details_header(), which uses core-api.nba.com and has
-    stayed reachable throughout, rather than burning ~10 minutes per game
-    on 11 calls known to fail. Flip back on once stats.nba.com access is
-    restored (proxy, etc.) or those calls are replaced with an
-    nba.com-scraping equivalent (in progress).
+    Game metadata, the traditional box score, and play-by-play all come
+    from fetch_game_details_full() — a single core-api.nba.com call — and
+    always run, since that host has stayed reachable throughout the
+    stats.nba.com blocking (see the WO#33 conversation history).
+
+    fetch_advanced_stats: when True, additionally fetches the other nine
+    box-score variants and matchups, which are still only available from
+    stats.nba.com (confirmed — the site's own Advanced/Misc/Scoring/Usage/
+    etc. tabs call stats.nba.com directly, not core-api.nba.com) and are
+    currently blocking/timing out for us. Defaults to False so a run —
+    including a big backfill — isn't stuck burning several minutes per
+    game on nine calls known to fail. Flip back on once stats.nba.com
+    access is restored (proxy, etc.).
     """
     game_ids = discover_games_for_date(target_date)
     log.info("Discovered %d game(s) for %s", len(game_ids), target_date)
@@ -216,12 +219,14 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
         return 0
 
     game_rows = []
+    trad_rows: list[dict] = []
+    pbp_rows: list[dict] = []
     box_rows_by_key: dict[str, list[dict]] = {k: [] for k in BOX_SCORE_TABLES}
     matchup_rows: list[dict] = []
-    pbp_rows: list[dict] = []
 
     for game_id in game_ids:
-        summary = fetch_game_details_header(game_id)
+        details = fetch_game_details_full(game_id)
+        summary = details["summary"]
 
         game_rows.append({
             "game_id": game_id,
@@ -248,6 +253,9 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
             "series_text": summary["series_text"],
         })
 
+        trad_rows.extend(details["traditional_rows"])
+        pbp_rows.extend(details["pbp_rows"])
+
         if not fetch_advanced_stats:
             continue
 
@@ -260,23 +268,28 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
         matchup_parsed = fetch_box_score("BS_MATCH", game_id)
         matchup_rows.extend(flatten_matchup_box_score(matchup_parsed, game_id))
 
-        pbp_parsed = fetch_play_by_play(game_id)
-        pbp_rows.extend(flatten_play_by_play(pbp_parsed, game_id))
-
     _upsert("nba_games", game_rows, key_cols=["game_id"])
 
+    # Traditional + PBP always run now, so their person_ids always need the
+    # placeholder-row treatment too — not just when fetch_advanced_stats.
+    person_ids = {row["person_id"] for row in trad_rows if row.get("person_id")}
+    person_ids |= {row["person_id"] for row in pbp_rows if row.get("person_id")}
+
     if fetch_advanced_stats:
-        person_ids = {row["person_id"] for rows in box_rows_by_key.values() for row in rows if row.get("person_id")}
+        person_ids |= {row["person_id"] for rows in box_rows_by_key.values() for row in rows if row.get("person_id")}
         person_ids |= {row["defender_person_id"] for row in matchup_rows if row.get("defender_person_id")}
         person_ids |= {row["offensive_person_id"] for row in matchup_rows if row.get("offensive_person_id")}
-        person_ids |= {row["person_id"] for row in pbp_rows if row.get("person_id")}
-        _ensure_players_exist(person_ids)
 
+    _ensure_players_exist(person_ids)
+
+    _upsert("nba_box_score_traditional", trad_rows, key_cols=["game_id", "person_id"])
+    _upsert("nba_play_by_play", pbp_rows, key_cols=["game_id", "action_number"])
+
+    if fetch_advanced_stats:
         for endpoint_key, table in BOX_SCORE_TABLES.items():
             _upsert(table, box_rows_by_key[endpoint_key], key_cols=["game_id", "person_id"])
         _upsert("nba_box_score_matchup", matchup_rows,
                 key_cols=["game_id", "defender_person_id", "offensive_person_id"])
-        _upsert("nba_play_by_play", pbp_rows, key_cols=["game_id", "action_number"])
 
     log.info("Ingest complete for %s: %d game(s) (advanced stats %s)",
               target_date, len(game_ids), "included" if fetch_advanced_stats else "skipped")
