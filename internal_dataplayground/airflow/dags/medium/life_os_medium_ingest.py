@@ -54,7 +54,7 @@ log = logging.getLogger(__name__)
 _ARTICLE_COLUMNS = [
     "guid", "source_type", "source_identifier", "source_label",
     "title", "url", "author", "published_at", "tags",
-    "summary", "content_html", "raw_item", "fetched_at",
+    "summary", "content_html", "raw_item", "thumbnail_url", "fetched_at",
 ]
 
 
@@ -121,6 +121,7 @@ def _build_upsert_statements(articles, labels: dict[tuple[str, str], str | None]
             "",  # summary — see docstring above
             a.content_html,
             a.raw_item,
+            a.thumbnail_url,
             a.fetched_at,
         )))
     return statements

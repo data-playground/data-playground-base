@@ -71,7 +71,7 @@ def test_rows_to_sources_and_labels():
     print("_rows_to_sources_and_labels: OK")
 
 
-def _fake_article(guid, source_type, source_identifier, tags):
+def _fake_article(guid, source_type, source_identifier, tags, thumbnail_url=None):
     return ParsedArticle(
         guid=guid,
         title=f"Title for {guid}",
@@ -84,14 +84,18 @@ def _fake_article(guid, source_type, source_identifier, tags):
         source_identifier=source_identifier,
         fetched_at=datetime(2026, 9, 13, 1, 0, tzinfo=timezone.utc),
         raw_item="<item>placeholder</item>",
+        thumbnail_url=thumbnail_url,
     )
 
 
 def test_build_upsert_statements():
     labels = {("publication", "example-publication"): "Example Pub"}
     articles = [
-        _fake_article("guid-1", FeedSourceType.PUBLICATION, "example-publication", ["tag-a", "tag-b"]),
-        _fake_article("guid-2", FeedSourceType.PROFILE, "@jsmith", []),  # no label entry -> should be None
+        _fake_article(
+            "guid-1", FeedSourceType.PUBLICATION, "example-publication", ["tag-a", "tag-b"],
+            thumbnail_url="https://cdn-images-1.medium.com/max/1024/0*fakecover.png",
+        ),
+        _fake_article("guid-2", FeedSourceType.PROFILE, "@jsmith", []),  # no label entry, no thumbnail -> both None
     ]
 
     statements = dag_module._build_upsert_statements(articles, labels)
@@ -107,9 +111,11 @@ def test_build_upsert_statements():
     assert params[col_index("guid")] == "guid-1"
     assert params[col_index("source_label")] == "Example Pub"
     assert params[col_index("tags")] == '["tag-a", "tag-b"]'  # JSON-serialized, since raw SQL bypasses the ORM's JSON type
+    assert params[col_index("thumbnail_url")] == "https://cdn-images-1.medium.com/max/1024/0*fakecover.png"
 
     _, params2 = statements[1]
     assert params2[col_index("source_label")] is None  # no matching labels entry
+    assert params2[col_index("thumbnail_url")] is None  # article had no image — stays None, not a guess
     print("_build_upsert_statements: OK")
 
 

@@ -2,48 +2,254 @@
 {% block title %}Match Detail{% endblock %}
 {% block page_title %}Soccer{% endblock %}
 {% block topbar_meta %}
-    <span style="font-size:10px;color:var(--text-muted);">{{ match.home_team_name }} vs {{ match.away_team_name }}</span>
+    {% if match %}<span style="font-size:10px;color:var(--text-muted);">{{ match.home_team_name }} vs {{ match.away_team_name }}</span>{% endif %}
 {% endblock %}
 {% block topbar_actions %}
     <a class="btn" href="/soccer">← Back to fixtures</a>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+  /* Match detail — pitch diagram + lineup tokens.
+     Colors reuse the app's existing theme variables (base.css) so this
+     renders correctly across all three themes without a separate
+     light/dark version. Team crest fallback colors (--accent for home,
+     a fixed neutral gray for away) are NOT real team colors — see the
+     WO#34 conversation's "deferred ideas" note; nothing in any FIFA
+     payload we've parsed includes kit/brand colors.
+  */
+  .md-wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding:4px 0 24px;}
+  .comp-ribbon{text-align:center;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;}
+
+  .score-header{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .team-block{flex:1;display:flex;flex-direction:column;gap:9px;}
+  .team-block.home{align-items:flex-end;text-align:right;}
+  .team-block.away{align-items:flex-start;text-align:left;}
+  .crest{width:56px;height:56px;border-radius:50%;flex-shrink:0;position:relative;overflow:hidden;}
+  .crest img{width:100%;height:100%;object-fit:cover;display:block;}
+  .crest .fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:#fff;}
+  .crest.home-c .fallback{background:var(--accent);}
+  .crest.away-c .fallback{background:#6b7280;}
+  .mini-crest{width:22px;height:22px;}
+  .mini-crest .fallback{font-size:8px;}
+  .team-name-row{display:flex;align-items:center;gap:12px;}
+  .team-block.home .team-name-row{flex-direction:row-reverse;}
+  .team-name{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;}
+  .team-record{font-size:10px;color:var(--text-muted);margin-top:2px;}
+  .scorers{font-size:11px;color:var(--text-secondary);line-height:2;}
+  .score-center{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0 20px;flex-shrink:0;}
+  .score-big{font-family:'Syne',sans-serif;font-weight:800;font-size:38px;}
+  .ft-badge{background:var(--accent-dim);color:var(--accent);font-size:9px;font-weight:600;letter-spacing:.1em;padding:3px 11px;border-radius:10px;}
+
+  .tri-grid{display:grid;grid-template-columns:1fr 260px 1fr;gap:20px;align-items:start;}
+  .pitch-col-title{display:flex;align-items:center;justify-content:center;gap:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:10px;}
+  .pitch{position:relative;width:100%;aspect-ratio:2/3;border-radius:10px;overflow:hidden;
+    background:repeating-linear-gradient(180deg,#2a7a3c 0px,#2a7a3c 34px,#337f45 34px,#337f45 68px);
+    border:1px solid #1d5a2a;}
+  .pitch::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,0.25);}
+  .pitch::after{content:'';position:absolute;top:50%;left:50%;width:70px;height:70px;border:1px solid rgba(255,255,255,0.25);border-radius:50%;transform:translate(-50%,-50%);}
+  .pbox{position:absolute;left:22%;right:22%;height:11%;border:1px solid rgba(255,255,255,0.25);}
+  .pbox.top{top:0;} .pbox.bottom{bottom:0;}
+  .ptoken{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .pdot{width:36px;height:36px;border-radius:50%;background:#fff;border:2.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#18182e;position:relative;flex-shrink:0;}
+  .pdot.away-dot{border-color:#c8102e;}
+  .pdot.gk-dot{background:#64748b;border-color:#64748b;color:#fff;}
+  .pname{font-size:9.5px;color:#fff;white-space:nowrap;background:rgba(0,0,0,0.6);padding:2px 5px;border-radius:3px;}
+
+  .badge-goal{position:absolute;top:-8px;right:-9px;background:var(--green);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;}
+  .badge-assist{position:absolute;top:-8px;left:-9px;background:var(--blue);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;}
+  .badge-card{position:absolute;bottom:-4px;left:-6px;width:9px;height:13px;background:var(--yellow);border:1px solid #a56d00;border-radius:1.5px;}
+  .badge-sub{position:absolute;bottom:-4px;right:-6px;width:15px;height:15px;border-radius:50%;background:var(--red);color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;}
+
+  .subs-list{margin-top:12px;display:flex;flex-direction:column;gap:5px;}
+  .sub-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:5px 8px;border-radius:5px;background:var(--bg-hover);}
+  .sub-row .out{color:var(--text-muted);text-decoration:line-through;}
+  .sub-row .in{color:var(--green);font-weight:500;}
+  .sub-row .min{color:var(--text-muted);flex-shrink:0;margin-left:8px;white-space:nowrap;}
+  .card-dot{display:inline-block;width:7px;height:9px;background:var(--yellow);border:1px solid #a56d00;border-radius:1px;margin-left:4px;vertical-align:middle;}
+  .manager-line{margin-top:10px;font-size:10px;color:var(--text-muted);text-align:center;}
+
+  .mini-stats{display:flex;flex-direction:column;gap:14px;padding-top:2px;}
+  .mini-stat-label{text-align:center;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+  .mini-stat-row{display:flex;align-items:center;gap:7px;}
+  .mini-stat-row span{font-size:11px;font-weight:700;width:40px;text-align:center;flex-shrink:0;}
+  .msbar{flex:1;display:flex;height:5px;border-radius:3px;overflow:hidden;background:var(--bg-hover);}
+  .msbar-h{background:var(--accent);height:100%;}
+  .msbar-a{background:var(--border-accent);height:100%;}
+  .stats-note{font-size:9px;color:var(--text-muted);line-height:1.6;margin-top:6px;text-align:center;}
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="max-width:960px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:16px;">
+<div class="md-wrap">
 
-    <div class="panel">
-        <div class="panel-title">Match</div>
-        <div style="font-size:14px;">
-            {{ match.home_team_name or 'TBD' }}
-            {% if match.home_team_score is not none %}<strong>&nbsp;{{ match.home_team_score }}</strong>{% endif %}
-            <span style="color:var(--text-muted);">&nbsp;vs&nbsp;</span>
-            {% if match.away_team_score is not none %}<strong>{{ match.away_team_score }}&nbsp;</strong>{% endif %}
-            {{ match.away_team_name or 'TBD' }}
+  <div class="panel">
+    {% if match.venue_name %}<div class="comp-ribbon">{{ match.venue_name }}</div>{% endif %}
+    <div class="score-header">
+      <div class="team-block home">
+        <div class="team-name-row">
+          <div>
+            <div class="team-name">{{ match.home_team_name or 'TBD' }}</div>
+            <div class="team-record">
+              {%- if match.home_formation %}{{ match.home_formation }}{% endif -%}
+              {%- if home_coach %} · {{ home_coach }}{% endif -%}
+            </div>
+          </div>
+          <div class="crest home-c">
+            {% if home_crest_url %}
+            <img src="{{ home_crest_url }}" alt="{{ match.home_team_name }}"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+            {% endif %}
+            <span class="fallback"{% if not home_crest_url %} style="display:flex;"{% endif %}>{{ (match.home_team_name or '?')[:3]|upper }}</span>
+          </div>
         </div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">
-            {% if match.kickoff_at %}{{ match.kickoff_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
-            · {{ match.status_label }}
-            {% if match.venue_name %} · {{ match.venue_name }}{% endif %}
+        {% if home_scorers %}
+        <div class="scorers">
+          {% for s in home_scorers %}{{ s.name }} {{ s.minute }}{% if s.assist %} <span style="opacity:.65;">(asst. {{ s.assist }})</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
         </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-title">Raw match details (unparsed — see WO#34 notes)</div>
-        {% if details_json %}
-        <pre style="font-size:10px;overflow-x:auto;white-space:pre-wrap;">{{ details_json }}</pre>
-        {% else %}
-        <div class="empty-state"><p>Not fetched yet.</p></div>
         {% endif %}
-    </div>
+      </div>
 
-    <div class="panel">
-        <div class="panel-title">Raw play-by-play events (unparsed)</div>
-        {% if events_json %}
-        <pre style="font-size:10px;overflow-x:auto;white-space:pre-wrap;">{{ events_json }}</pre>
-        {% else %}
-        <div class="empty-state"><p>Not fetched yet.</p></div>
+      <div class="score-center">
+        <div class="score-big">
+          {% if match.home_team_score is not none and match.away_team_score is not none %}{{ match.home_team_score }} – {{ match.away_team_score }}{% else %}vs{% endif %}
+        </div>
+        <div class="ft-badge">{{ match.status_label|upper }}</div>
+      </div>
+
+      <div class="team-block away">
+        <div class="team-name-row">
+          <div class="crest away-c">
+            {% if away_crest_url %}
+            <img src="{{ away_crest_url }}" alt="{{ match.away_team_name }}"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+            {% endif %}
+            <span class="fallback"{% if not away_crest_url %} style="display:flex;"{% endif %}>{{ (match.away_team_name or '?')[:3]|upper }}</span>
+          </div>
+          <div>
+            <div class="team-name">{{ match.away_team_name or 'TBD' }}</div>
+            <div class="team-record">
+              {%- if match.away_formation %}{{ match.away_formation }}{% endif -%}
+              {%- if away_coach %} · {{ away_coach }}{% endif -%}
+            </div>
+          </div>
+        </div>
+        {% if away_scorers %}
+        <div class="scorers">
+          {% for s in away_scorers %}{{ s.name }} {{ s.minute }}{% if s.assist %} <span style="opacity:.65;">(asst. {{ s.assist }})</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
+        </div>
         {% endif %}
+      </div>
     </div>
+  </div>
+
+  {% if has_lineup_data %}
+  <div class="panel">
+    <div class="panel-title">Formations &amp; Lineups</div>
+    <div class="tri-grid">
+
+      <div>
+        <div class="pitch-col-title">
+          <div class="crest mini-crest home-c">
+            {% if home_crest_url %}<img src="{{ home_crest_url }}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">{% endif %}
+            <span class="fallback"{% if not home_crest_url %} style="display:flex;"{% endif %}>{{ (match.home_team_name or '?')[:3]|upper }}</span>
+          </div>
+          {{ match.home_team_name }}
+        </div>
+        <div class="pitch">
+          <div class="pbox top"></div><div class="pbox bottom"></div>
+          {% for t in home_tokens %}
+          <div class="ptoken" style="left:{{ t.left_pct }}%;top:{{ t.top_pct }}%;">
+            <div class="pdot{% if t.is_gk %} gk-dot{% endif %}">
+              {{ t.player.shirt_number or '' }}
+              {% if t.goal_count > 0 %}<div class="badge-goal">⚽{% if t.goal_count > 1 %}×{{ t.goal_count }}{% endif %}</div>{% endif %}
+              {% if t.assist_count > 0 %}<div class="badge-assist">👟{% if t.assist_count > 1 %}×{{ t.assist_count }}{% endif %}</div>{% endif %}
+              {% if t.has_card %}<div class="badge-card"></div>{% endif %}
+              {% if t.subbed_off %}<div class="badge-sub">↓</div>{% endif %}
+            </div>
+            <div class="pname">{{ t.player.player_name }}{% if t.player.is_captain %} (C){% endif %}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if home_subs %}
+        <div class="subs-list">
+          {% for s in home_subs %}
+          <div class="sub-row">
+            <span><span class="in">{{ s.player_on_name }}</span> ← <span class="out">{{ s.player_off_name }}</span>{% if s.fifa_player_on_id in home_carded_ids %}<span class="card-dot"></span>{% endif %}</span>
+            <span class="min">{{ s.minute_display }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if home_coach %}<div class="manager-line">Manager: {{ home_coach }}</div>{% endif %}
+      </div>
+
+      <div class="mini-stats">
+        {% if match.possession_home is not none and match.possession_away is not none %}
+        <div>
+          <div class="mini-stat-label">Possession</div>
+          <div class="mini-stat-row">
+            <span>{{ "%.1f"|format(match.possession_home) }}%</span>
+            <div class="msbar"><div class="msbar-h" style="width:{{ match.possession_home }}%"></div><div class="msbar-a" style="width:{{ match.possession_away }}%"></div></div>
+            <span>{{ "%.1f"|format(match.possession_away) }}%</span>
+          </div>
+        </div>
+        {% endif %}
+        <div class="stats-note">
+          More match stats (shots, corners, fouls) aren't wired up yet —
+          possession is currently the only confirmed real FIFA field for this.
+        </div>
+      </div>
+
+      <div>
+        <div class="pitch-col-title">
+          {{ match.away_team_name }}
+          <div class="crest mini-crest away-c">
+            {% if away_crest_url %}<img src="{{ away_crest_url }}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">{% endif %}
+            <span class="fallback"{% if not away_crest_url %} style="display:flex;"{% endif %}>{{ (match.away_team_name or '?')[:3]|upper }}</span>
+          </div>
+        </div>
+        <div class="pitch">
+          <div class="pbox top"></div><div class="pbox bottom"></div>
+          {% for t in away_tokens %}
+          <div class="ptoken" style="left:{{ t.left_pct }}%;top:{{ t.top_pct }}%;">
+            <div class="pdot away-dot{% if t.is_gk %} gk-dot{% endif %}">
+              {{ t.player.shirt_number or '' }}
+              {% if t.goal_count > 0 %}<div class="badge-goal">⚽{% if t.goal_count > 1 %}×{{ t.goal_count }}{% endif %}</div>{% endif %}
+              {% if t.assist_count > 0 %}<div class="badge-assist">👟{% if t.assist_count > 1 %}×{{ t.assist_count }}{% endif %}</div>{% endif %}
+              {% if t.has_card %}<div class="badge-card"></div>{% endif %}
+              {% if t.subbed_off %}<div class="badge-sub">↓</div>{% endif %}
+            </div>
+            <div class="pname">{{ t.player.player_name }}{% if t.player.is_captain %} (C){% endif %}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% if away_subs %}
+        <div class="subs-list">
+          {% for s in away_subs %}
+          <div class="sub-row">
+            <span><span class="in">{{ s.player_on_name }}</span> ← <span class="out">{{ s.player_off_name }}</span>{% if s.fifa_player_on_id in away_carded_ids %}<span class="card-dot"></span>{% endif %}</span>
+            <span class="min">{{ s.minute_display }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if away_coach %}<div class="manager-line">Manager: {{ away_coach }}</div>{% endif %}
+      </div>
+
+    </div>
+  </div>
+  {% else %}
+  <div class="panel">
+    <div class="empty-state">
+      <p>
+        Lineup not yet available for this match.<br>
+        This appears once the match is finished and the daily ingest has parsed its detail data —
+        check back after kickoff, or after the next scheduled run.
+      </p>
+    </div>
+  </div>
+  {% endif %}
 
 </div>
 {% endblock %}

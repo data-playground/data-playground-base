@@ -35,6 +35,7 @@ Phase 1 notes on the GraphQL flank for that.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -91,6 +92,47 @@ class ParsedArticle:
     source_identifier: str
     fetched_at: datetime
     raw_item: str  # the original <item> element, verbatim — see _parse_item()
+    thumbnail_url: str | None  # first real <img> src in content_html — see extract_thumbnail()
+
+
+_IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+_IMG_SRC_RE = re.compile(r'src="([^"]*)"', re.IGNORECASE)
+_IMG_WIDTH_RE = re.compile(r'width="(\d+)"', re.IGNORECASE)
+_IMG_HEIGHT_RE = re.compile(r'height="(\d+)"', re.IGNORECASE)
+
+
+def extract_thumbnail(content_html: str) -> str | None:
+    """First real <img> src in the article body, skipping Medium's own
+    1x1 view-tracking pixel — every article ends with one
+    (<img src="https://medium.com/_/stat?event=post.clientViewed..."
+    width="1" height="1">).
+
+    Deliberately scans the whole body for the first <img> tag in
+    document order, rather than checking only the first child element.
+    Confirmed against a real feed (a Google Cloud publication, WO#35
+    bug report) that several articles open with a paragraph — sometimes
+    an author byline, a heading, and more than one paragraph — before
+    their lead image ever appears. "First child" would have missed
+    those; "first <img> anywhere" did not, and matched all 10/10 items
+    in that sample.
+
+    Returns None — not a guess, not a fallback URL — when no real image
+    exists at all; some articles genuinely have none. The caller is
+    expected to fall back to a placeholder, not treat None as an error.
+    """
+    if not content_html:
+        return None
+    for match in _IMG_TAG_RE.finditer(content_html):
+        tag = match.group(0)
+        src_match = _IMG_SRC_RE.search(tag)
+        if not src_match or not src_match.group(1):
+            continue
+        width_match = _IMG_WIDTH_RE.search(tag)
+        height_match = _IMG_HEIGHT_RE.search(tag)
+        if width_match and height_match and width_match.group(1) == "1" == height_match.group(1):
+            continue  # Medium's 1x1 tracking pixel — not a thumbnail
+        return src_match.group(1)
+    return None
 
 
 def build_feed_url(source: FeedSource) -> str:
@@ -172,6 +214,7 @@ def _parse_item(item: ET.Element, source: FeedSource) -> ParsedArticle:
         source_identifier=source.identifier,
         fetched_at=datetime.now(timezone.utc),
         raw_item=raw_item,
+        thumbnail_url=extract_thumbnail(content_html),
     )
 
 

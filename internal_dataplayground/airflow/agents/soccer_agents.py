@@ -357,13 +357,24 @@ def parse_match_summary(raw_match: dict) -> dict:
     except (TypeError, ValueError):
         status_code = None
 
+    home_obj = raw_match.get("Home") or {}
+    away_obj = raw_match.get("Away") or {}
+
     return {
         "fifa_competition_id": str(raw_match.get("IdCompetition", "")),
         "fifa_season_id":      str(raw_match.get("IdSeason", "")),
         "fifa_stage_id":       str(raw_match.get("IdStage", "")),
         "fifa_match_id":       str(raw_match.get("IdMatch", "")),
-        "home_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("Home"), key="TeamName")),
-        "away_team_name":      _scalar_or_none(_extract_localized_text(raw_match.get("Away"), key="TeamName")),
+        "home_team_name":      _scalar_or_none(_extract_localized_text(home_obj, key="TeamName")),
+        "away_team_name":      _scalar_or_none(_extract_localized_text(away_obj, key="TeamName")),
+        # Confirmed present on both Home/Away (calendar endpoint) and
+        # HomeTeam/AwayTeam (/live endpoint) — used to build real crest
+        # image URLs (https://api.fifa.com/api/v3/picture/teams-{format}-
+        # {size}/{IdTeam}). Populated here rather than waiting for the
+        # /live fetch, so a crest can render even for a scheduled,
+        # not-yet-finished match.
+        "fifa_home_team_id":   _scalar_or_none(home_obj.get("IdTeam")),
+        "fifa_away_team_id":   _scalar_or_none(away_obj.get("IdTeam")),
         "home_team_score":     _scalar_or_none(raw_match.get("HomeTeamScore")),
         "away_team_score":     _scalar_or_none(raw_match.get("AwayTeamScore")),
         "kickoff_at":          raw_match.get("Date"),  # ISO string — DAG parses to datetime

@@ -71,6 +71,16 @@ async def _load_source_options(db: AsyncSession) -> list[dict]:
     return [{"value": row.identifier, "label": row.label or row.identifier} for row in rows]
 
 
+def _filter_button_label(source_options: list[dict], selected: list[str]) -> str:
+    """What the collapsed filter dropdown's toggle button shows."""
+    if not selected:
+        return "Filter by source"
+    if len(selected) == 1:
+        match = next((opt["label"] for opt in source_options if opt["value"] == selected[0]), selected[0])
+        return match
+    return f"{len(selected)} sources selected"
+
+
 @router.get("")
 async def articles_page(
     request: Request,
@@ -81,6 +91,7 @@ async def articles_page(
     rows = result.scalars().all()
     articles = [_present(row) for row in rows]
     has_more = len(rows) == _PAGE_SIZE  # cheap heuristic, not an exact count — see module docstring
+    source_options = await _load_source_options(db)
 
     return templates.TemplateResponse(
         "articles.html",
@@ -90,8 +101,9 @@ async def articles_page(
             "articles": articles,
             "latest": articles[:_LATEST_COUNT],
             "more": articles[_LATEST_COUNT:],
-            "source_options": await _load_source_options(db),
+            "source_options": source_options,
             "selected_sources": sources,
+            "filter_button_label": _filter_button_label(source_options, sources),
             "has_more": has_more,
             "next_offset": _PAGE_SIZE,
         },
@@ -135,4 +147,5 @@ def _present(row: MediumArticle) -> dict:
         "published_relative": relative_time(row.published_at) if row.published_at else "",
         "read_minutes": estimate_read_minutes(row.content_html or row.summary),
         "tags": row.tags or [],
+        "thumbnail_url": row.thumbnail_url,
     }

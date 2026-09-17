@@ -141,11 +141,13 @@ def _upsert_match(competition_row_id: int, parsed: dict):
     if existing:
         execute(
             "UPDATE soccer_matches SET home_team_name=%s, away_team_name=%s, "
+            "fifa_home_team_id=%s, fifa_away_team_id=%s, "
             "home_team_score=%s, away_team_score=%s, kickoff_at=%s, "
             "fifa_match_status_code=%s, status_label=%s, venue_name=%s, "
             "details_fetched_at = CASE WHEN %s = 'finished' THEN details_fetched_at ELSE NULL END "
             "WHERE id=%s",
             (parsed["home_team_name"], parsed["away_team_name"],
+             parsed["fifa_home_team_id"], parsed["fifa_away_team_id"],
              parsed["home_team_score"], parsed["away_team_score"], kickoff_at,
              parsed["fifa_match_status_code"], parsed["status_label"],
              parsed["venue_name"], parsed["status_label"], existing["id"]),
@@ -154,12 +156,14 @@ def _upsert_match(competition_row_id: int, parsed: dict):
         execute(
             "INSERT INTO soccer_matches "
             "(competition_id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id, "
-            "home_team_name, away_team_name, home_team_score, away_team_score, kickoff_at, "
+            "home_team_name, away_team_name, fifa_home_team_id, fifa_away_team_id, "
+            "home_team_score, away_team_score, kickoff_at, "
             "fifa_match_status_code, status_label, venue_name) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (competition_row_id, parsed["fifa_competition_id"], parsed["fifa_season_id"],
              parsed["fifa_stage_id"], parsed["fifa_match_id"],
              parsed["home_team_name"], parsed["away_team_name"],
+             parsed["fifa_home_team_id"], parsed["fifa_away_team_id"],
              parsed["home_team_score"], parsed["away_team_score"], kickoff_at,
              parsed["fifa_match_status_code"], parsed["status_label"], parsed["venue_name"]),
         )

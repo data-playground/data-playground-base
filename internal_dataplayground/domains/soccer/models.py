@@ -36,7 +36,7 @@ Integer column would break the moment that competition is ever watched.
 """
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Date, Boolean, JSON, ForeignKey, Index, UniqueConstraint,
+    Column, Integer, String, DateTime, Date, Boolean, Float, JSON, ForeignKey, Index, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -119,6 +119,15 @@ class SoccerMatch(Base):
     home_team_score = Column(Integer, nullable=True)
     away_team_score = Column(Integer, nullable=True)
 
+    # FIFA's own team IDs — added specifically to build real crest image
+    # URLs (https://api.fifa.com/api/v3/picture/teams-{format}-{size}/{IdTeam}).
+    # Confirmed present on both the calendar endpoint (Home.IdTeam/
+    # Away.IdTeam) and the /live endpoint (HomeTeam.IdTeam/AwayTeam.IdTeam),
+    # so this populates during ordinary daily ingest, not just for
+    # finished matches. See migration s0cc3r_t34m1ds001.
+    fifa_home_team_id = Column(String(64), nullable=True)
+    fifa_away_team_id = Column(String(64), nullable=True)
+
     kickoff_at = Column(DateTime, nullable=True)
 
     # Raw FIFA MatchStatus integer code, preserved as-is (see
@@ -129,6 +138,26 @@ class SoccerMatch(Base):
     status_label = Column(String(20), nullable=False, default="unknown")
 
     venue_name = Column(String(255), nullable=True)
+
+    # Populated once by parse_finished_match_details() from the /live
+    # payload — see domains/soccer/models.py's module docstring and
+    # migration s0cc3r_l1n3ups001. Real, confirmed fields (Tactics,
+    # BallPossession, Attendance) — NOT the same thing as the
+    # xG/shots/big-chances/corners/passes/duels/saves/fouls numbers shown
+    # in early WO#34 mockups, which came from a reference ESPN screenshot
+    # used purely for layout design, not from any FIFA field we've
+    # actually confirmed. Possession is the only match-level "stat" we
+    # currently have real data for — see soccer_match_detail.html and the
+    # WO#34 conversation for candidate future stats derivable from the
+    # /timelines event stream (fouls, corners, offsides — all clean event
+    # Type codes; shot/save counts would need event-description text
+    # matching, which is a materially weaker source than a structured
+    # field and hasn't been built).
+    home_formation = Column(String(20), nullable=True)
+    away_formation = Column(String(20), nullable=True)
+    possession_home = Column(Float(), nullable=True)
+    possession_away = Column(Float(), nullable=True)
+    attendance = Column(Integer(), nullable=True)
 
     # Set once /live and /timelines have been fetched for this match, so
     # the DAG doesn't re-fetch detail/events for a match every single day
@@ -143,6 +172,117 @@ class SoccerMatch(Base):
 
     def __repr__(self):
         return f"<SoccerMatch {self.home_team_name} vs {self.away_team_name} ({self.fifa_match_id})>"
+
+
+class SoccerMatchLineup(Base):
+    """
+    One row per squad player per match (starter or bench) — parsed from
+    the /live endpoint's HomeTeam.Players/AwayTeam.Players. See
+    airflow/agents/soccer_agents.py::parse_match_lineup_data() for the
+    confirmed field mapping and airflow/dags/soccer/life_os_soccer_ingest.py
+    ::parse_finished_match_details() for when this gets populated.
+    """
+    __tablename__ = "soccer_match_lineups"
+    __table_args__ = (
+        Index("ix_soccer_lineups_match", "match_id"),
+        UniqueConstraint("match_id", "fifa_player_id", name="uq_soccer_lineup_player"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey("soccer_matches.id"), nullable=False)
+    team_side = Column(String(4), nullable=False)  # 'home' | 'away'
+    fifa_player_id = Column(String(64), nullable=False)
+    shirt_number = Column(Integer, nullable=True)
+    player_name = Column(String(255), nullable=True)
+    # Confirmed real FIFA Position codes: 0=GK, 1=DEF, 2=AM/wide, 3=FWD,
+    # 6=DM. See domains/soccer/lineup_helpers.py for the row-ordering
+    # this feeds into on the pitch diagram.
+    position_code = Column(Integer, nullable=True)
+    is_starter = Column(Boolean, nullable=False, default=False)
+    is_captain = Column(Boolean, nullable=False, default=False)
+    on_field_at_finish = Column(Boolean, nullable=False, default=False)
+
+    def __repr__(self):
+        return f"<SoccerMatchLineup match={self.match_id} {self.player_name!r}>"
+
+
+class SoccerGoal(Base):
+    """One goal, with scorer + optional assist. See parse_match_lineup_data()."""
+    __tablename__ = "soccer_goals"
+    __table_args__ = (Index("ix_soccer_goals_match", "match_id"),)
+
+    id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey("soccer_matches.id"), nullable=False)
+    team_side = Column(String(4), nullable=False)
+    fifa_player_id = Column(String(64), nullable=True)
+    fifa_assist_player_id = Column(String(64), nullable=True)
+    minute_display = Column(String(10), nullable=True)  # e.g. "45'+4'", verbatim
+    minute_numeric = Column(Integer, nullable=True)      # e.g. 49 — for sorting
+    period = Column(Integer, nullable=True)
+
+    def __repr__(self):
+        return f"<SoccerGoal match={self.match_id} player={self.fifa_player_id} {self.minute_display}>"
+
+
+class SoccerBooking(Base):
+    """One card. Card code 1 = yellow, confirmed. No red-card example seen yet."""
+    __tablename__ = "soccer_bookings"
+    __table_args__ = (Index("ix_soccer_bookings_match", "match_id"),)
+
+    id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey("soccer_matches.id"), nullable=False)
+    team_side = Column(String(4), nullable=False)
+    fifa_player_id = Column(String(64), nullable=True)
+    card_type_code = Column(Integer, nullable=True)
+    minute_display = Column(String(10), nullable=True)
+    minute_numeric = Column(Integer, nullable=True)
+    period = Column(Integer, nullable=True)
+    reason = Column(String(100), nullable=True)
+
+    def __repr__(self):
+        return f"<SoccerBooking match={self.match_id} player={self.fifa_player_id}>"
+
+
+class SoccerSubstitution(Base):
+    """One substitution event. player_off_name/player_on_name are stored
+    directly (not just IDs) — the /live payload already gives them, so no
+    join back to soccer_match_lineups is needed to render the subs list."""
+    __tablename__ = "soccer_substitutions"
+    __table_args__ = (Index("ix_soccer_substitutions_match", "match_id"),)
+
+    id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey("soccer_matches.id"), nullable=False)
+    team_side = Column(String(4), nullable=False)
+    fifa_player_off_id = Column(String(64), nullable=True)
+    fifa_player_on_id = Column(String(64), nullable=True)
+    player_off_name = Column(String(255), nullable=True)
+    player_on_name = Column(String(255), nullable=True)
+    minute_display = Column(String(10), nullable=True)
+    minute_numeric = Column(Integer, nullable=True)
+    period = Column(Integer, nullable=True)
+
+    def __repr__(self):
+        return f"<SoccerSubstitution match={self.match_id} {self.player_off_name!r}->{self.player_on_name!r}>"
+
+
+class SoccerCoach(Base):
+    """
+    One coach/manager per team per match. role_code: confirmed pattern
+    (both teams, independently, on one real match) is 0=head coach,
+    1=assistant — two data points, treated as a strong signal, not a spec.
+    """
+    __tablename__ = "soccer_coaches"
+    __table_args__ = (Index("ix_soccer_coaches_match", "match_id"),)
+
+    id = Column(Integer, primary_key=True)
+    match_id = Column(Integer, ForeignKey("soccer_matches.id"), nullable=False)
+    team_side = Column(String(4), nullable=False)
+    fifa_coach_id = Column(String(64), nullable=True)
+    name = Column(String(255), nullable=True)
+    role_code = Column(Integer, nullable=True)
+
+    def __repr__(self):
+        return f"<SoccerCoach match={self.match_id} {self.name!r}>"
 
 
 class SoccerRawPayload(Base):

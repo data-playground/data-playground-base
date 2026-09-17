@@ -52,6 +52,12 @@ def test_parse_sample_feed():
     assert first.title == "Understanding Distributed Consensus"
     assert first.tags == ["distributed-systems", "engineering"]
     assert first.published_at.year == 2025 and first.published_at.month == 9
+    assert first.thumbnail_url == "https://cdn-images-1.medium.com/max/1024/0*fakecover.png", (
+        "should find the figure image and skip the trailing 1x1 tracking pixel"
+    )
+
+    second = articles[1]
+    assert second.thumbnail_url is None, "second fixture item has no <img> at all — must stay None, not guess"
 
     print("parse_feed: OK (2/2 articles)")
     for a in articles:

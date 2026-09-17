@@ -93,6 +93,13 @@ class MediumArticle(Base):
     # recent items per source.
     raw_item: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
+    # First real <img> src found in content_html (rss_ingest.extract_thumbnail()),
+    # skipping Medium's own 1x1 view-tracking pixel. Nullable, not a
+    # placeholder default — some articles genuinely have no image at
+    # all, and the template renders the SVG placeholder for those, not
+    # an empty-string src.
+    thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

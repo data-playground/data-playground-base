@@ -6,7 +6,10 @@
 {% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="/static/medium/css/medium.css">{% endblock %}
 
-{% macro thumb() %}
+{% macro thumb(url=none) %}
+{% if url %}
+<img class="medium-thumb-img" src="{{ url }}" alt="" loading="lazy">
+{% else %}
 <div class="medium-thumb">
   <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5">
     <rect x="4" y="3" width="16" height="18" rx="2"></rect>
@@ -15,6 +18,7 @@
     <line x1="8" y1="16" x2="12" y2="16"></line>
   </svg>
 </div>
+{% endif %}
 {% endmacro %}
 
 {% macro feed_row(a) %}
@@ -29,13 +33,13 @@
       <span class="feed-read-time">{{ a.read_minutes }} min read</span>
     </div>
   </div>
-  <div class="feed-thumb">{{ thumb() }}</div>
+  <div class="feed-thumb">{{ thumb(a.thumbnail_url) }}</div>
 </div>
 {% endmacro %}
 
 {% macro grid_card(a) %}
 <div class="grid-card">
-  <div class="grid-thumb">{{ thumb() }}</div>
+  <div class="grid-thumb">{{ thumb(a.thumbnail_url) }}</div>
   <div class="grid-body">
     <span class="grid-source">{{ a.source_label }}</span>
     <h4 class="grid-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></h4>
@@ -66,23 +70,27 @@
 {% block content %}
 <main class="main-content" id="main-content">
 
-    <form method="get" action="/medium" class="source-filter-form">
-      <div class="form-group">
-        <label class="form-label" for="source-filter">Filter by source</label>
-        <select id="source-filter" name="sources" class="form-select" multiple size="5"
-                onchange="this.form.submit()" style="min-width:220px;">
-          {% for opt in source_options %}
-          <option value="{{ opt.value }}" {% if opt.value in selected_sources %}selected{% endif %}>{{ opt.label }}</option>
-          {% else %}
-          <option value="" disabled>No tracked sources yet</option>
-          {% endfor %}
-        </select>
-        <span style="font-size:9px;color:var(--text-muted);">Hold Cmd/Ctrl to select more than one</span>
-      </div>
-      {% if selected_sources %}
-      <a href="/medium" class="action-btn" style="align-self:flex-start;">Clear filter</a>
-      {% endif %}
-    </form>
+    <div class="source-filter" id="source-filter-widget">
+        <button type="button" class="source-filter-toggle" id="source-filter-toggle" aria-expanded="false">
+            {{ filter_button_label }} <span class="source-filter-chevron">▾</span>
+        </button>
+        <div class="source-filter-panel" id="source-filter-panel">
+            <form method="get" action="/medium">
+                {% for opt in source_options %}
+                <label class="source-filter-option">
+                    <input type="checkbox" name="sources" value="{{ opt.value }}" {% if opt.value in selected_sources %}checked{% endif %}>
+                    {{ opt.label }}
+                </label>
+                {% else %}
+                <p style="font-size:11px;color:var(--text-muted);margin:0;">No tracked sources yet.</p>
+                {% endfor %}
+                <div class="source-filter-actions">
+                    <button type="submit" class="btn btn-primary">Apply</button>
+                    {% if selected_sources %}<a href="/medium" class="action-btn">Clear</a>{% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div class="medium-tabbar" role="tablist" aria-label="Article view">
         <button type="button" class="active" data-view="mixed">Latest</button>
@@ -134,6 +142,24 @@
 </main>
 
 <script>
+(function () {
+    var widget = document.getElementById('source-filter-widget');
+    if (widget) {
+        var toggle = document.getElementById('source-filter-toggle');
+        toggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var isOpen = widget.classList.toggle('open');
+            toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+        document.addEventListener('click', function (e) {
+            if (!widget.contains(e.target)) {
+                widget.classList.remove('open');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+})();
+
 (function () {
     var tabbar = document.querySelector('.medium-tabbar');
     if (!tabbar) return;

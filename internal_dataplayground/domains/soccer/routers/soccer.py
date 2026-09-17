@@ -8,13 +8,23 @@ router is registered in main.py and reachable at /soccer, but it is
 deliberately NOT wired into routers/dashboard.py's cross-domain summary
 or the sidebar's Modules nav in this pass.
 
-Match-level detail rendering reads straight from soccer_raw_payloads
-(see domains/soccer/models.py's module docstring on why match_details/
-match_events aren't normalized yet) rather than a dedicated ORM model —
-the payload is displayed as formatted JSON rather than parsed into a
-template-friendly shape. This is a known limitation to revisit once
-FIFA's field names are verified against a live response (see
-airflow/agents/soccer_agents.py's FIELD-NAME CAVEAT).
+Match detail rendering (soccer_match_detail below) uses the real
+normalized soccer_match_lineups / soccer_goals / soccer_bookings /
+soccer_substitutions / soccer_coaches tables once
+parse_finished_match_details() has populated them for a given match —
+see lineup_helpers.py for the pitch-token layout math. Before that DAG
+task has run for a match (still scheduled, or finished but not yet
+parsed this cycle), the template shows an empty state rather than the
+old raw-JSON dump.
+
+Stats shown on the match page are deliberately limited to what's
+actually confirmed and stored (score, possession, formations). Earlier
+WO#34 mockups also showed xG/shots/big-chances/corners/passes/duels/
+saves/fouls, but those numbers came from a reference ESPN screenshot
+used purely for layout design — never a real FIFA field this pipeline
+has parsed. See soccer_match_detail.html for the honest, data-backed
+version and a note on which of those could realistically be derived
+later from the /timelines event stream.
 
 `since` defaults to yesterday: competitions can carry years of backfilled
 history (World Cup 2022 onward, for example), and a fixtures list with no
@@ -27,17 +37,20 @@ soccer.html) explicitly overrides BOTH bounds to a wide sentinel range
 rather than omitting them — since omitting them now just falls back to
 the yesterday/tomorrow defaults instead of "no filter."
 """
-import json
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, asc, desc
+from sqlalchemy import select, asc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from core.templating import templates
-from domains.soccer.models import SoccerCompetition, SoccerMatch, SoccerRawPayload
+from domains.soccer.models import (
+    SoccerCompetition, SoccerMatch, SoccerMatchLineup,
+    SoccerGoal, SoccerBooking, SoccerSubstitution, SoccerCoach,
+)
+from domains.soccer.lineup_helpers import build_pitch_tokens, build_crest_url
 
 router = APIRouter(prefix="/soccer", tags=["Soccer"])
 
@@ -112,11 +125,7 @@ async def soccer_home(
 
 @router.get("/match/{match_id}", response_class=HTMLResponse)
 async def soccer_match_detail(request: Request, match_id: int, db: AsyncSession = Depends(get_db)):
-    """
-    Single match view. Shows normalized summary fields plus the most
-    recently fetched raw /live and /timelines payloads, formatted as
-    JSON — see module docstring on why these aren't parsed further yet.
-    """
+    """Single match view — see module docstring for what's real vs. deferred."""
     match_result = await db.execute(select(SoccerMatch).where(SoccerMatch.id == match_id))
     match = match_result.scalar_one_or_none()
     if not match:
@@ -131,28 +140,67 @@ async def soccer_match_detail(request: Request, match_id: int, db: AsyncSession 
             status_code=404,
         )
 
-    details_result = await db.execute(
-        select(SoccerRawPayload)
-        .where(SoccerRawPayload.endpoint == "match_details")
-        .where(SoccerRawPayload.fifa_match_id == match.fifa_match_id)
-        .order_by(desc(SoccerRawPayload.fetched_at))
-        .limit(1)
-    )
-    details_row = details_result.scalar_one_or_none()
+    lineup_result = await db.execute(select(SoccerMatchLineup).where(SoccerMatchLineup.match_id == match_id))
+    lineups = lineup_result.scalars().all()
 
-    events_result = await db.execute(
-        select(SoccerRawPayload)
-        .where(SoccerRawPayload.endpoint == "match_events")
-        .where(SoccerRawPayload.fifa_match_id == match.fifa_match_id)
-        .order_by(desc(SoccerRawPayload.fetched_at))
-        .limit(1)
+    goals_result = await db.execute(
+        select(SoccerGoal).where(SoccerGoal.match_id == match_id).order_by(SoccerGoal.minute_numeric)
     )
-    events_row = events_result.scalar_one_or_none()
+    goals = goals_result.scalars().all()
+
+    bookings_result = await db.execute(select(SoccerBooking).where(SoccerBooking.match_id == match_id))
+    bookings = bookings_result.scalars().all()
+
+    subs_result = await db.execute(
+        select(SoccerSubstitution).where(SoccerSubstitution.match_id == match_id).order_by(SoccerSubstitution.minute_numeric)
+    )
+    subs = subs_result.scalars().all()
+
+    coaches_result = await db.execute(select(SoccerCoach).where(SoccerCoach.match_id == match_id))
+    coaches = coaches_result.scalars().all()
+
+    home_lineup = [l for l in lineups if l.team_side == "home"]
+    away_lineup = [l for l in lineups if l.team_side == "away"]
+    home_goals = [g for g in goals if g.team_side == "home"]
+    away_goals = [g for g in goals if g.team_side == "away"]
+    home_bookings = [b for b in bookings if b.team_side == "home"]
+    away_bookings = [b for b in bookings if b.team_side == "away"]
+
+    # Player-name lookup for the scorer/assist line up top — every
+    # player who could possibly score or assist is in soccer_match_lineups
+    # (starters and bench alike), so this covers both without a join.
+    player_names = {l.fifa_player_id: l.player_name for l in lineups}
+
+    def _scorer_lines(team_goals):
+        return [
+            {
+                "name": player_names.get(g.fifa_player_id, "Unknown"),
+                "minute": g.minute_display,
+                "assist": player_names.get(g.fifa_assist_player_id) if g.fifa_assist_player_id else None,
+            }
+            for g in team_goals
+        ]
+
+    # role_code 0 = head coach — confirmed pattern on both teams
+    # independently for one real match; see SoccerCoach's docstring.
+    home_coach = next((c.name for c in coaches if c.team_side == "home" and c.role_code == 0), None)
+    away_coach = next((c.name for c in coaches if c.team_side == "away" and c.role_code == 0), None)
 
     return templates.TemplateResponse("soccer_match_detail.html", {
         "request": request,
         "active_module": "soccer",
         "match": match,
-        "details_json": json.dumps(details_row.payload, indent=2) if details_row else None,
-        "events_json": json.dumps(events_row.payload, indent=2) if events_row else None,
+        "has_lineup_data": bool(lineups),
+        "home_tokens": build_pitch_tokens(home_lineup, home_goals, home_bookings),
+        "away_tokens": build_pitch_tokens(away_lineup, away_goals, away_bookings),
+        "home_subs": [s for s in subs if s.team_side == "home"],
+        "away_subs": [s for s in subs if s.team_side == "away"],
+        "home_scorers": _scorer_lines(home_goals),
+        "away_scorers": _scorer_lines(away_goals),
+        "home_coach": home_coach,
+        "away_coach": away_coach,
+        "home_carded_ids": {b.fifa_player_id for b in home_bookings if b.fifa_player_id},
+        "away_carded_ids": {b.fifa_player_id for b in away_bookings if b.fifa_player_id},
+        "home_crest_url": build_crest_url(match.fifa_home_team_id),
+        "away_crest_url": build_crest_url(match.fifa_away_team_id),
     })
