@@ -1,16 +1,16 @@
 """widen medium_articles text columns from TEXT to MEDIUMTEXT
 
 Revision ID: m3d1um_d0ma1n004
-Revises: s0cc3r_t34m1ds001_add_team_ids
+Revises: s0cc3r_t34m1ds001
 Create Date: 2026-09-18
 
-⚠ down_revision assumes s0cc3r_t34m1ds001_add_team_ids is your current single head.
+⚠ down_revision assumes s0cc3r_t34m1ds001 is your current single head.
 Same verification as always, and worth taking seriously here — the
 soccer lineups migration's own history shows this project's head has
 drifted more than once from unrelated parallel work landing between
 sessions:
   1. Run `alembic heads`.
-  2. If it prints exactly one hash and it's s0cc3r_t34m1ds001_add_team_ids, apply as-is.
+  2. If it prints exactly one hash and it's s0cc3r_t34m1ds001, apply as-is.
   3. If it prints a different single hash, change down_revision below to
      that hash.
   4. If it prints more than one, run
@@ -54,7 +54,7 @@ from alembic import op
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 
 revision: str = 'm3d1um_d0ma1n004'
-down_revision: Union[str, None] = 's0cc3r_t34m1ds001_add_team_ids'  # ← verify per the note above
+down_revision: Union[str, None] = 's0cc3r_t34m1ds001'  # ← verify per the note above
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
