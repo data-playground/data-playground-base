@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from domains.habits.routers import habits # WO1
+from domains.habits.routers import habits, habits_settings # WO1, WO#23
 from domains.blog.routers import blog # WO2
 from domains.code_intel.routers import ci_projects, ci_files, ci_readme # WO2
 from domains.jobs.routers import jobs, ats, staging, job_config # WO3
@@ -66,6 +66,7 @@ app.include_router(staging.router)
 app.include_router(blog.router)
 app.include_router(explorer.router)
 app.include_router(habits.router)
+app.include_router(habits_settings.router)  # WO#23 — must stay AFTER habits.router
 app.include_router(journal.router)
 
 # ── Code Intelligence (files + readme before projects for path specificity) ────
