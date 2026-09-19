@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, String, UniqueConstraint
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.base_model import Base
@@ -83,15 +84,22 @@ class MediumArticle(Base):
     )
 
     tags: Mapped[list] = mapped_column(JSON, default=list)
-    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    content_html: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # MEDIUMTEXT (16MB), not Text/TEXT (65,535 bytes) — a real article's
+    # full body, or its full verbatim <item> XML, can and does exceed
+    # MySQL's 64KB TEXT cap; see the bug report this widening fixes
+    # (WO#35, 2026-09-18: DataError 1406 on raw_item, which rolled back
+    # an entire day's ingest batch across all 4 sources, not just the
+    # one oversized row — every article in ingest_sources() currently
+    # lands in one execute_many() transaction).
+    summary: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False, default="")
+    content_html: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False, default="")
 
     # Verbatim <item> XML, straight from rss_ingest.ParsedArticle.raw_item.
     # Exists so a field nobody thought to extract today can be backfilled
     # from stored rows later, instead of needing a re-fetch that may no
     # longer be possible — Medium's live feed only shows the ~10-25 most
     # recent items per source.
-    raw_item: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    raw_item: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False, default="")
 
     # First real <img> src found in content_html (rss_ingest.extract_thumbnail()),
     # skipping Medium's own 1x1 view-tracking pixel. Nullable, not a
