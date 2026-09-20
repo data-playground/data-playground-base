@@ -10,7 +10,10 @@ from database import init_db
 # ── Routers ────────────────────────────────────────────────────────────────────
 from domains.habits.routers import habits, habits_settings # WO1, WO#23
 from domains.blog.routers import blog # WO2
-from domains.code_intel.routers import ci_projects, ci_files, ci_readme # WO2
+from domains.code_intel.routers import ( # WO2, WO#24
+    ci_projects, ci_files, ci_readme,
+    ci_folder_readme, ci_batch, ci_status,
+)
 from domains.jobs.routers import jobs, ats, staging, job_config # WO3
 from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
@@ -71,8 +74,11 @@ app.include_router(journal.router)
 
 # ── Code Intelligence (files + readme before projects for path specificity) ────
 app.include_router(ci_files.router)
+app.include_router(ci_batch.router)          # split from ci_files.py (WO#24 Part B)
 app.include_router(ci_readme.router)
+app.include_router(ci_folder_readme.router)  # split from ci_readme.py (WO#24 Part A)
 app.include_router(ci_projects.router)
+app.include_router(ci_status.router)         # split from ci_projects.py (WO#24 Part C)
 
 app.include_router(dashboard.router)
 
