@@ -7,8 +7,10 @@ Endpoints:
   GET   /journal/{date}                   → Specific date view (YYYY-MM-DD)
   POST  /journal                          → Create or update today's entry
   PATCH /journal/{entry_id}/lock          → Lock an entry (used by DAG + UI)
-  GET   /journal/synthesis/latest         → Latest weekly synthesis (JSON)
-  GET   /journal/synthesis/{week_start}   → Full synthesis for a week (HTML partial)
+
+Weekly-synthesis endpoints (GET /journal/synthesis/*) moved to
+routers/journal_synthesis.py in WO#25 — see that file's docstring.
+Calendar/streak helpers moved to routers/_calendar.py in WO#25.
 
 Privacy contract: content, gratitude, and challenges are read/written here
 but are NEVER forwarded to any external API call anywhere in this router.
@@ -19,12 +21,17 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from domains.journal.models import JournalEntry, WeeklySynthesis
+from domains.journal.routers._calendar import (
+    _build_calendar_months,
+    _calculate_streak,
+    _get_calendar_data,
+)
 
 log = logging.getLogger(__name__)
 
@@ -49,27 +56,6 @@ async def _get_entry_by_date(
         select(JournalEntry).where(JournalEntry.entry_date == entry_date)
     )
     return result.scalar_one_or_none()
-
-
-async def _get_calendar_dates(db: AsyncSession, days: int = 90) -> set[datetime.date]:
-    """Returns the set of dates that have entries, for the last `days` days."""
-    cutoff = _today() - datetime.timedelta(days=days)
-    result = await db.execute(
-        select(JournalEntry.entry_date, JournalEntry.mood_score)
-        .where(JournalEntry.entry_date >= cutoff)
-        .order_by(JournalEntry.entry_date)
-    )
-    return {row.entry_date: row.mood_score for row in result.all()}
-
-
-async def _get_calendar_data(db: AsyncSession, days: int = 90) -> dict:
-    """Returns {date: mood_score} for calendar rendering."""
-    cutoff = _today() - datetime.timedelta(days=days)
-    result = await db.execute(
-        select(JournalEntry.entry_date, JournalEntry.mood_score)
-        .where(JournalEntry.entry_date >= cutoff)
-    )
-    return {row.entry_date: row.mood_score for row in result.all()}
 
 
 # ── Main journal page ──────────────────────────────────────────────────────────
@@ -123,70 +109,6 @@ async def journal_home(
 
 
 # ── Specific date view ─────────────────────────────────────────────────────────
-
-@router.get("/synthesis/history", response_class=HTMLResponse)
-async def synthesis_history(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(WeeklySynthesis)
-        .order_by(desc(WeeklySynthesis.week_start_date))
-    )
-    syntheses = result.scalars().all()
-    return templates.TemplateResponse("journal_synthesis.html", {
-        "request": request,
-        "syntheses": syntheses,
-        "active_module": "journal_synthesis",
-    })
-
-
-@router.get("/synthesis/latest")
-async def latest_synthesis_json(db: AsyncSession = Depends(get_db)):
-    """JSON endpoint consumed by the dashboard."""
-    result = await db.execute(
-        select(WeeklySynthesis)
-        .order_by(desc(WeeklySynthesis.week_start_date))
-        .limit(1)
-    )
-    synthesis = result.scalar_one_or_none()
-    if not synthesis:
-        return JSONResponse({"synthesis": None})
-    return JSONResponse({
-        "synthesis": {
-            "id": synthesis.id,
-            "week_label": synthesis.week_label,
-            "avg_mood": float(synthesis.avg_mood) if synthesis.avg_mood else None,
-            "avg_energy": float(synthesis.avg_energy) if synthesis.avg_energy else None,
-            "synthesis_text": synthesis.synthesis_text,
-            "generated_at": synthesis.generated_at.isoformat(),
-        }
-    })
-
-
-@router.get("/synthesis/{week_start_date}", response_class=HTMLResponse)
-async def synthesis_detail(
-    week_start_date: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        week_date = datetime.date.fromisoformat(week_start_date)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Date must be YYYY-MM-DD")
-
-    result = await db.execute(
-        select(WeeklySynthesis).where(WeeklySynthesis.week_start_date == week_date)
-    )
-    synthesis = result.scalar_one_or_none()
-    if not synthesis:
-        raise HTTPException(status_code=404, detail="Synthesis not found for that week")
-
-    return templates.TemplateResponse("partials/synthesis_detail.html", {
-        "request": request,
-        "synthesis": synthesis,
-    })
-
 
 @router.get("/{date_str}", response_class=HTMLResponse)
 async def journal_date(
@@ -351,96 +273,3 @@ async def lock_entry(
         f'<span class="lock-badge locked">🔒 Locked</span>',
         status_code=200,
     )
-
-
-# ── Calendar helpers ───────────────────────────────────────────────────────────
-
-def _build_calendar_months(
-    today: datetime.date,
-    calendar_data: dict,
-) -> list[dict]:
-    """
-    Returns 3 months of calendar data for the template.
-    Each month is a dict with: year, month, month_name, weeks (list of week rows).
-    Each day cell: {date, day_num, has_entry, mood_score, is_today, is_future, mood_class}
-    """
-    months = []
-    for month_offset in range(-2, 1):  # two months ago, last month, this month
-        # Calculate target month
-        m = today.month + month_offset
-        y = today.year
-        while m <= 0:
-            m += 12
-            y -= 1
-        while m > 12:
-            m -= 12
-            y += 1
-
-        import calendar as cal_mod
-        month_name = datetime.date(y, m, 1).strftime("%B %Y")
-        first_day = datetime.date(y, m, 1)
-        # weekday() returns 0=Mon, 6=Sun — we want Mon as start
-        start_weekday = first_day.weekday()  # 0-6
-        num_days = cal_mod.monthrange(y, m)[1]
-
-        weeks = []
-        current_week = [None] * start_weekday  # padding for first week
-        for day_num in range(1, num_days + 1):
-            d = datetime.date(y, m, day_num)
-            mood = calendar_data.get(d)
-            cell = {
-                "date": d,
-                "day_num": day_num,
-                "has_entry": d in calendar_data,
-                "mood_score": mood,
-                "is_today": d == today,
-                "is_future": d > today,
-                "mood_class": _mood_class(mood) if d in calendar_data else "none",
-                "date_str": d.isoformat(),
-            }
-            current_week.append(cell)
-            if len(current_week) == 7:
-                weeks.append(current_week)
-                current_week = []
-        if current_week:
-            # Pad the last week
-            while len(current_week) < 7:
-                current_week.append(None)
-            weeks.append(current_week)
-
-        months.append({
-            "year": y,
-            "month": m,
-            "month_name": month_name,
-            "weeks": weeks,
-        })
-
-    return months
-
-
-def _mood_class(mood_score: Optional[int]) -> str:
-    if not mood_score:
-        return "none"
-    if mood_score <= 2:
-        return "low"
-    if mood_score == 3:
-        return "mid"
-    return "high"
-
-
-async def _calculate_streak(db: AsyncSession, today: datetime.date) -> int:
-    """Returns the number of consecutive days with journal entries ending today."""
-    result = await db.execute(
-        select(JournalEntry.entry_date)
-        .where(JournalEntry.entry_date <= today)
-        .order_by(desc(JournalEntry.entry_date))
-        .limit(365)
-    )
-    dates = {row.entry_date for row in result.all()}
-
-    streak = 0
-    check = today
-    while check in dates:
-        streak += 1
-        check -= datetime.timedelta(days=1)
-    return streak
