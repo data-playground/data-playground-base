@@ -9,7 +9,7 @@ from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
 from domains.habits.routers import habits, habits_settings # WO1, WO#23
-from domains.blog.routers import blog # WO2
+from domains.blog.routers import blog, blog_pipeline # WO2, split in WO#27
 from domains.code_intel.routers import ( # WO2, WO#24
     ci_projects, ci_files, ci_readme,
     ci_folder_readme, ci_batch, ci_status,
@@ -18,7 +18,7 @@ from domains.jobs.routers import jobs, ats, staging, job_config # WO3
 from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
 from domains.journal.routers import journal, journal_synthesis # WO6, split in WO#25
-from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes # WO7
+from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes, recipe_mutations # WO7, WO#26
 from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
 from domains.media.routers import media, media_search, media_recommend, media_settings # WO9
 from domains.planning.routers import intent, weekly_plan, weekly_plan_generator, weekly_plan_shopping # WO10
@@ -67,6 +67,8 @@ app.include_router(job_config.router)
 app.include_router(ats.router)
 app.include_router(staging.router)
 app.include_router(blog.router)
+app.include_router(blog_pipeline.router)  # WO#27 — HITL/Airflow pipeline endpoints
+
 app.include_router(explorer.router)
 app.include_router(habits.router)
 app.include_router(habits_settings.router)  # WO#23 — must stay AFTER habits.router
@@ -87,6 +89,7 @@ app.include_router(recipe_extract.router)     # ← NEW — before recipes
 app.include_router(recipe_discovery.router)   # ← NEW — before recipes
 app.include_router(pantry.router)             # ← NEW
 app.include_router(recipes.router)            # ← NEW — last, has /{id} catch-all
+app.include_router(recipe_mutations.router)   # WO#26 — /{id}/rate|favorite|cook
 
 app.include_router(workout.router)
 app.include_router(workout_log.router)

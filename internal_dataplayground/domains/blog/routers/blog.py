@@ -1,20 +1,28 @@
 # routers/blog.py
 """
-Blog Ideation Module — Full Pipeline Router
+Blog Ideation Module — Kanban & CRUD Router
+
+Split from this file's original monolith (WO#27) — the four HITL/Airflow-
+pipeline endpoints (evidence, trigger, review, finalize) now live in
+routers/blog_pipeline.py, which owns the Ghostwriter → Refiner → Editor
+pipeline specifically. This file keeps the kanban board, BYOI intake, the
+generic status/archive/delete/revert endpoints, the Scout trigger, and the
+article reader view.
 
 Endpoints:
   GET   /blog                           → Kanban board
   POST  /blog/ideas                     → BYOI: save raw idea, trigger expander DAG
   GET   /blog/ideas/{id}                → Detail drawer partial (HTMX)
-  PATCH /blog/ideas/{id}/evidence       → Save code + author notes + difficulty (HITL 1)
-  PATCH /blog/ideas/{id}/trigger        → Trigger Ghostwriter DAG
-  PATCH /blog/ideas/{id}/review         → Save review notes (HITL 2)
-  PATCH /blog/ideas/{id}/finalize       → Trigger Refiner+Editor DAG
   PATCH /blog/ideas/{id}/status         → Generic status update
   PATCH /blog/ideas/{id}/archive        → Move back to backlog
   DELETE /blog/ideas/{id}               → Permanent delete
+  PATCH /blog/ideas/{id}/revert         → Move status backward one stage
   POST  /blog/scout                     → Trigger Scout DAG
   GET   /blog/ideas/{id}/article        → Full article reader view
+
+See routers/blog_pipeline.py for: PATCH /blog/ideas/{id}/evidence,
+PATCH /blog/ideas/{id}/trigger, PATCH /blog/ideas/{id}/review,
+PATCH /blog/ideas/{id}/finalize.
 """
 
 import logging
@@ -27,7 +35,7 @@ from sqlalchemy import select, desc
 
 from database import get_db
 from domains.blog.models import (
-    BlogIdea, BlogIdeaStatus, BlogProjectType, DIFFICULTY_LEVELS,
+    BlogIdea, BlogIdeaStatus, BlogProjectType,
 )
 from domains.code_intel.models import CodeFile, CodeProject
 from services.airflow_service import trigger_airflow
@@ -37,10 +45,8 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/blog", tags=["Blog"])
 
-SCOUT_DAG     = "life_os_blog_scout"
-CREATOR_DAG   = "life_os_blog_creator"
-FINALIZER_DAG = "life_os_blog_finalizer"
-EXPANDER_DAG  = "life_os_idea_expander"
+SCOUT_DAG    = "life_os_blog_scout"
+EXPANDER_DAG = "life_os_idea_expander"
 
 
 # ── Kanban board ───────────────────────────────────────────────────────────────
@@ -121,163 +127,6 @@ async def idea_detail(
         "partials/blog_detail.html",
         {"request": request, "idea": idea,
          "code_files": code_files, "code_projects": code_projects},
-    )
-
-
-# ── HITL 1 — Save evidence ─────────────────────────────────────────────────────
-
-@router.patch("/ideas/{idea_id}/evidence", response_class=HTMLResponse)
-async def save_evidence(
-    idea_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    form = await request.form()
-    idea = await db.get(BlogIdea, idea_id)
-    if not idea:
-        raise HTTPException(status_code=404)
-
-    idea.code_content  = str(form.get("code_content", "")).strip() or None
-    idea.author_notes  = str(form.get("author_notes", "")).strip() or None
-
-    difficulty_raw = str(form.get("difficulty", "")).strip()
-    if difficulty_raw in DIFFICULTY_LEVELS:
-        idea.difficulty = difficulty_raw
-
-    code_file_id    = form.get("code_file_id")
-    code_project_id = form.get("code_project_id")
-    idea.code_file_id    = int(code_file_id)    if code_file_id    else None
-    idea.code_project_id = int(code_project_id) if code_project_id else None
-
-    idea.status     = BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER
-    idea.updated_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(idea)
-
-    files_result = await db.execute(select(CodeFile).order_by(CodeFile.file_name))
-    projects_result = await db.execute(select(CodeProject).order_by(CodeProject.project_name))
-
-    return templates.TemplateResponse(
-        "partials/blog_detail.html",
-        {"request": request, "idea": idea,
-         "code_files": files_result.scalars().all(),
-         "code_projects": projects_result.scalars().all(),
-         "toast": "Evidence saved. Ready to trigger the Ghostwriter."},
-    )
-
-
-# ── Trigger 1 — Ghostwriter DAG ───────────────────────────────────────────────
-
-@router.patch("/ideas/{idea_id}/trigger", response_class=HTMLResponse)
-async def trigger_creator(
-    idea_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    idea = await db.get(BlogIdea, idea_id)
-    if not idea:
-        raise HTTPException(status_code=404)
-
-    # IN_DEVELOPMENT is allowed — triggering auto-advances status
-    if idea.status not in (
-        BlogIdeaStatus.IDEA_GENERATED,
-        BlogIdeaStatus.WAITING_FOR_WRITING_TRIGGER,
-        BlogIdeaStatus.IN_DEVELOPMENT,
-    ):
-        return templates.TemplateResponse(
-            "partials/blog_detail.html",
-            {"request": request, "idea": idea,
-             "error": f"Cannot trigger from status: {idea.status.label}"},
-        )
-
-    try:
-        run_id = await trigger_airflow(CREATOR_DAG, conf={"idea_id": idea_id})
-        idea.airflow_run_id = run_id
-        idea.status = BlogIdeaStatus.WRITING_IN_PROGRESS
-    except Exception as exc:
-        log.warning("Airflow trigger failed: %s", exc)
-        return templates.TemplateResponse(
-            "partials/blog_detail.html",
-            {"request": request, "idea": idea,
-             "error": f"Airflow unreachable: {exc}"},
-        )
-
-    idea.updated_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(idea)
-
-    return templates.TemplateResponse(
-        "partials/blog_detail.html",
-        {"request": request, "idea": idea,
-         "toast": f"Ghostwriter DAG triggered (run: {run_id}). Check Airflow for progress."},
-    )
-
-
-# ── HITL 2 — Save review notes ────────────────────────────────────────────────
-
-@router.patch("/ideas/{idea_id}/review", response_class=HTMLResponse)
-async def save_review(
-    idea_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    form = await request.form()
-    idea = await db.get(BlogIdea, idea_id)
-    if not idea:
-        raise HTTPException(status_code=404)
-
-    idea.user_review_notes = str(form.get("user_review_notes", "")).strip() or None
-    idea.status            = BlogIdeaStatus.WAITING_FOR_REVIEW
-    idea.updated_at        = datetime.utcnow()
-    await db.commit()
-    await db.refresh(idea)
-
-    return templates.TemplateResponse(
-        "partials/blog_detail.html",
-        {"request": request, "idea": idea,
-         "toast": "Review notes saved. Click Finalize when ready."},
-    )
-
-
-# ── Trigger 2 — Finalizer DAG ─────────────────────────────────────────────────
-
-@router.patch("/ideas/{idea_id}/finalize", response_class=HTMLResponse)
-async def trigger_finalizer(
-    idea_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    idea = await db.get(BlogIdea, idea_id)
-    if not idea:
-        raise HTTPException(status_code=404)
-
-    if not idea.draft_v1:
-        return templates.TemplateResponse(
-            "partials/blog_detail.html",
-            {"request": request, "idea": idea,
-             "error": "No draft found. Run the Ghostwriter first."},
-        )
-
-    try:
-        run_id = await trigger_airflow(FINALIZER_DAG, conf={"idea_id": idea_id})
-        idea.airflow_run_id = run_id
-        idea.status = BlogIdeaStatus.REVIEW_COMPLETED
-    except Exception as exc:
-        log.warning("Finalizer DAG trigger failed: %s", exc)
-        return templates.TemplateResponse(
-            "partials/blog_detail.html",
-            {"request": request, "idea": idea,
-             "error": f"Airflow unreachable: {exc}"},
-        )
-
-    idea.updated_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(idea)
-
-    return templates.TemplateResponse(
-        "partials/blog_detail.html",
-        {"request": request, "idea": idea,
-         "toast": f"Refiner + Editor triggered (run: {run_id})."},
     )
 
 

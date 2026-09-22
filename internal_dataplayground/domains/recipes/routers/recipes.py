@@ -8,15 +8,14 @@ Endpoints:
   POST   /recipes                        → Create recipe manually (form data)
   PATCH  /recipes/{id}                   → Update recipe metadata
   DELETE /recipes/{id}                   → Soft-delete (archive)
-  PATCH  /recipes/{id}/rate              → Set user_rating (1-5)
-  PATCH  /recipes/{id}/favorite          → Toggle is_favorite
-  POST   /recipes/{id}/cook              → Log a cook: increment counter + update date
   GET    /recipes/tags                   → All tags as JSON (for autocomplete)
   GET    /recipes/ingredients/suggest    → Ingredient name autocomplete
+
+The rate / favorite / cook endpoints live in recipe_mutations.py (WO#26 Part B).
 """
 
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
@@ -292,80 +291,3 @@ async def delete_recipe(
     recipe.updated_at = datetime.utcnow()
     await db.commit()
     return HTMLResponse("")  # HTMX removes the card
-
-
-# ── Rate ───────────────────────────────────────────────────────────────────────
-
-@router.patch("/{recipe_id}/rate", response_class=HTMLResponse)
-async def rate_recipe(
-    recipe_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    form = await request.form()
-    rating = int(form.get("rating", 0))
-    if not 1 <= rating <= 5:
-        raise HTTPException(status_code=422, detail="Rating must be 1-5")
-
-    recipe = await db.get(Recipe, recipe_id)
-    if not recipe:
-        raise HTTPException(status_code=404)
-
-    recipe.user_rating = rating
-    recipe.updated_at = datetime.utcnow()
-    await db.commit()
-
-    # Return updated rating stars partial
-    return templates.TemplateResponse(
-        "partials/recipe_rating.html",
-        {"request": request, "recipe": recipe},
-    )
-
-
-# ── Favorite toggle ────────────────────────────────────────────────────────────
-
-@router.patch("/{recipe_id}/favorite", response_class=HTMLResponse)
-async def toggle_favorite(
-    recipe_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    recipe = await db.get(Recipe, recipe_id)
-    if not recipe:
-        raise HTTPException(status_code=404)
-
-    recipe.is_favorite = not recipe.is_favorite
-    recipe.updated_at = datetime.utcnow()
-    await db.commit()
-
-    return templates.TemplateResponse(
-        "partials/recipe_favorite.html",
-        {"request": request, "recipe": recipe},
-    )
-
-
-# ── Cook logger ────────────────────────────────────────────────────────────────
-
-@router.post("/{recipe_id}/cook", response_class=HTMLResponse)
-async def log_cook(
-    recipe_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Increments times_cooked and sets last_cooked_at to today.
-    No per-cook log table — simple counter model.
-    """
-    recipe = await db.get(Recipe, recipe_id)
-    if not recipe:
-        raise HTTPException(status_code=404)
-
-    recipe.times_cooked = (recipe.times_cooked or 0) + 1
-    recipe.last_cooked_at = date.today()
-    recipe.updated_at = datetime.utcnow()
-    await db.commit()
-
-    return templates.TemplateResponse(
-        "partials/recipe_cook_count.html",
-        {"request": request, "recipe": recipe},
-    )
