@@ -9,7 +9,7 @@ Endpoints:
   POST /recipes/extract/confirm        → Save previewed recipe → redirect to detail
 
 Extraction strategy:
-  URL:   1. requests.get() the page HTML
+  URL:   1. httpx.AsyncClient fetches the page HTML
          2. Parse Schema.org/Recipe JSON-LD (covers most recipe sites)
          3. If no JSON-LD found, strip HTML tags and pass to Gemini Flash
          4. Return preview partial for user review before saving
@@ -28,7 +28,7 @@ import base64
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,25 @@ from core.templating import templates
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recipes/extract", tags=["Recipe Extraction"])
+
+
+# ── Error response helper ───────────────────────────────────────────────────────
+
+def _extraction_error(request: Request, message: str, source_url: Optional[str] = None):
+    """
+    Renders partials/recipe_extract_preview.html in its error state.
+    Shared by every failure branch below (fetch failures, unreadable files,
+    and AI extraction failures) so the error shape stays consistent.
+    """
+    return templates.TemplateResponse(
+        "partials/recipe_extract_preview.html",
+        {
+            "request": request,
+            "error": message,
+            "extracted": None,
+            "source_url": source_url,
+        },
+    )
 
 
 # ── Extraction landing page ────────────────────────────────────────────────────
@@ -74,15 +93,7 @@ async def extract_from_url(
         html = await _fetch_url_content(url)
     except Exception as exc:
         log.warning("URL fetch failed for %s: %s", url, exc)
-        return templates.TemplateResponse(
-            "partials/recipe_extract_preview.html",
-            {
-                "request": request,
-                "error": f"Could not fetch that URL: {exc}",
-                "extracted": None,
-                "source_url": url,
-            },
-        )
+        return _extraction_error(request, f"Could not fetch that URL: {exc}", source_url=url)
 
     # Path A: Schema.org
     extracted = _parse_schema_org(html)
@@ -93,21 +104,25 @@ async def extract_from_url(
         from airflow.agents.recipe_agents import agent_extract_recipe
         page_text = _strip_html(html)
         if len(page_text) < 200:
-            return templates.TemplateResponse(
-                "partials/recipe_extract_preview.html",
-                {
-                    "request": request,
-                    "error": (
-                        "The page appears to be JavaScript-rendered and returned "
-                        "very little content. Try copying the recipe text and using "
-                        "the Manual tab instead."
-                        # TODO: This message will be removed when Playwright is added.
-                    ),
-                    "extracted": None,
-                    "source_url": url,
-                },
+            return _extraction_error(
+                request,
+                "The page appears to be JavaScript-rendered and returned "
+                "very little content. Try copying the recipe text and using "
+                "the Manual tab instead.",
+                # TODO: This message will be removed when Playwright is added.
+                source_url=url,
             )
-        extracted = agent_extract_recipe(page_text, source_hint="from a recipe website")
+        try:
+            extracted = agent_extract_recipe(page_text, source_hint="from a recipe website")
+        except Exception as exc:
+            log.error("Gemini extraction failed for %s: %s", url, exc)
+            return _extraction_error(request, f"AI extraction failed: {exc}", source_url=url)
+        if not extracted:
+            return _extraction_error(
+                request,
+                "AI extraction returned no data. Try the Manual tab instead.",
+                source_url=url,
+            )
         extracted["source_type"] = "url"
 
     extracted["source_url"] = url
@@ -150,18 +165,16 @@ async def extract_from_file(
             pdf_text = "\n".join(text_parts)
         except Exception as exc:
             log.warning("PDF text extraction failed: %s", exc)
-            return templates.TemplateResponse(
-                "partials/recipe_extract_preview.html",
-                {
-                    "request": request,
-                    "error": f"Could not read the PDF: {exc}",
-                    "extracted": None,
-                    "source_url": None,
-                },
-            )
+            return _extraction_error(request, f"Could not read the PDF: {exc}")
 
         from airflow.agents.recipe_agents import agent_extract_recipe
-        extracted = agent_extract_recipe(pdf_text, source_hint="from a PDF cookbook")
+        try:
+            extracted = agent_extract_recipe(pdf_text, source_hint="from a PDF cookbook")
+        except Exception as exc:
+            log.error("Gemini extraction failed for PDF %s: %s", filename, exc)
+            return _extraction_error(request, f"AI extraction failed: {exc}")
+        if not extracted:
+            return _extraction_error(request, "AI extraction returned no data for this PDF.")
         extracted["source_type"] = "pdf"
 
     elif content_type.startswith("image/") or filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
@@ -170,18 +183,19 @@ async def extract_from_file(
         mime = content_type if content_type.startswith("image/") else "image/jpeg"
 
         from airflow.agents.recipe_agents import agent_extract_recipe_from_image
-        extracted = agent_extract_recipe_from_image(image_b64, mime_type=mime)
+        try:
+            extracted = agent_extract_recipe_from_image(image_b64, mime_type=mime)
+        except Exception as exc:
+            log.error("Gemini vision extraction failed for %s: %s", filename, exc)
+            return _extraction_error(request, f"AI extraction failed: {exc}")
+        if not extracted:
+            return _extraction_error(request, "AI extraction returned no data for this image.")
         extracted["source_type"] = "image"
 
     else:
-        return templates.TemplateResponse(
-            "partials/recipe_extract_preview.html",
-            {
-                "request": request,
-                "error": "Unsupported file type. Please upload a PDF or image (JPEG, PNG, WEBP).",
-                "extracted": None,
-                "source_url": None,
-            },
+        return _extraction_error(
+            request,
+            "Unsupported file type. Please upload a PDF or image (JPEG, PNG, WEBP).",
         )
 
     return templates.TemplateResponse(

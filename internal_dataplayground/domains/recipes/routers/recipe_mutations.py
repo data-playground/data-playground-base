@@ -36,7 +36,10 @@ async def rate_recipe(
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
-    rating = int(form.get("rating", 0))
+    try:
+        rating = int(form.get("rating", 0))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Rating must be 1-5")
     if not 1 <= rating <= 5:
         raise HTTPException(status_code=422, detail="Rating must be 1-5")
 

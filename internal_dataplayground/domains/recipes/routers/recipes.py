@@ -20,12 +20,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import select, desc, func, or_
+from sqlalchemy import select, desc, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from domains.recipes.models import (
-    Ingredient, IngredientCategory, Recipe, RecipeDifficulty,
+    Ingredient, Recipe, RecipeDifficulty,
     RecipeMealType, RecipeSourceType, RecipeTag,
 )
 from services.recipe_service import run_normalization_pipeline
@@ -256,8 +256,7 @@ async def update_recipe(
     if form.get("replace_ingredients") and form.get("raw_ingredients"):
         from domains.recipes.models import RecipeIngredient
         await db.execute(
-            __import__("sqlalchemy", fromlist=["delete"]).delete(RecipeIngredient)
-            .where(RecipeIngredient.recipe_id == recipe_id)
+            delete(RecipeIngredient).where(RecipeIngredient.recipe_id == recipe_id)
         )
         ingredient_lines = [
             line.strip()

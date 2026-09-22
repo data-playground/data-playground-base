@@ -11,11 +11,11 @@ recipe_extract.py:
   _strip_html()         → tag-stripped page text for the Gemini fallback (Path B)
 
 TODO (Playwright headless browser):
-  The _fetch_url_content() function below uses requests.get() which fails
-  on JS-rendered sites (NYT Cooking, Bon Appétit, Serious Eats, etc.)
+  The _fetch_url_content() function below uses httpx.AsyncClient which
+  fails on JS-rendered sites (NYT Cooking, Bon Appétit, Serious Eats, etc.)
   because those pages return near-empty HTML before JS executes.
 
-  Integration point: inside _fetch_url_content(), after the requests
+  Integration point: inside _fetch_url_content(), after the httpx
   attempt, add a fallback branch:
 
       if _looks_empty(html):
@@ -35,7 +35,7 @@ TODO (Playwright headless browser):
 import json
 import logging
 import re
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -108,7 +108,7 @@ def _parse_schema_org(html: str) -> Optional[dict]:
             continue
 
         # Parse time strings like "PT30M", "PT1H20M"
-        def parse_duration(s: any) -> Optional[int]:
+        def parse_duration(s: Any) -> Optional[int]:
             if not s:
                 return None
             s = str(s)
