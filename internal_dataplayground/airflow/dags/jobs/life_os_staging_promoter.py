@@ -58,7 +58,7 @@ default_args = {
 
 def task_fetch_and_scrape(**context):
     from dag_db import fetch_all, execute_many
-    from agents.job_agents import get_full_job_posting, extract_linkedin_job_id, DETAIL_FETCH_DELAY_SEC
+    from agents.jobs.job_agents import get_full_job_posting, extract_linkedin_job_id, DETAIL_FETCH_DELAY_SEC
 
     conf = context["dag_run"].conf or {}
     staging_ids = conf.get("staging_ids")
@@ -130,8 +130,8 @@ def task_fetch_and_scrape(**context):
 
 
 def task_score(**context):
-    from agents.job_agents import build_scoring_chunks, score_job_batch
-    from agents.job_resume_context import RESUME_MARKDOWN, KEY_STRENGTHS_TO_WEIGHT
+    from agents.jobs.job_agents import build_scoring_chunks, score_job_batch
+    from agents.jobs.job_resume_context import RESUME_MARKDOWN, KEY_STRENGTHS_TO_WEIGHT
 
     jobs = context["ti"].xcom_pull(key="scraped", task_ids="fetch_and_scrape") or []
     if not jobs:
@@ -282,7 +282,7 @@ def task_log_run(**context):
     upstream tasks succeeded (trigger_rule="all_done" below), same pattern
     as both existing Job Scout DAGs use for their own health logging.
     """
-    from agents.job_scout_health import log_run
+    from agents.jobs.job_scout_health import log_run
 
     items_attempted = context["ti"].xcom_pull(key="items_attempted", task_ids="fetch_and_scrape") or 0
     scraped = context["ti"].xcom_pull(key="scraped", task_ids="fetch_and_scrape") or []

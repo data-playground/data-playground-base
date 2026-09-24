@@ -47,7 +47,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 from dag_db import fetch_all, execute
-from agents.media_agents import get_tmdb_watch_providers
+from agents.media.media_agents import get_tmdb_watch_providers
 
 log = logging.getLogger(__name__)
 

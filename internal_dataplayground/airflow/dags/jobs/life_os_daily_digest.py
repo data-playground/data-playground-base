@@ -101,7 +101,7 @@ def _render_digest_html(jobs: list[dict], health: list[dict]) -> str:
 
 def task_build_and_send(**context):
     from dag_db import fetch_all
-    from agents.job_scout_health import get_health_summary
+    from agents.jobs.job_scout_health import get_health_summary
     from agents.email_client import send_email
 
     conf = context["dag_run"].conf or {}

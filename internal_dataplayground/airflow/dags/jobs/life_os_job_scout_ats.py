@@ -39,7 +39,7 @@ default_args = {
 
 def task_fetch_ats_jobs(**context):
     from dag_db import fetch_all, execute_many
-    from agents.job_ats_agents import fetch_all_watched_companies
+    from agents.jobs.job_ats_agents import fetch_all_watched_companies
 
     conf = context["dag_run"].conf or {}
     name_filter = set(conf.get("companies") or [])
@@ -89,7 +89,7 @@ def task_fetch_ats_jobs(**context):
 
     # Cross-source dedup: skip anything that's the same role already sitting
     # in linkedin_jobs from the LinkedIn DAG (same company + near-identical title).
-    from agents.job_dedup import filter_cross_source_duplicates, RECENCY_WINDOW_DAYS
+    from agents.jobs.job_dedup import filter_cross_source_duplicates, RECENCY_WINDOW_DAYS
     cutoff = (datetime.utcnow() - timedelta(days=RECENCY_WINDOW_DAYS)).strftime("%Y-%m-%d")
     recent_rows = fetch_all(
         "SELECT company_name, job_title, source FROM linkedin_jobs WHERE search_date >= %s",
@@ -109,8 +109,8 @@ def task_fetch_ats_jobs(**context):
 
 
 def task_score_jobs(**context):
-    from agents.job_agents import build_scoring_chunks, score_job_batch
-    from agents.job_resume_context import RESUME_MARKDOWN, KEY_STRENGTHS_TO_WEIGHT
+    from agents.jobs.job_agents import build_scoring_chunks, score_job_batch
+    from agents.jobs.job_resume_context import RESUME_MARKDOWN, KEY_STRENGTHS_TO_WEIGHT
 
     jobs = context["ti"].xcom_pull(key="ats_jobs", task_ids="fetch_ats_jobs") or []
     if not jobs:
@@ -196,7 +196,7 @@ def task_load_to_mysql(**context):
 
 
 def task_log_run(**context):
-    from agents.job_scout_health import log_run
+    from agents.jobs.job_scout_health import log_run
 
     items_attempted = context["ti"].xcom_pull(key="items_attempted", task_ids="fetch_ats_jobs") or 0
     items_found = context["ti"].xcom_pull(key="items_found", task_ids="fetch_ats_jobs") or 0
