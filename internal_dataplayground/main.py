@@ -8,24 +8,24 @@ from fastapi.templating import Jinja2Templates
 from database import init_db
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from domains.habits.routers import habits, habits_settings # WO1, WO#23
-from domains.blog.routers import blog, blog_pipeline # WO2, split in WO#27
-from domains.code_intel.routers import ( # WO2, WO#24
+from domains.habits.routers import habits, habits_settings # WO1, WO23
+from domains.blog.routers import blog, blog_pipeline # WO2, WO27
+from domains.code_intel.routers import ( # WO2, WO24
     ci_projects, ci_files, ci_readme,
     ci_folder_readme, ci_batch, ci_status,
 )
 from domains.jobs.routers import jobs, ats, staging, job_config # WO3
 from domains.explorer.routers import explorer # WO4
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
-from domains.journal.routers import journal, journal_synthesis # WO6, split in WO#25
-from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes, recipe_mutations # WO7, WO#26
-from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
-from domains.media.routers import media, media_search, media_recommend, media_settings, media_seasons # WO9, split in WO#28
-from domains.planning.routers import intent, weekly_plan, weekly_plan_confirm, weekly_plan_generator, weekly_plan_shopping # WO10, WO#30
+from domains.journal.routers import journal, journal_synthesis # WO6, WO25
+from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes, recipe_mutations # WO7, WO26
+from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings, workout_body_metrics # WO8
+from domains.media.routers import media, media_search, media_recommend, media_settings, media_seasons # WO9, split in WO28
+from domains.planning.routers import intent, weekly_plan, weekly_plan_confirm, weekly_plan_generator, weekly_plan_shopping # WO10, WO30
 
-from domains.nba.routers import nba_games # WO#33
-from domains.soccer.routers import soccer, soccer_settings # WO#34
-from domains.medium.routers import medium_feed, medium_settings # WO#35
+from domains.nba.routers import nba_games # WO33
+from domains.soccer.routers import soccer, soccer_settings # WO34
+from domains.medium.routers import medium_feed, medium_settings # WO35
 
 from routers import dashboard
 
@@ -93,7 +93,7 @@ app.include_router(recipe_mutations.router)   # WO#26 — /{id}/rate|favorite|co
 
 app.include_router(workout.router)
 app.include_router(workout_log.router)
-app.include_router(workout_log.body_metrics_router)   # separate sub-router!
+app.include_router(workout_body_metrics.body_metrics_router)   # separate sub-router!
 app.include_router(workout_plans_crud.router)
 app.include_router(workout_plan_ai_generator.router)   # separate sub-router!
 app.include_router(workout_settings.router)
