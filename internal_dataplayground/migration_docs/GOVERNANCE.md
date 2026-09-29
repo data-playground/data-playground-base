@@ -1,7 +1,9 @@
 # Life OS — Project Governance Bible
 
 **Status:** Living document. Last updated after Work Orders #1–4 (habits,
-blog+code_intel, jobs, explorer domain migrations).
+blog+code_intel, jobs, explorer domain migrations). Individual sections
+carry their own "Status" notes as they're superseded by later work — check
+those before trusting this front-matter line for any one section.
 
 This document is the permanent law for all development on this repository —
 human or AI-assisted. Any future coding session, work order, or ad hoc change
@@ -123,6 +125,22 @@ work, but it is binding for all *new* code starting now.)
 resolved by the domain-folder migrations (WO#1–4 intentionally left
 `blog_agents.py` untouched — see WO#2's hard boundaries).
 
+> **Known staleness, not yet corrected:** the paragraph above no longer
+> reflects reality. WO#11–16 have since migrated `job_agents.py`,
+> `recipe_agents.py`, `weekly_agents.py`, `workout_plan_ai_generator.py`
+> (the renamed successor to `workout_plans.py`'s AI-generation half), and
+> `media_recommend.py`, plus all three of `blog_agents.py`'s provider
+> implementations (Gemini, Groq, Cerebras), into `services/ai/providers/`.
+> `finance_upload.py`'s SDK-based call has been explicitly documented as a
+> deliberate, permanent exception rather than remaining debt (see
+> `services/ai/README.md`'s "SDK Exceptions" section, added in WO#16).
+> This "Current state" section is left unedited for now — pending a
+> rewrite once WO#16's own open items (verifying `services/ai/base.py`,
+> `keys.py`, and `__init__.py` against real source, and resolving the
+> "five vs. six implementations" discrepancy first flagged in WO#11's
+> postmortem) are closed, so it only needs rewriting once rather than
+> twice.
+
 **Target state:**
 ```
 services/ai/
@@ -199,8 +217,7 @@ preservation).
 
 **What this does NOT resolve:** moving the *agent modules* under
 `airflow/agents/*.py` into a similar structure is a different,
-higher-risk question, flagged but not yet assigned a work order (see
-WO#18's own postmortem, §7.5). Several of those files (`recipe_agents.py`,
+higher-risk question. Several of those files (`recipe_agents.py`,
 `weekly_agents.py`, `blog_agents.py`) are imported directly by FastAPI
 routers as well as (or instead of) DAGs — unlike DAG files, which nothing
 outside the Airflow layer imports — so the "pure relocation, zero code
@@ -208,10 +225,16 @@ change" property does not automatically transfer. Don't assume it does;
 redo the same discovery/import/identity analysis WO#18 performed for
 DAGs, applied fresh to `agents/*.py`, before scoping that move.
 
-The original `domains/*/dags/` restructuring this section used to
-describe is no longer the plan — organizing within `airflow/dags/`
-achieved the actual goal (discoverability, being able to hand a scoped
-subfolder to an agent) without the domain-folder move's added risk.
+**Update (WO#31):** the DAG-only tier of `airflow/agents/*.py` has since
+been relocated too — see `airflow/agents/jobs/` and `airflow/agents/media/`.
+Unlike the DAG move above, this was *not* a zero-code-change relocation:
+every consumer's import line had to change in the same commit, since
+nothing about a Python module's own import path is location-independent
+the way a DAG's `dag_id` is. The remaining two tiers (router-only modules
+arguably misplaced under `airflow/agents/` at all, and `blog_agents.py`,
+which is consumed by both DAGs and routers simultaneously and can't move
+incrementally) remain deliberately unscoped — see WO#31's own postmortem
+and the Track D scoping analysis before attempting either.
 
 ### 2.6 Templating & Static Serving
 - **Templates:** `core/templating.py` holds one shared `Jinja2Templates`
@@ -229,6 +252,49 @@ subfolder to an agent) without the domain-folder move's added risk.
   first will silently 404 every domain-specific static request before the
   more specific mount ever gets a chance (this was a real bug caught during
   WO#1 and is now a standing rule, not just a lesson).
+
+### 2.7 Secrets & Environment Variable Wiring
+
+**Rule: when a router, service, or agent module needs a secret or
+environment variable to talk to another internal service (Airflow, a
+database credential) or an external one (an LLM provider, a third-party
+API), verify that variable is actually passed through in *every*
+`docker-compose.yml` service that will call it at runtime — not just the
+service that already owns that secret's other configuration values.**
+
+This is not a hypothetical risk; it's what actually happened. WO#35 (the
+`medium` domain build) found that `docker-compose.yml`'s `web` service was
+missing `AIRFLOW_SECRET_KEY` — present for the three `airflow-*` services,
+where it's used to set Airflow's own admin password and Flask secret key,
+but never passed through to `web`, where `services/airflow_service.py`
+actually needs it to authenticate outbound `trigger_airflow()` calls. This
+silently broke **every** "click a button, fire a DAG" feature already
+shipped in this app — blog's Scout/Creator/Finalizer/Idea Expander,
+code_intel's README Writer and Narrate/Comment/Improve DAGs — not just the
+medium domain being built at the time. It went undetected because nothing
+had previously exercised that exact code path end-to-end from the `web`
+container; medium's build was simply the first feature to do so, and only
+found it because its own acceptance criteria required confirming the
+trigger actually reached Airflow rather than accepting a mocked response.
+
+**Going forward:**
+- Before treating any new Airflow-trigger, external-API, or cross-service
+  integration as "done," confirm the credential/secret it depends on is
+  present in the environment block of every `docker-compose.yml` service
+  that will actually invoke it — not just the service that defines or
+  owns the secret.
+- Do not assume an existing, already-working integration (e.g. another
+  domain's DAG trigger) proves a given secret is correctly wired
+  everywhere it's needed. As this incident shows, a missing var on one
+  service can sit undetected indefinitely if nothing happens to exercise
+  that specific service-to-service path.
+- When a work order's acceptance criteria include "reaches the DAG/API
+  correctly," a mocked or stubbed call — which most work orders in this
+  program have had to rely on for lack of live infrastructure access — is
+  not sufficient to catch this class of bug. Mark that criterion ⚠️ rather
+  than ✅ unless the live credential path was actually exercised, the same
+  way any other unverifiable-in-sandbox criterion is handled per §4.3's
+  standing template.
 
 ---
 
@@ -256,9 +322,18 @@ and treat it as new:
   any new page must use the shared `#toast`/`showToast()` from `base.js`.
   Existing duplicates get cleaned up opportunistically when their domain
   is next touched for any reason — not a standalone project.
+
+  **Status: resolved (see WO#17).** Every page identified above, plus
+  eleven more found in a subsequent full-tree audit, has been migrated
+  onto the shared `#toast`/`showToast()`. Toast display duration was
+  harmonized to 2600ms across all pages as a disclosed side effect. Kept
+  here for historical context, not as an open item.
 - **Sidebar/theme JS:** `sidebar_js.html` re-implements functions already
   in `base.js`. New pages should include `base.js` via `base.html` and
   never re-declare `setTheme()`/`toggleSidebar()`/mobile handlers locally.
+
+  **Status: resolved (see WO#17).** `sidebar_js.html` had zero remaining
+  includes anywhere in the codebase and was deleted.
 - **Inline `style="..."` attributes:** dominant across most templates.
   Rule going forward: any inline style pattern repeated 3+ times within a
   single template, or matching an existing `base.css` primitive
@@ -269,12 +344,32 @@ and treat it as new:
 - **Multiple AI client implementations:** see §2.3.
 
 ### 3.3 Migration Debt Tracker
-Domains not yet moved into the `domains/` structure, as of this document:
-`finance`, `journal`, `recipes` (+ `pantry`), `workout`, `media`,
-`planning` (`weekly_plan` + `intent`). `dashboard` intentionally stays at
-the top level (see §2.2). These migrate on demand using the standing
-work-order template in §4.3 — there is no forced deadline, since none of
-them are on the priority list and all are "tested but not in heavy use."
+
+**Status: historical/closed.** Every domain originally named in this
+tracker has since been migrated: `finance` (WO#5), `journal` (WO#6),
+`recipes` + `pantry` (WO#7), `workout` (WO#8), `media` (WO#9), and
+`planning` (`weekly_plan` + `intent`, WO#10). Combined with the four
+priority domains migrated earlier (`habits` WO#1, `blog` + `code_intel`
+WO#2, `jobs` WO#3, `explorer` WO#4), every domain on the original backlog
+now lives under `domains/<name>/`. `dashboard` remains, intentionally, the
+one domain-less top-level router — see §2.2.
+
+This section was found stale — still listing all six domains above as
+un-migrated well after their work orders had actually shipped —
+independently by four separate postmortems (WO#25, #26, #28, #29), each
+re-deriving the same "wait, is this actually done?" check on its own
+rather than trusting this document. It's corrected here for the same
+reason §2.4 was: a tracker that isn't updated the moment its own condition
+is satisfied becomes actively misleading rather than merely outdated. If a
+domain is ever un-migrated, split further, or newly created, add it here
+explicitly rather than assuming this section stays silently accurate on
+its own.
+
+**Note on a related but distinct concern:** this tracker covers
+domain-*folder* migration status only. Router *file-size* compliance
+within an already-migrated domain is a separate axis (§1.2) with its own
+tracking — see the Router Line-Limit Remediation series (WO#19,
+WO#23–30) for that status, not this section.
 
 ---
 
@@ -355,6 +450,26 @@ otherwise depend on an out-of-scope resource, rather than leaving the gap
 for the agent to discover mid-task]
 ```
 
+**Candidate additions flagged by later work orders, not yet folded into
+the template above — track these before the next major redraft:**
+- Any work order that splits a router into multiple files should require,
+  as its own Step 0, either listing `main.py` in SCOPE or explicitly
+  confirming every resulting router's registration — several Track C
+  postmortems (WO#28, #29, #30) independently found or narrowly avoided a
+  broken registration because this wasn't a mandatory check (WO#30 in
+  particular found and had to fix a real, pre-existing 404 this way).
+- A router split that separates literal-path routes from a parametric
+  `/{id}` route into different files should require an explicit check for
+  shadowing (not just exact-path collision) and, ideally, an automated
+  route-order regression test — per WO#23's finding for `habits`/
+  `habits_settings`.
+- A work order whose STEPS pins a closed set of functions to remain in a
+  file *and* whose ACCEPTANCE CRITERIA requires that file to hit a line
+  ceiling should have its author pre-check that the arithmetic actually
+  works (count the pinned functions' lines before publishing the work
+  order) — this exact conflict produced open items in both WO#24 and
+  WO#28.
+
 ### 4.4 Report Review Checklist
 When a work-order report comes back, check in this order:
 1. Did every HARD BOUNDARY get respected? (Check "Files edited" against
@@ -376,13 +491,26 @@ its own verification — never bundled into the migration's diff, even if
 the fix is one line. This keeps migration diffs reviewable as "pure
 relocation" and keeps bug fixes independently revertable.
 
+This rule is about *not bundling*, not about *never fixing quickly* — a
+high-severity, directly-adjacent bug found while a file is already open
+for a required edit can still be fixed in the same session, but only if
+it's kept as a clearly labeled, separately callable-out change within the
+diff (not silently merged into the migration's own hunks), with its own
+line in whatever change-tracking the repo uses. WO#30's handling of a
+pre-existing `main.py` router-registration bug it found while doing its
+own required registration edit is the reference example for how to do
+this correctly.
+
 ### 4.6 What "Done" Means for a Domain Migration
 A domain is considered migrated when:
 - Its `models.py`, routers, templates, and static assets all live under
   `domains/<name>/`.
 - `main.py` and `core/templating.py` reference the new paths.
 - A legacy shim exists in root `models.py` for any external consumer
-  (normally just `dashboard.py`).
+  (normally just `dashboard.py`) — **historical note:** per §2.4, this no
+  longer applies to any currently-migrated domain, since shims and root
+  `models.py` itself have both been fully retired (WO#20, WO#22). This
+  criterion is kept for any future domain migration, should one occur.
 - All acceptance criteria in its work order passed (✅ or an explained ⚠️).
 - No unrelated behavior changed (confirmed via the `Base.metadata`
   identity check pattern established in WO#1, and functional
@@ -396,9 +524,7 @@ reviewable changes by design (§3.2, §4.5).
 
 ## 5. Open Items Tracked for Later (Not Blocking Current Work)
 
-These are recorded here so they aren't lost, per standing practice — they
-are explicitly **not** being worked on until the domain migration backlog
-(§3.3) is either complete or deliberately deprioritized further:
+These are recorded here so they aren't lost, per standing practice:
 
 1. **Interaction tracking → adaptive Dashboard.** Needs a lightweight
    event-log table plus a template-variant system. Natural fit once
@@ -410,10 +536,13 @@ are explicitly **not** being worked on until the domain migration backlog
 3. **In-Docker coding environments (Jupyter + browser IDE).** Infrastructure
    addition, not a FastAPI domain — belongs in `docker-compose.yml` +
    an `infra/` or `dev-tools/` folder. Needs its own memory/caching design.
-4. **New domains** (sports data, Medium article extraction, etc.) — these
-   are exactly what the domain-folder pattern was derisked for. Once the
-   backlog in §3.3 is cleared, new domains should be built directly inside
-   this structure from day one rather than needing a later migration.
+4. **New domains** (sports data, Medium article extraction, etc.) — the
+   backlog this was originally written against is now substantially
+   cleared: Medium (WO#35) has shipped as its own domain under
+   `domains/medium/`, and NBA/Soccer data domains are in progress (see the
+   project's own work-order index). New domains going forward should be
+   built directly inside the `domains/` structure from day one, per the
+   pattern these three establish, rather than needing a later migration.
 
 ---
 
@@ -424,3 +553,20 @@ ordering fix, the pre-existing-bug handling rule, and the substitute-
 verification rule all originated as one-off corrections and were promoted
 into standing rules here). Treat every work-order report's "Notes" section
 as a candidate source of the next amendment, not just a log.
+
+**Amendment log (sections touched, most recent first):**
+- §3.3, §2.7 (new) — corrected the Migration Debt Tracker to
+  historical/closed after four independent postmortems (WO#25, #26, #28,
+  #29) caught it listing already-migrated domains as outstanding; added a
+  new rule on threading secrets through every `docker-compose.yml` service
+  that needs them, after WO#35 found `AIRFLOW_SECRET_KEY` missing from the
+  `web` service and traced the resulting silent breakage across multiple
+  domains' Airflow-trigger features. §3.2's toast/sidebar-JS entries also
+  marked resolved per WO#17.
+- §2.4 — marked historical/closed after WO#20 (shim removal) and WO#22
+  (root `models.py` deletion, `configure_mappers()` verification attempt).
+- §2.5 — rewritten after WO#18 (DAG reorganization) replaced the original,
+  more cautious assumption with confirmed, lower-risk reality; later noted
+  the WO#31 Tier 1 agent-module reorg as a related but distinct case.
+- §2.2 — one stale cross-reference to §2.5 corrected during WO#21's
+  authorized follow-up.

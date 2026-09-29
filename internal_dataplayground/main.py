@@ -21,7 +21,7 @@ from domains.journal.routers import journal, journal_synthesis # WO6, split in W
 from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes, recipe_mutations # WO7, WO#26
 from domains.workout.routers import workout, workout_log, workout_plans_crud, workout_plan_ai_generator, workout_settings # WO8
 from domains.media.routers import media, media_search, media_recommend, media_settings, media_seasons # WO9, split in WO#28
-   from domains.planning.routers import intent, weekly_plan, weekly_plan_confirm, weekly_plan_generator, weekly_plan_shopping # WO10, WO#30
+from domains.planning.routers import intent, weekly_plan, weekly_plan_confirm, weekly_plan_generator, weekly_plan_shopping # WO10, WO#30
 
 from domains.nba.routers import nba_games # WO#33
 from domains.soccer.routers import soccer, soccer_settings # WO#34
