@@ -143,27 +143,53 @@ class SoccerMatch(Base):
     # payload — see domains/soccer/models.py's module docstring and
     # migration s0cc3r_l1n3ups001. Real, confirmed fields (Tactics,
     # BallPossession, Attendance) — NOT the same thing as the
-    # xG/shots/big-chances/corners/passes/duels/saves/fouls numbers shown
-    # in early WO#34 mockups, which came from a reference ESPN screenshot
-    # used purely for layout design, not from any FIFA field we've
-    # actually confirmed. Possession is the only match-level "stat" we
-    # currently have real data for — see soccer_match_detail.html and the
-    # WO#34 conversation for candidate future stats derivable from the
-    # /timelines event stream (fouls, corners, offsides — all clean event
-    # Type codes; shot/save counts would need event-description text
-    # matching, which is a materially weaker source than a structured
-    # field and hasn't been built).
+    # xG/big-chances/passes/duels/saves numbers shown in early WO#34
+    # mockups, which came from a reference ESPN screenshot used purely
+    # for layout design, not from any FIFA field we've actually
+    # confirmed. Possession, shots/corners/fouls/offsides (below), and
+    # penalty scores (below) ARE real, confirmed fields.
     home_formation = Column(String(20), nullable=True)
     away_formation = Column(String(20), nullable=True)
     possession_home = Column(Float(), nullable=True)
     possession_away = Column(Float(), nullable=True)
     attendance = Column(Integer(), nullable=True)
 
-    # Set once /live and /timelines have been fetched for this match, so
-    # the DAG doesn't re-fetch detail/events for a match every single day
-    # once it's finished. NULL means "never fetched." Mirrors the
-    # streaming_fetched_at pattern in media_agents.py /
-    # life_os_refresh_streaming_availability.py.
+    # Confirmed real fields (HomeTeamPenaltyScore/AwayTeamPenaltyScore on
+    # the /live endpoint), added after a real penalty-shootout match
+    # surfaced extra goal rows this conversation initially misdiagnosed
+    # as duplicates (see soccer_agents.py's parse_match_lineup_data()
+    # docstring) — the project owner confirmed by having watched the
+    # match that it was, in fact, a shootout. NULL for any match that
+    # didn't need one.
+    home_penalty_score = Column(Integer(), nullable=True)
+    away_penalty_score = Column(Integer(), nullable=True)
+
+    # Derived from the /timelines event stream by counting clean,
+    # structured Type codes per team — see
+    # airflow/agents/soccer_agents.py::parse_match_event_stats() for the
+    # exact codes and what's deliberately NOT attempted (shots on target
+    # specifically, saves/blocks — both would need Qualifier decoding or
+    # English-text matching, materially weaker than a bare Type code).
+    shots_home = Column(Integer(), nullable=True)
+    shots_away = Column(Integer(), nullable=True)
+    corners_home = Column(Integer(), nullable=True)
+    corners_away = Column(Integer(), nullable=True)
+    fouls_home = Column(Integer(), nullable=True)
+    fouls_away = Column(Integer(), nullable=True)
+    offsides_home = Column(Integer(), nullable=True)
+    offsides_away = Column(Integer(), nullable=True)
+
+    # Timestamp of the most recent successful detail/events fetch+parse.
+    # UPDATED (2026-09-18): no longer a permanent "never touch again"
+    # lock. A match whose kickoff falls within the current rolling
+    # ingestion window gets its /live + /timelines data refetched AND
+    # its lineup/goal/booking/substitution/coach rows fully replaced on
+    # EVERY run, not fetched once and frozen — see
+    # life_os_soccer_ingest.py::ingest_match_details() and
+    # parse_finished_match_details() for why: a match captured mid-event
+    # (e.g. before a penalty shootout concluded) used to stay stuck on
+    # that incomplete snapshot forever. This column is now informational
+    # (last-refreshed-at), not a gate.
     details_fetched_at = Column(DateTime, nullable=True)
 
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

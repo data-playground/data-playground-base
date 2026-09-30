@@ -1,16 +1,25 @@
 """add fifa team id columns to soccer_matches
 
 Revision ID: s0cc3r_t34m1ds001
-Revises: s0cc3r_l1n3ups001
+Revises: m3d1um_d0ma1n004
 Create Date: 2026-09-13
 
-⚠ Same recurring caveat as the last two soccer migrations — this repo's
-alembic head has moved twice already from unrelated parallel domain
-work landing while a soccer migration sat unapplied. This one chains
-after s0cc3r_l1n3ups001 on the assumption that migration is applied (or
-being applied) immediately before this one, as part of the same
-deploy. If that's not true by the time you run this — check
-`alembic heads` first, same as always.
+⚠ Third time this exact thing has happened — this migration's
+down_revision has now moved twice while it sat unapplied, both times
+because unrelated parallel work landed on another domain first:
+  1st: s0cc3r_l1n3ups001 (assumed head at the time)
+  Current: m3d1um_d0ma1n004, which — per its own header — chains
+  directly after s0cc3r_l1n3ups001, meaning this migration and
+  m3d1um_d0ma1n004 were briefly siblings off the same parent until this
+  rebase. Given the track record, assume this will need rechecking again
+  before it's actually applied:
+  1. Run `alembic heads`.
+  2. If it prints exactly one hash and it's m3d1um_d0ma1n004, apply as-is.
+  3. If it prints a different single hash, change down_revision below to
+     that hash.
+  4. If it prints more than one, run
+       alembic merge heads -m "merge before soccer team ids"
+     first, then point down_revision at that new merge revision instead.
 
 Adds soccer_matches.fifa_home_team_id / fifa_away_team_id — FIFA's
 IdTeam for each side. Confirmed present on BOTH endpoints we've parsed
@@ -30,7 +39,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = 's0cc3r_t34m1ds001'
-down_revision: Union[str, None] = 'm3d1um_d0ma1n003'
+down_revision: Union[str, None] = 'm3d1um_d0ma1n004'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

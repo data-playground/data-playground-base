@@ -84,7 +84,14 @@ async def soccer_settings_home(request: Request, db: AsyncSession = Depends(get_
 
     return templates.TemplateResponse("soccer_settings.html", {
         "request": request,
-        "active_module": "soccer",
+        # "soccer_settings", not "soccer" — the shared sidebar.html
+        # checks this exact value to highlight the Settings sub-nav
+        # link specifically (the sub-nav SECTION's visibility checks
+        # active_module in ('soccer', 'soccer_settings'), which "soccer"
+        # alone would already satisfy — but the link's own `active`
+        # class checks == 'soccer_settings' exactly, which never matched
+        # before this fix).
+        "active_module": "soccer_settings",
         "settings": settings,
         "competitions": competitions,
     })

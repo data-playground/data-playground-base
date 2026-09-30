@@ -531,9 +531,92 @@ def parse_match_lineup_data(raw_details: dict) -> dict:
         "possession_home": _scalar_or_none(possession.get("OverallHome")),
         "possession_away": _scalar_or_none(possession.get("OverallAway")),
         "attendance": _scalar_or_none(raw_details.get("Attendance")),
+        # Confirmed real top-level fields — see the module's 2026-09-18
+        # note above on why these were added (a real shootout match).
+        "home_penalty_score": _scalar_or_none(raw_details.get("HomeTeamPenaltyScore")),
+        "away_penalty_score": _scalar_or_none(raw_details.get("AwayTeamPenaltyScore")),
         "lineups": _players(home, "home") + _players(away, "away"),
         "goals": _goals(home, "home") + _goals(away, "away"),
         "bookings": _bookings(home, "home") + _bookings(away, "away"),
         "substitutions": _subs(home, "home") + _subs(away, "away"),
         "coaches": _coaches(home, "home") + _coaches(away, "away"),
     }
+
+
+# ── EVENT-STREAM STATS (from /timelines) ──────────────────────────────────
+#
+# CONTEXT (2026-09-18): a real match's soccer_goals rows initially looked
+# like duplicates (4 "goals" for a team that appeared to have scored 3) —
+# two guesses were made and both were wrong (extra time, then a
+# still-in-progress shootout) before the project owner confirmed, having
+# watched the match, that it really was a penalty shootout with more
+# goals scored there. That incident is also why home_penalty_score/
+# away_penalty_score exist now (see parse_match_lineup_data() above) —
+# so a shootout's outcome has an explicit home, not something that has
+# to be inferred from the Goals array's minute/period fields.
+#
+# Separately, this module now also derives a handful of match stats from
+# the /timelines endpoint (a different raw payload than match_details —
+# see fetch_match_events() / the "match_events" endpoint in
+# soccer_raw_payloads). Confirmed, structured Type codes only — no
+# English-text matching of EventDescription, which would be a
+# meaningfully weaker foundation:
+#   12 = "Attempt at Goal" (shot)
+#   15 = "Offside"
+#   16 = "Corner"
+#   18 = "Foul"
+# Deliberately NOT attempted: shots specifically ON TARGET (would need
+# decoding the Qualifiers array, unconfirmed), and saves/blocks (both
+# bucketed under Type 17 "Goal Prevention", distinguished only by
+# English EventDescription text — "pulls off a save" vs "blocks the
+# shot" — which is exactly the kind of text-matching this module avoids
+# elsewhere).
+
+_EVENT_TYPE_SHOT = 12
+_EVENT_TYPE_OFFSIDE = 15
+_EVENT_TYPE_CORNER = 16
+_EVENT_TYPE_FOUL = 18
+
+
+def parse_match_event_stats(raw_events: list, fifa_home_team_id: str, fifa_away_team_id: str) -> dict:
+    """
+    Tallies shots/offsides/corners/fouls per side from a /timelines
+    payload (a flat list of event dicts — see fetch_match_events()).
+    Events with no IdTeam (kickoff/half-time/full-time markers) or an
+    IdTeam matching neither side are silently skipped rather than
+    raising — defensive, same posture as the rest of this module.
+
+    Returns a dict with keys shots_home/shots_away/offsides_home/
+    offsides_away/corners_home/corners_away/fouls_home/fouls_away, all
+    ints (0 if the event type never occurred, not None — an empty
+    /timelines payload, e.g. for a match not yet started, returns all
+    zeros rather than missing keys).
+    """
+    counts = {
+        "shots_home": 0, "shots_away": 0,
+        "offsides_home": 0, "offsides_away": 0,
+        "corners_home": 0, "corners_away": 0,
+        "fouls_home": 0, "fouls_away": 0,
+    }
+    for event in (raw_events or []):
+        if not isinstance(event, dict):
+            continue
+        team_id = str(event.get("IdTeam", ""))
+        if team_id == fifa_home_team_id:
+            side = "home"
+        elif team_id == fifa_away_team_id:
+            side = "away"
+        else:
+            continue
+
+        event_type = event.get("Type")
+        if event_type == _EVENT_TYPE_SHOT:
+            counts[f"shots_{side}"] += 1
+        elif event_type == _EVENT_TYPE_OFFSIDE:
+            counts[f"offsides_{side}"] += 1
+        elif event_type == _EVENT_TYPE_CORNER:
+            counts[f"corners_{side}"] += 1
+        elif event_type == _EVENT_TYPE_FOUL:
+            counts[f"fouls_{side}"] += 1
+
+    return counts

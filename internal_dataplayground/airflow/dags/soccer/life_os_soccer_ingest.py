@@ -2,19 +2,37 @@
 """
 Daily FIFA data ingest for the soccer domain (WO#34).
 
-Pulls fixtures/results for every watched competition in
-soccer_competitions, upserts them into soccer_matches, and backfills
-match detail + play-by-play payloads (raw only — see
-domains/soccer/models.py's module docstring) for matches near kickoff or
-already finished — see ingest_match_details()'s own docstring for the
-two different re-fetch policies and the 2026-09-12 fix to how "already
-fetched" is determined.
+Four tasks, in order:
+  1. ingest_fixtures            — pulls fixtures/results for every
+                                   watched competition, upserts into
+                                   soccer_matches.
+  2. ingest_match_details       — fetches /live + /timelines (raw only)
+                                   for matches worth refreshing. Makes
+                                   FIFA API calls — bounded to the
+                                   rolling ingestion window for cost
+                                   reasons (see its own docstring).
+  3. parse_finished_match_details — parses whatever raw payloads already
+                                   exist into the normalized lineup/goal/
+                                   booking/substitution/coach tables plus
+                                   derived scalar stats. Makes NO API
+                                   calls — pure local reprocessing, so it
+                                   is NOT bounded to the window the same
+                                   way (see its own docstring).
+  4. prune_raw_payloads         — keeps soccer_raw_payloads from growing
+                                   without bound, while still preserving
+                                   a small amount of history for
+                                   debugging (see its own docstring).
 
-Per CONTRIBUTING.md / GOVERNANCE.md §2.2: this DAG never imports
-models.py, database.py, or any router/service. All DB access goes
-through dag_db.py's raw-SQL helpers. All FIFA HTTP calls go through
-airflow.agents.soccer_agents, which is likewise DAG-safe (no ORM, no
-FastAPI imports).
+REDESIGNED 2026-09-18. The previous design fetched/parsed a match's
+detail data ONCE and locked it forever once "finished". That failed in
+a very concrete way this session: a real match's soccer_goals rows
+looked like duplicates (4 goals for a 3-goal side) because the /live
+snapshot had been captured while a penalty shootout was still in
+progress — confirmed by the project owner, who watched the match. The
+lock meant that incomplete snapshot was never going to be refreshed.
+The new design accepts that ANY single snapshot might be incomplete and
+just keeps refreshing anything within the rolling window until it ages
+out, rather than trusting the first "finished" status it sees.
 """
 import sys
 import json
@@ -30,7 +48,7 @@ from airflow.operators.python import PythonOperator
 from dag_db import fetch_all, fetch_one, execute, execute_many
 from agents.soccer_agents import (
     fetch_matches, fetch_match_details, fetch_match_events, parse_match_summary,
-    parse_match_lineup_data,
+    parse_match_lineup_data, parse_match_event_stats,
 )
 
 log = logging.getLogger(__name__)
@@ -44,6 +62,10 @@ DAG_ID = "life_os_soccer_ingest"
 # values the soccer_settings row is seeded with (both in the WO#34
 # migration and in SoccerSettings' model-level column defaults), so a
 # fresh install behaves identically whether or not that row exists yet.
+#
+# This SAME window now also governs how far back/forward
+# ingest_match_details() reaches to refresh detail data — see that
+# function's docstring.
 ROLLING_WINDOW_PAST_DAYS = 3
 ROLLING_WINDOW_FUTURE_DAYS = 60
 
@@ -72,15 +94,16 @@ def _needs_backfill(comp: dict) -> bool:
 
     This is re-checked on EVERY run, not just "does this competition have
     zero matches yet" (the original, simpler rule). That distinction
-    matters: backfill_from_date is now editable after the fact from
+    matters: backfill_from_date is editable after the fact from
     /soccer/settings (e.g. "actually, pull World Cup history back to
     2018 too"), and the old rule would have silently ignored that edit
     forever once a competition already had at least one match. With this
     rule, editing it to an earlier date means the very next run notices
-    the gap and pulls the wider range — a one-time larger fetch until the
-    gap closes, then it settles back to the cheap rolling window on
-    subsequent runs since the earliest match on file will then already
-    reach back to (or past) backfill_from_date.
+    the gap and pulls the wider range, then settles back to the cheap
+    rolling window once the gap closes.
+
+    Used only by ingest_fixtures() for the FIXTURES pull — unrelated to
+    the match-detail reprocessing window used by the other two tasks.
     """
     backfill = comp["backfill_from_date"]
     if not backfill:
@@ -110,16 +133,10 @@ def _upsert_match(competition_row_id: int, parsed: dict):
 
     On UPDATE, details_fetched_at is cleared back to NULL whenever the
     freshly-parsed status is anything other than 'finished' — keeping
-    that column's meaning unambiguous ("non-null == this match is
-    CURRENTLY finished and we've captured its final detail snapshot").
-    Without this, a match that was ever incorrectly locked in as
-    'finished' (as happened under the pre-2026-09-10 MatchStatus map bug
-    — see ingest_match_details()'s docstring) would keep showing a stale,
-    confusing details_fetched_at timestamp indefinitely even after
-    status_label self-corrects back to 'scheduled'. It's harmless either
-    way — ingest_match_details()'s query doesn't consult
-    details_fetched_at at all for non-finished matches — but leaving it
-    stale serves no purpose and is confusing to read directly.
+    that column's meaning unambiguous. It's now purely informational
+    (see SoccerMatch's docstring) rather than a processing gate, but
+    it's still confusing to leave a stale timestamp sitting on a match
+    that's gone back to 'scheduled' or similar.
     """
     if not parsed["fifa_match_id"]:
         return
@@ -175,14 +192,9 @@ def ingest_fixtures():
     """
     Pulls fixtures/results for every active watched competition.
 
-    The watch list itself is NOT seeded or managed here anymore — it
-    used to be (see git history / the WO#34 conversation for why that
-    was removed). soccer_competitions is seeded once by the
-    s0cc3r_d0ma1n001 migration on initial install, and from there is
-    entirely self-service via /soccer/settings (search FIFA's live
-    competitions list and add/remove/deactivate). This DAG's only job is
-    to iterate over whatever's active in that table — it has no opinion
-    about which competitions "should" be watched.
+    The watch list itself is NOT seeded or managed here — soccer_competitions
+    is seeded once by the s0cc3r_d0ma1n001 migration on initial install,
+    and from there is entirely self-service via /soccer/settings.
     """
     competitions = fetch_all(
         "SELECT id, fifa_competition_id, name, backfill_from_date "
@@ -219,13 +231,6 @@ def ingest_fixtures():
                 _upsert_match(comp["id"], parsed)
                 upserted += 1
             except Exception as exc:
-                # A single malformed match (see soccer_agents.py's
-                # _extract_localized_text() docstring for the incident
-                # that motivated this) used to kill the whole task,
-                # discarding every other match already fetched this run.
-                # The raw payload for ALL matches was already committed
-                # above regardless, so nothing is lost either way — this
-                # just stops one bad row from blocking the other ~167.
                 log.error(
                     "Failed to parse/upsert one match for %s (raw IdMatch=%s): %s",
                     comp["name"], raw_match.get("IdMatch"), exc,
@@ -235,55 +240,47 @@ def ingest_fixtures():
         log.info("Ingested %d/%d matches for %s", upserted, len(raw_matches), comp["name"])
 
 
-# ── TASK 2 — MATCH DETAILS + PLAY-BY-PLAY (raw only) ─────────────────────────
-
-# How close to kickoff a non-finished match has to be before it's worth
-# re-checking /live and /timelines on every run. Lineups get announced
-# shortly before kickoff and events happen during the match, so this data
-# is only worth repeatedly polling right around matchday — not for a
-# fixture three months out. Not yet exposed on /soccer/settings (unlike
-# the fixtures window), but could be if it turns out to need tuning.
-DETAIL_FETCH_PROXIMITY_DAYS = 1
-
+# ── TASK 2 — MATCH DETAILS + PLAY-BY-PLAY (raw fetch, API calls) ─────────────
 
 def ingest_match_details():
     """
-    Backfills /live + /timelines (raw only).
+    Fetches /live + /timelines (raw only) and stores them in
+    soccer_raw_payloads.
 
-    Two different re-fetch policies depending on match state:
-      - FINISHED matches are fetched exactly once (details_fetched_at
-        gates this) — the result is final and won't change.
-      - Anything else (scheduled, postponed, or a not-yet-confirmed
-        "live" state) is refetched on EVERY run, but only within
-        +/- DETAIL_FETCH_PROXIMITY_DAYS of kickoff. details_fetched_at is
-        deliberately left NULL for these fetches — only a fetch that
-        lands on a genuinely 'finished' match locks it in for good.
+    REDESIGNED 2026-09-18: refetches EVERY match whose kickoff falls
+    within the current rolling ingestion window (the same window
+    ingest_fixtures() uses — see _get_window_days()), unconditionally,
+    on every run — not gated by status_label or a one-time lock. Outside
+    that window, a match is only fetched if it has NEVER had a
+    match_details payload at all — this still catches historical/
+    backfilled matches that need at least one pull, without perpetually
+    re-hitting FIFA for settled history forever.
 
-    CONTEXT (2026-09-12): this replaces the original rule of
-    "status_label IN ('live','finished') AND details_fetched_at IS NULL".
-    Under the ORIGINAL (buggy) MatchStatus map, MatchStatus code 1 —
-    which actually means "Scheduled" — was mistakenly mapped to "live".
-    Any still-scheduled match sitting at that code got a premature /live
-    fetch, which correctly came back with empty Players/Goals/Bookings/
-    Substitutions (the match hadn't started — FIFA had nothing to report
-    yet), and then details_fetched_at got permanently set, freezing that
-    match on an empty snapshot forever even after the status map was
-    corrected. The new rule fixes this going forward AND self-heals it:
-    since details_fetched_at is now only trusted for matches that are
-    CURRENTLY 'finished', any match wrongly locked in while still
-    scheduled becomes eligible for refetch again as soon as it's within
-    the proximity window, regardless of what details_fetched_at was set
-    to under the old logic.
+    This is the bounded, API-calling half of the redesign — see
+    parse_finished_match_details() for the unbounded, API-free half. The
+    split exists because a stale/incomplete snapshot (the real case that
+    motivated this: a penalty shootout still in progress when fetched)
+    can only be fixed by a FRESH fetch, not by re-parsing the same old
+    data — so re-fetching stays bounded to where it's actually likely to
+    matter (recent activity), while re-parsing, being free, doesn't need
+    to be.
     """
+    past_days, future_days = _get_window_days()
+    today = date.today()
+    window_start = today - timedelta(days=past_days)
+    window_end = today + timedelta(days=future_days)
+
     pending = fetch_all(
         """
-        SELECT id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id, status_label
+        SELECT id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id
         FROM soccer_matches
-        WHERE (status_label = 'finished' AND details_fetched_at IS NULL)
-           OR (status_label != 'finished'
-               AND kickoff_at BETWEEN (NOW() - INTERVAL %s DAY) AND (NOW() + INTERVAL %s DAY))
+        WHERE kickoff_at BETWEEN %s AND %s
+           OR NOT EXISTS (
+               SELECT 1 FROM soccer_raw_payloads
+               WHERE endpoint = 'match_details' AND fifa_match_id = soccer_matches.fifa_match_id
+           )
         """,
-        (DETAIL_FETCH_PROXIMITY_DAYS, DETAIL_FETCH_PROXIMITY_DAYS),
+        (window_start, window_end),
     )
 
     fetched = 0
@@ -301,91 +298,143 @@ def ingest_match_details():
             )
             _store_raw("match_events", match["fifa_competition_id"], match["fifa_match_id"], events)
             fetched += 1
-
-            # Only lock this match in as "done forever" once it's
-            # CURRENTLY finished (per soccer_matches.status_label, freshly
-            # updated by ingest_fixtures earlier in this same DAG run —
-            # fixtures_task runs before details_task). Anything else stays
-            # eligible for refetch every run within the proximity window.
-            if match["status_label"] == "finished":
-                execute(
-                    "UPDATE soccer_matches SET details_fetched_at = %s WHERE id = %s",
-                    (datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), match["id"]),
-                )
         except Exception as exc:
             log.error("Detail/events fetch failed for match %s: %s", match["fifa_match_id"], exc)
             continue
 
-    log.info("Fetched details/events for %d/%d candidate matches", fetched, len(pending))
+    log.info(
+        "Fetched details/events for %d/%d candidate matches (window: %s to %s)",
+        fetched, len(pending), window_start, window_end,
+    )
 
 
-# ── TASK 3 — PARSE LINEUPS/GOALS/BOOKINGS/SUBS/COACHES (idempotent) ──────────
+# ── TASK 3 — PARSE LINEUPS/GOALS/BOOKINGS/SUBS/COACHES/STATS (local, free) ───
 
 def parse_finished_match_details():
     """
-    Parses the raw /live payload already sitting in soccer_raw_payloads
-    into the normalized soccer_match_lineups / soccer_goals /
-    soccer_bookings / soccer_substitutions / soccer_coaches tables, for
-    every finished match that doesn't have lineup rows yet.
+    Parses whatever raw /live + /timelines payloads already exist in
+    soccer_raw_payloads into soccer_match_lineups / soccer_goals /
+    soccer_bookings / soccer_substitutions / soccer_coaches, plus derived
+    scalar fields on soccer_matches (formation, possession, attendance,
+    penalty scores, shots/corners/fouls/offsides).
 
-    Deliberately makes NO FIFA API calls — it only reads what
-    ingest_match_details() already stored. This is what makes it both
-    the ongoing ingest step AND the backfill mechanism for every match
-    that was fetched before this parser existed: the NOT EXISTS guard
-    below doesn't care when a match's raw payload was captured, only
-    whether it's been parsed yet. No separate one-off backfill script is
-    needed — this task catches everything, forever, just by running
-    daily alongside the other two.
+    REDESIGNED 2026-09-18 — now a FULL OVERWRITE, not insert-if-missing.
+    Every match whose kickoff falls within the current rolling window
+    gets its five normalized tables deleted and reinserted from the MOST
+    RECENT raw payload on every run, even if it already had rows.
+    Outside that window, a match is only (re)processed if it has never
+    been parsed at all (no soccer_match_lineups rows yet).
 
-    Guarded by soccer_match_lineups specifically (not a separate
-    "parsed" flag column) — and safe to re-run if it ever partially
-    fails, since all the INSERTs for one match go through a single
-    execute_many() call, which dag_db.py runs as one transaction. A
-    partial failure leaves soccer_match_lineups empty for that match, so
-    the NOT EXISTS guard picks it up again next run rather than treating
-    it as done.
+    That second branch is what makes a full "clean slate" cheap: clear
+    the five normalized tables, and on the very next run EVERY match —
+    including years of backfilled history — becomes eligible for a fresh
+    parse pass, entirely from data already sitting in
+    soccer_raw_payloads. No new FIFA API calls needed for anything
+    outside the rolling window; see ingest_match_details() for the half
+    of this redesign that DOES call FIFA, and why that half stays
+    bounded while this one doesn't.
+
+    Safe to re-run if it ever partially fails: the DELETEs and INSERTs
+    for one match all go through a single execute_many() call, which
+    dag_db.py runs as one transaction, so a failure leaves that match's
+    normalized rows exactly as they were before this attempt (old data,
+    not half-deleted) — the guard picks it up again next run either way.
     """
+    past_days, future_days = _get_window_days()
+    today = date.today()
+    window_start = today - timedelta(days=past_days)
+    window_end = today + timedelta(days=future_days)
+
     pending = fetch_all(
         """
-        SELECT sm.id, sm.fifa_match_id
-        FROM soccer_matches sm
-        WHERE sm.status_label = 'finished'
-          AND NOT EXISTS (SELECT 1 FROM soccer_match_lineups WHERE match_id = sm.id)
-        """
+        SELECT id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id,
+               fifa_home_team_id, fifa_away_team_id
+        FROM soccer_matches
+        WHERE kickoff_at BETWEEN %s AND %s
+           OR NOT EXISTS (
+               SELECT 1 FROM soccer_match_lineups WHERE match_id = soccer_matches.id
+           )
+        """,
+        (window_start, window_end),
     )
 
     parsed_count = 0
     for match in pending:
-        raw_row = fetch_one(
+        details_row = fetch_one(
             "SELECT payload FROM soccer_raw_payloads "
             "WHERE endpoint = 'match_details' AND fifa_match_id = %s "
             "ORDER BY fetched_at DESC LIMIT 1",
             (match["fifa_match_id"],),
         )
-        if not raw_row:
-            # Fetched-but-not-yet-detailed edge case: status is
-            # 'finished' but ingest_match_details() hasn't run for it
-            # yet this cycle (or ever). Nothing to parse yet — it'll be
-            # picked up once a match_details row exists.
+        if not details_row:
+            # No match_details payload captured yet for this match at
+            # all (ingest_match_details() hasn't run for it this cycle,
+            # or ever) — nothing to parse yet.
             continue
 
         try:
-            payload = raw_row["payload"]
+            payload = details_row["payload"]
             raw_details = json.loads(payload) if isinstance(payload, str) else payload
             parsed = parse_match_lineup_data(raw_details)
         except Exception as exc:
             log.error("Failed to parse match_details for %s: %s", match["fifa_match_id"], exc)
             continue
 
+        # match_events is optional — a details payload can exist without
+        # a matching events payload (e.g. fetch_match_events() failed
+        # independently of fetch_match_details() succeeding). Missing
+        # event stats just come back NULL rather than blocking the rest
+        # of this match's parse.
+        event_stats = {
+            "shots_home": None, "shots_away": None,
+            "corners_home": None, "corners_away": None,
+            "fouls_home": None, "fouls_away": None,
+            "offsides_home": None, "offsides_away": None,
+        }
+        events_row = fetch_one(
+            "SELECT payload FROM soccer_raw_payloads "
+            "WHERE endpoint = 'match_events' AND fifa_match_id = %s "
+            "ORDER BY fetched_at DESC LIMIT 1",
+            (match["fifa_match_id"],),
+        )
+        if events_row:
+            try:
+                events_payload = events_row["payload"]
+                raw_events = json.loads(events_payload) if isinstance(events_payload, str) else events_payload
+                event_stats = parse_match_event_stats(
+                    raw_events, match["fifa_home_team_id"], match["fifa_away_team_id"],
+                )
+            except Exception as exc:
+                log.error("Failed to parse match_events for %s: %s", match["fifa_match_id"], exc)
+
         execute(
             "UPDATE soccer_matches SET home_formation=%s, away_formation=%s, "
-            "possession_home=%s, possession_away=%s, attendance=%s WHERE id=%s",
+            "possession_home=%s, possession_away=%s, attendance=%s, "
+            "home_penalty_score=%s, away_penalty_score=%s, "
+            "shots_home=%s, shots_away=%s, corners_home=%s, corners_away=%s, "
+            "fouls_home=%s, fouls_away=%s, offsides_home=%s, offsides_away=%s, "
+            "details_fetched_at=%s "
+            "WHERE id=%s",
             (parsed["home_formation"], parsed["away_formation"],
-             parsed["possession_home"], parsed["possession_away"],
-             parsed["attendance"], match["id"]),
+             parsed["possession_home"], parsed["possession_away"], parsed["attendance"],
+             parsed["home_penalty_score"], parsed["away_penalty_score"],
+             event_stats["shots_home"], event_stats["shots_away"],
+             event_stats["corners_home"], event_stats["corners_away"],
+             event_stats["fouls_home"], event_stats["fouls_away"],
+             event_stats["offsides_home"], event_stats["offsides_away"],
+             datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), match["id"]),
         )
 
-        statements = []
+        # Full overwrite: clear whatever's there (possibly a stale/
+        # incomplete snapshot from a previous run) before reinserting
+        # fresh rows, all in one transaction.
+        statements = [
+            ("DELETE FROM soccer_match_lineups WHERE match_id = %s", (match["id"],)),
+            ("DELETE FROM soccer_goals WHERE match_id = %s", (match["id"],)),
+            ("DELETE FROM soccer_bookings WHERE match_id = %s", (match["id"],)),
+            ("DELETE FROM soccer_substitutions WHERE match_id = %s", (match["id"],)),
+            ("DELETE FROM soccer_coaches WHERE match_id = %s", (match["id"],)),
+        ]
         for row in parsed["lineups"]:
             statements.append((
                 "INSERT INTO soccer_match_lineups "
@@ -430,12 +479,64 @@ def parse_finished_match_details():
                 (match["id"], row["team_side"], row["fifa_coach_id"], row["name"], row["role_code"]),
             ))
 
-        if statements:
-            execute_many(statements)
-
+        execute_many(statements)
         parsed_count += 1
 
-    log.info("Parsed lineup/event data for %d/%d finished matches", parsed_count, len(pending))
+    log.info(
+        "Reprocessed lineup/event/stat data for %d/%d candidate matches (window: %s to %s)",
+        parsed_count, len(pending), window_start, window_end,
+    )
+
+
+# ── TASK 4 — PRUNE RAW PAYLOAD HISTORY (local, free) ──────────────────────────
+
+RAW_PAYLOAD_RETENTION_COUNT = 3
+
+
+def prune_raw_payloads():
+    """
+    Keeps only the RAW_PAYLOAD_RETENTION_COUNT most recent rows per
+    (endpoint, fifa_competition_id, fifa_match_id) group in
+    soccer_raw_payloads, deleting older snapshots.
+
+    ADDED 2026-09-18: this table was growing without bound — every
+    reprocessing of a match added a new row instead of replacing the old
+    one, and the window-based full-overwrite reprocessing above makes
+    that WORSE, not better, since matches inside the rolling window now
+    get refetched on every run instead of once ever.
+
+    This PRUNES, it does not collapse to a single row per group — losing
+    all history would remove exactly what made two real issues
+    diagnosable this session (a match_events payload confirmed going
+    from empty to populated across separate pulls; a soccer_goals
+    puzzle resolved by checking status_label against raw history).
+    RAW_PAYLOAD_RETENTION_COUNT is deliberately small but not 1, as the
+    balance between bounding growth and keeping that value.
+
+    fifa_match_id is NULL for the "matches" (calendar page) endpoint —
+    COALESCE'd to '' so those rows group correctly per competition
+    instead of all colliding under one NULL bucket.
+    """
+    execute(
+        """
+        DELETE FROM soccer_raw_payloads
+        WHERE id IN (
+            SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (
+                    PARTITION BY endpoint, fifa_competition_id, COALESCE(fifa_match_id, '')
+                    ORDER BY fetched_at DESC
+                ) AS rn
+                FROM soccer_raw_payloads
+            ) ranked
+            WHERE rn > %s
+        )
+        """,
+        (RAW_PAYLOAD_RETENTION_COUNT,),
+    )
+    log.info(
+        "Pruned soccer_raw_payloads to the %d most recent snapshots per (endpoint, competition, match)",
+        RAW_PAYLOAD_RETENTION_COUNT,
+    )
 
 
 # ── DAG DEFINITION ─────────────────────────────────────────────────────────────
@@ -471,4 +572,9 @@ with DAG(
         python_callable=parse_finished_match_details,
     )
 
-    fixtures_task >> details_task >> lineups_task
+    prune_task = PythonOperator(
+        task_id="prune_raw_payloads",
+        python_callable=prune_raw_payloads,
+    )
+
+    fixtures_task >> details_task >> lineups_task >> prune_task

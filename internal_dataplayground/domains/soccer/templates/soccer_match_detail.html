@@ -39,6 +39,7 @@
   .scorers{font-size:11px;color:var(--text-secondary);line-height:2;}
   .score-center{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0 20px;flex-shrink:0;}
   .score-big{font-family:'Syne',sans-serif;font-weight:800;font-size:38px;}
+  .pen-score{font-size:10px;color:var(--text-muted);letter-spacing:.04em;margin-top:-2px;}
   .ft-badge{background:var(--accent-dim);color:var(--accent);font-size:9px;font-weight:600;letter-spacing:.1em;padding:3px 11px;border-radius:10px;}
 
   .tri-grid{display:grid;grid-template-columns:1fr 260px 1fr;gap:20px;align-items:start;}
@@ -80,6 +81,22 @@
 </style>
 {% endblock %}
 
+{% macro stat_row(label, home_val, away_val) %}
+{% if home_val is not none and away_val is not none %}
+{% set total = home_val + away_val %}
+{% set home_pct = (home_val / total * 100) if total > 0 else 50 %}
+{% set away_pct = (away_val / total * 100) if total > 0 else 50 %}
+<div>
+  <div class="mini-stat-label">{{ label }}</div>
+  <div class="mini-stat-row">
+    <span>{{ home_val }}</span>
+    <div class="msbar"><div class="msbar-h" style="width:{{ home_pct }}%"></div><div class="msbar-a" style="width:{{ away_pct }}%"></div></div>
+    <span>{{ away_val }}</span>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="md-wrap">
 
@@ -114,6 +131,12 @@
         <div class="score-big">
           {% if match.home_team_score is not none and match.away_team_score is not none %}{{ match.home_team_score }} – {{ match.away_team_score }}{% else %}vs{% endif %}
         </div>
+        {# Penalty shootout result, shown only when FIFA actually reported
+           one (HomeTeamPenaltyScore/AwayTeamPenaltyScore on /live) —
+           NULL for any match that didn't need a shootout. #}
+        {% if match.home_penalty_score is not none and match.away_penalty_score is not none %}
+        <div class="pen-score">({{ match.home_penalty_score }} – {{ match.away_penalty_score }} pens)</div>
+        {% endif %}
         <div class="ft-badge">{{ match.status_label|upper }}</div>
       </div>
 
@@ -195,10 +218,17 @@
           </div>
         </div>
         {% endif %}
+        {{ stat_row("Shots", match.shots_home, match.shots_away) }}
+        {{ stat_row("Corners", match.corners_home, match.corners_away) }}
+        {{ stat_row("Fouls", match.fouls_home, match.fouls_away) }}
+        {{ stat_row("Offsides", match.offsides_home, match.offsides_away) }}
+        {% if match.shots_home is none %}
         <div class="stats-note">
-          More match stats (shots, corners, fouls) aren't wired up yet —
-          possession is currently the only confirmed real FIFA field for this.
+          Shots/corners/fouls/offsides appear once the daily ingest has parsed
+          this match's play-by-play data — derived from confirmed FIFA event
+          types, not the earlier placeholder mockup numbers.
         </div>
+        {% endif %}
       </div>
 
       <div>
