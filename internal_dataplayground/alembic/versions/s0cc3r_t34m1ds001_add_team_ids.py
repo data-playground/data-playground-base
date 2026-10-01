@@ -1,20 +1,20 @@
 """add fifa team id columns to soccer_matches
 
 Revision ID: s0cc3r_t34m1ds001
-Revises: m3d1um_d0ma1n004
+Revises: m3d1um_d0ma1n003
 Create Date: 2026-09-13
 
 ⚠ Third time this exact thing has happened — this migration's
 down_revision has now moved twice while it sat unapplied, both times
 because unrelated parallel work landed on another domain first:
   1st: s0cc3r_l1n3ups001 (assumed head at the time)
-  Current: m3d1um_d0ma1n004, which — per its own header — chains
+  Current: m3d1um_d0ma1n003, which — per its own header — chains
   directly after s0cc3r_l1n3ups001, meaning this migration and
-  m3d1um_d0ma1n004 were briefly siblings off the same parent until this
+  m3d1um_d0ma1n003 were briefly siblings off the same parent until this
   rebase. Given the track record, assume this will need rechecking again
   before it's actually applied:
   1. Run `alembic heads`.
-  2. If it prints exactly one hash and it's m3d1um_d0ma1n004, apply as-is.
+  2. If it prints exactly one hash and it's m3d1um_d0ma1n003, apply as-is.
   3. If it prints a different single hash, change down_revision below to
      that hash.
   4. If it prints more than one, run
@@ -39,7 +39,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = 's0cc3r_t34m1ds001'
-down_revision: Union[str, None] = 'm3d1um_d0ma1n004'
+down_revision: Union[str, None] = 'm3d1um_d0ma1n003'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
