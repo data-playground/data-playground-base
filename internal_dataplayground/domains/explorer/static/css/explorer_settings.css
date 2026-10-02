@@ -4,7 +4,18 @@
 .settings-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
 .settings-filter, .domain-input { font-family:'DM Mono',monospace; font-size:11px; padding:5px 10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text-primary); border-radius:4px; outline:none; }
 .settings-filter:focus, .domain-input:focus { border-color:var(--accent); }
+input.settings-filter { flex:1 1 220px; min-width:200px; max-width:320px; }   /* wide enough for its placeholder */
+select.settings-filter { min-width:160px; cursor:pointer; }
 .settings-summary { font-size:10px; color:var(--text-muted); margin-left:auto; }
+
+/* Dark / mixed themes: the browser draws a <select>'s popup list and an input's
+   datalist suggestions itself. Without these it paints them with its light
+   defaults, so the options end up pale text on a white list. */
+[data-theme="dark"] .settings-filter, [data-theme="mixed"] .settings-filter,
+[data-theme="dark"] .domain-input,    [data-theme="mixed"] .domain-input { color-scheme:dark; }
+[data-theme="dark"] select.settings-filter, [data-theme="mixed"] select.settings-filter { background-color:#1a1a22; }
+[data-theme="dark"] .settings-filter option, [data-theme="mixed"] .settings-filter option { background-color:#1a1a22; color:var(--text-primary); }
+
 .bulk-bar { display:flex; gap:10px; align-items:center; padding:8px 12px; margin-bottom:10px; border:1px solid var(--border); border-radius:6px; background:var(--bg-hover); font-size:11px; color:var(--text-secondary); }
 .bulk-bar button:disabled { opacity:.4; cursor:not-allowed; }
 .settings-table { width:100%; border-collapse:collapse; font-size:12px; }
@@ -14,4 +25,5 @@
 .settings-table tr[hidden] { display:none; }   /* filtered-out rows (guards against any tr display override) */
 .tbl-name { color:var(--text-secondary); font-family:'DM Mono',monospace; }
 .domain-input { width:200px; }
-.domain-input:placeholder-shown { border-color:rgba(232,160,32,0.4); }   /* unassigned rows stand out */
+/* Unassigned rows stand out — scoped to the table so the bulk-bar input isn't tinted too */
+.settings-table .domain-input:placeholder-shown { border-color:rgba(232,160,32,0.4); }
