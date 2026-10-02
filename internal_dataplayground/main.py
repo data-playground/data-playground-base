@@ -15,7 +15,7 @@ from domains.code_intel.routers import ( # WO2, WO24
     ci_folder_readme, ci_batch, ci_status,
 )
 from domains.jobs.routers import jobs, ats, staging, job_config # WO3
-from domains.explorer.routers import explorer # WO4
+from domains.explorer.routers import explorer, explorer_settings # WO4, WO36
 from domains.finance.routers import finance_summary, finance_ledger, finance_upload, finance_settings # WO5
 from domains.journal.routers import journal, journal_synthesis # WO6, WO25
 from domains.recipes.routers import recipe_extract, recipe_discovery, pantry, recipes, recipe_mutations # WO7, WO26
@@ -70,6 +70,8 @@ app.include_router(blog.router)
 app.include_router(blog_pipeline.router)  # WO#27 — HITL/Airflow pipeline endpoints
 
 app.include_router(explorer.router)
+app.include_router(explorer_settings.router)  # WO#36 — /explorer/settings/* (literal paths only)
+
 app.include_router(habits.router)
 app.include_router(habits_settings.router)  # WO#23 — must stay AFTER habits.router
 app.include_router(journal_synthesis.router)  # WO#25 — /journal/synthesis/*

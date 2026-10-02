@@ -3,8 +3,12 @@ SQL Explorer — Read-Only Query Interface
 
 Endpoints:
   GET  /explorer          → The BigQuery-style UI
-  GET  /explorer/schema   → Returns all tables + columns + row counts as JSON
+  GET  /explorer/schema   → Returns all tables + columns + row counts + domain as JSON
   POST /explorer/query    → Executes a validated SELECT query, returns rows as JSON
+
+Table → domain grouping is managed in routers/explorer_settings.py and read
+here via domains/explorer/table_domains.py. Tables with no assignment are
+reported with domain "unassigned".
 
 Security:
   - Keyword blocklist rejects any query containing write operations
@@ -23,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from core.templating import templates
+from domains.explorer.table_domains import UNASSIGNED, get_domain_map, list_tables
 
 log = logging.getLogger(__name__)
 
@@ -41,13 +46,6 @@ BLOCKED_PATTERN = re.compile(
 
 # Maximum rows returned — prevents accidental full-table dumps
 ROW_CAP = 500
-
-# Tables to hide from the schema browser (internal Airflow/Alembic metadata)
-HIDDEN_TABLES = {
-    "alembic_version",
-    "dag", "dag_run", "task_instance", "job", "log",
-    "xcom", "serialized_dag", "import_error",
-}
 
 
 class QueryRequest(BaseModel):
@@ -111,55 +109,42 @@ async def get_schema(db: AsyncSession = Depends(get_db)) -> JSONResponse:
     {
       "table_name": {
         "columns": [{"name": str, "type": str, "is_pk": bool}],
-        "row_count": int
+        "row_count": int,
+        "domain": str            # "unassigned" if not mapped
       }
     }
     """
-    schema: dict[str, Any] = {}
+    tables = await list_tables(db)
+    domain_map = await get_domain_map(db)
 
-    # 1. Get all tables in the 'jobs' database
-    tables_result = await db.execute(
-        text("SELECT TABLE_NAME FROM information_schema.TABLES "
-             "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' "
-             "ORDER BY TABLE_NAME")
-    )
-    tables = [row[0] for row in tables_result.fetchall() if row[0] not in HIDDEN_TABLES]
-
-    for table in tables:
-        # 2. Get columns for each table
-        cols_result = await db.execute(
-            text(
-                "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_KEY "
-                "FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table "
-                "ORDER BY ORDINAL_POSITION"
-            ),
-            {"table": table}
+    # One query for all columns and one for all row counts, instead of
+    # two queries per table.
+    cols_result = await db.execute(text(
+        "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, COLUMN_KEY "
+        "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        "ORDER BY TABLE_NAME, ORDINAL_POSITION"
+    ))
+    columns_by_table: dict[str, list] = {}
+    for tname, cname, ctype, ckey in cols_result.fetchall():
+        columns_by_table.setdefault(tname, []).append(
+            {"name": cname, "type": _infer_column_type(ctype), "is_pk": ckey == "PRI"}
         )
-        columns = [
-            {
-                "name": row[0],
-                "type": _infer_column_type(row[1]),
-                "is_pk": row[2] == "PRI",
-            }
-            for row in cols_result.fetchall()
-        ]
 
-        # 3. Get approximate row count (fast — uses engine stats)
-        try:
-            count_result = await db.execute(
-                text(
-                    "SELECT TABLE_ROWS FROM information_schema.TABLES "
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table"
-                ),
-                {"table": table}
-            )
-            row_count = count_result.scalar() or 0
-        except Exception:
-            row_count = 0
+    # Approximate row counts (fast — uses engine stats)
+    counts_result = await db.execute(text(
+        "SELECT TABLE_NAME, TABLE_ROWS FROM information_schema.TABLES "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'"
+    ))
+    row_counts = {r[0]: int(r[1] or 0) for r in counts_result.fetchall()}
 
-        schema[table] = {"columns": columns, "row_count": row_count}
-
+    schema: dict[str, Any] = {
+        t: {
+            "columns": columns_by_table.get(t, []),
+            "row_count": row_counts.get(t, 0),
+            "domain": domain_map.get(t, UNASSIGNED),
+        }
+        for t in tables
+    }
     return JSONResponse(content=schema)
 
 

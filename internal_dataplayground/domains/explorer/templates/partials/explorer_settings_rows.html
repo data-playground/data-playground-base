@@ -1,0 +1,4 @@
+{# Returned by: POST /explorer/settings/bulk-assign; included by explorer_settings.html
+   Context: tables (list of {name, domain})
+   Swapped into: #settings-tbody (innerHTML) #}
+{% for t in tables %}{% include "partials/explorer_settings_row.html" %}{% endfor %}

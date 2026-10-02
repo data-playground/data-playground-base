@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Explorer Settings{% endblock %}
+{% block page_title %}Explorer · Table Domains{% endblock %}
+{% block topbar_actions %}<a class="btn" href="/explorer" style="text-decoration:none;">← Back to Explorer</a>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="/static/explorer/css/explorer_settings.css">{% endblock %}
+{% block content %}
+<div class="settings-wrap">
+
+    <p class="settings-help">
+        Assign each table to a domain; the SQL Explorer groups its table browser by these.
+        Edits save as soon as you leave the field. Leave a domain blank to unassign.
+        Tables created later appear here automatically, unassigned, until you give them a domain.
+    </p>
+
+    <div class="settings-toolbar">
+        <input class="settings-filter" id="settings-filter" type="text" placeholder="Filter tables or domains…">
+        <select class="settings-filter" id="domain-filter">
+            <option value="">All domains</option>
+            <option value="__none__">Unassigned only</option>
+        </select>
+        <span class="settings-summary" id="settings-summary"></span>
+    </div>
+
+    <form class="bulk-bar" hx-post="/explorer/settings/bulk-assign"
+          hx-target="#settings-tbody" hx-swap="innerHTML" hx-include=".row-check:checked">
+        <span id="selected-count">0 selected</span>
+        <input class="domain-input" name="domain" list="domain-options"
+               placeholder="domain (blank = unassign)" autocomplete="off">
+        <button class="btn" id="bulk-apply" type="submit" disabled>Apply to selected</button>
+    </form>
+
+    <table class="settings-table">
+        <thead>
+            <tr>
+                <th style="width:32px;"><input type="checkbox" id="check-all" title="Select all visible"></th>
+                <th>Table</th>
+                <th>Domain</th>
+            </tr>
+        </thead>
+        <tbody id="settings-tbody">
+            {% include "partials/explorer_settings_rows.html" %}
+        </tbody>
+    </table>
+
+    {# Rebuilt by JS from the rows on the page whenever they change #}
+    <datalist id="domain-options"></datalist>
+</div>
+
+<script>
+const tbody = document.getElementById('settings-tbody');
+const filterInput = document.getElementById('settings-filter');
+const domainFilter = document.getElementById('domain-filter');
+const datalist = document.getElementById('domain-options');
+
+function allRows() { return [...tbody.querySelectorAll('tr')]; }
+function visibleRows() { return allRows().filter(tr => !tr.hidden); }
+
+// Rebuild the domain <select> and the autocomplete <datalist> from the rows
+// currently on the page, so a brand-new domain shows up without a reload.
+function refreshDomainOptions() {
+    const domains = [...new Set(allRows().map(tr => tr.dataset.domain).filter(Boolean))].sort();
+    const selected = domainFilter.value;
+    domainFilter.innerHTML =
+        '<option value="">All domains</option><option value="__none__">Unassigned only</option>' +
+        domains.map(d => `<option value="${d}">${d}</option>`).join('');
+    domainFilter.value = [...domainFilter.options].some(o => o.value === selected) ? selected : '';
+    datalist.innerHTML = domains.map(d => `<option value="${d}">`).join('');
+}
+
+function applyFilters() {
+    const q = filterInput.value.trim().toLowerCase();
+    const dom = domainFilter.value;
+    allRows().forEach(tr => {
+        const name = tr.dataset.table, d = tr.dataset.domain;
+        const okQ = !q || name.includes(q) || d.includes(q);
+        const okD = dom === '' || (dom === '__none__' ? d === '' : d === dom);
+        tr.hidden = !(okQ && okD);
+    });
+    updateSummary();
+}
+
+function updateSummary() {
+    const rows = allRows();
+    const none = rows.filter(tr => tr.dataset.domain === '').length;
+    document.getElementById('settings-summary').textContent =
+        `${rows.length} tables · ${none} unassigned · ${visibleRows().length} shown`;
+    updateSelection();
+}
+
+function updateSelection() {
+    const n = tbody.querySelectorAll('.row-check:checked').length;
+    document.getElementById('selected-count').textContent = `${n} selected`;
+    document.getElementById('bulk-apply').disabled = n === 0;
+}
+
+filterInput.addEventListener('input', applyFilters);
+domainFilter.addEventListener('change', applyFilters);
+tbody.addEventListener('change', e => { if (e.target.classList.contains('row-check')) updateSelection(); });
+document.getElementById('check-all').addEventListener('change', e => {
+    visibleRows().forEach(tr => { tr.querySelector('.row-check').checked = e.target.checked; });
+    updateSelection();
+});
+
+// After any HTMX swap (single row or whole tbody): refresh options + filters.
+// A successful save also gets a toast, since an in-place edit looks unchanged.
+document.body.addEventListener('htmx:afterSwap', e => {
+    document.getElementById('check-all').checked = false;
+    refreshDomainOptions();
+    applyFilters();
+    const path = e.detail?.requestConfig?.path || '';
+    if (path.endsWith('/assign') || path.endsWith('/bulk-assign')) showToast('Saved.');
+});
+
+// Surface the server's validation message (error_fragment.html) as a toast.
+document.body.addEventListener('htmx:responseError', e => {
+    let msg = 'Could not save.';
+    try {
+        const doc = new DOMParser().parseFromString(e.detail.xhr.responseText, 'text/html');
+        msg = doc.querySelector('.error-fragment-message')?.textContent?.trim() || msg;
+    } catch (_) { /* keep generic message */ }
+    showToast('⚠ ' + msg, true);
+});
+
+refreshDomainOptions();
+applyFilters();
+</script>
+{% endblock %}

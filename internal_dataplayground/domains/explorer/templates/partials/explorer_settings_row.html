@@ -1,0 +1,14 @@
+{# Returned by: POST /explorer/settings/assign; included by explorer_settings_rows.html
+   Context: t ({name, domain}; domain is '' when unassigned)
+   Swapped into: the <tr> itself (outerHTML) #}
+<tr data-table="{{ t.name }}" data-domain="{{ t.domain }}">
+    <td><input type="checkbox" class="row-check" name="table_names" value="{{ t.name }}"></td>
+    <td class="tbl-name">{{ t.name }}</td>
+    <td>
+        <input class="domain-input" name="domain" list="domain-options" autocomplete="off"
+               value="{{ t.domain }}" placeholder="unassigned"
+               hx-post="/explorer/settings/assign" hx-trigger="change"
+               hx-target="closest tr" hx-swap="outerHTML"
+               hx-vals='{"table_name": "{{ t.name }}"}'>
+    </td>
+</tr>

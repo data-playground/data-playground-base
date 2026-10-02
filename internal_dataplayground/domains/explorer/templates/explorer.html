@@ -3,18 +3,19 @@
 {% block page_title %}Life OS — SQL Explorer{% endblock %}
 {% block topbar_meta %}<span style="font-size:9px;padding:2px 8px;border-radius:3px;background:rgba(240,64,64,0.1);color:var(--red);border:1px solid rgba(240,64,64,0.2);letter-spacing:.08em;text-transform:uppercase;">Read-Only</span>{% endblock %}
 {% block topbar_badges %}<span class="status-pill" id="status-pill">Ready</span>{% endblock %}
-{% block topbar_actions %}<button class="run-btn" id="run-btn" onclick="runQuery()">▶ Run <span class="shortcut">⌘↵</span></button>{% endblock %}
+{% block topbar_actions %}<a class="editor-btn" id="domains-link" href="/explorer/settings" title="Assign tables to domains" style="text-decoration:none;">⚙ Domains</a> <button class="run-btn" id="run-btn" onclick="runQuery()">▶ Run <span class="shortcut">⌘↵</span></button>{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="/static/explorer/css/explorer.css">{% endblock %}
 {% block content %}
 
     <!-- ═══════════════════════════════════════════════════════════
          MOBILE SCHEMA STRIP  (hidden on desktop via mobile.css)
          On desktop the left .table-browser panel serves this role.
-         On mobile that panel is hidden and this chip strip replaces it.
+         On mobile that panel is hidden and this strip replaces it:
+         a domain <select> plus chips for that domain's tables.
     ═══════════════════════════════════════════════════════════ -->
     <div class="mobile-schema-strip" id="mobile-schema-strip">
         <span class="mobile-schema-label">Tables</span>
-        <!-- Chips are populated by JS once schemaData is loaded -->
+        <!-- Select + chips are populated by JS once schemaData is loaded -->
     </div>
 
     <!-- WORKSPACE
@@ -28,7 +29,11 @@
         <div class="table-browser">
             <div class="browser-header">
                 <div class="browser-title">Schema · jobs</div>
-                <input class="browser-search" type="text" placeholder="Search tables…" oninput="filterTables(this.value)" id="table-search">
+                <input class="browser-search" type="text" placeholder="Search tables or domains…" oninput="filterTables(this.value)" id="table-search">
+                <div class="browser-actions">
+                    <button class="editor-btn" onclick="expandAllDomains()">Expand all</button>
+                    <button class="editor-btn" onclick="collapseAllDomains()">Collapse all</button>
+                </div>
             </div>
             <div class="table-list" id="table-list">
                 <div class="state-box" style="height:120px;">
@@ -135,9 +140,15 @@ document.addEventListener('mouseup', () => {
 });
 
 // ── SCHEMA / TABLE BROWSER ─────────────────────────────────────────────────────
+// Three levels: domain (collapsed by default) → table → columns.
+// Domains come from GET /explorer/schema ("domain" on each table); any table
+// without an assignment arrives as "unassigned" and is listed last.
+const UNASSIGNED = 'unassigned';
 let schemaData = {};
 let expandedTable = null;
 let activeTable = null;
+let openDomains = new Set();        // empty = every domain collapsed
+let searchCollapsed = new Set();    // domains the user closed while a search is active
 
 async function loadSchema() {
     try {
@@ -145,53 +156,124 @@ async function loadSchema() {
         schemaData = await resp.json();
         renderTableList('');
         buildQuickChips();
-        buildMobileSchemaStrip(); // populate mobile chip strip
+        buildMobileSchemaStrip(); // populate mobile domain select + chips
+        updateUnassignedBadge();
     } catch (e) {
         document.getElementById('table-list').innerHTML =
             `<div class="state-box" style="height:100px;"><div class="state-text" style="color:var(--red);">Failed to load schema</div></div>`;
     }
 }
 
+// Shows "⚙ Domains · N unassigned" on the topbar link when new tables need a home.
+function updateUnassignedBadge() {
+    const n = Object.values(schemaData).filter(m => (m.domain || UNASSIGNED) === UNASSIGNED).length;
+    const link = document.getElementById('domains-link');
+    if (link) link.textContent = n ? `⚙ Domains · ${n} unassigned` : '⚙ Domains';
+}
+
+function sortedDomains(names) {
+    return [...names].sort((a, b) => {
+        if (a === UNASSIGNED) return 1;       // unassigned always last
+        if (b === UNASSIGNED) return -1;
+        return a.localeCompare(b);
+    });
+}
+
+// { domain: [tableName, ...] }, filtered by table-name OR domain-name match
+function groupTables(filter) {
+    const f = (filter || '').trim().toLowerCase();
+    const groups = {};
+    Object.keys(schemaData).forEach(name => {
+        const domain = schemaData[name].domain || UNASSIGNED;
+        if (!f || name.toLowerCase().includes(f) || domain.includes(f)) {
+            (groups[domain] = groups[domain] || []).push(name);
+        }
+    });
+    return groups;
+}
+
+function renderTableItem(tableName) {
+    const meta = schemaData[tableName];
+    const isExpanded = expandedTable === tableName;
+    const isActive = activeTable === tableName;
+
+    const colHtml = isExpanded ? `<div class="col-list">${meta.columns.map(col => `
+        <div class="col-item" onclick="insertColumnName('${col.name}')" title="Click to insert">
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${col.name}</span>
+            <span class="col-type">${col.type}</span>
+            ${col.is_pk ? '<span class="col-pk">PK</span>' : ''}
+        </div>`).join('')}</div>` : '';
+
+    return `
+        <div class="table-group">
+            <div class="table-item ${isActive ? 'active' : ''}" onclick="selectTable('${tableName}')">
+                <span class="table-icon">${isExpanded ? '▾' : '▸'}</span>
+                <span class="table-name">${tableName}</span>
+                <span class="table-row-count">${meta.row_count?.toLocaleString() ?? ''}</span>
+            </div>
+            ${colHtml}
+        </div>`;
+}
+
 function renderTableList(filter) {
     const list = document.getElementById('table-list');
-    const tables = Object.keys(schemaData).filter(t => t.toLowerCase().includes(filter.toLowerCase()));
+    const filtering = !!(filter || '').trim();
+    const groups = groupTables(filter);
+    const domains = sortedDomains(Object.keys(groups));
 
-    if (!tables.length) {
+    if (!domains.length) {
         list.innerHTML = `<div class="state-box" style="height:80px;"><div class="state-text">No tables match</div></div>`;
         return;
     }
 
-    list.innerHTML = tables.map(tableName => {
-        const meta = schemaData[tableName];
-        const isExpanded = expandedTable === tableName;
-        const isActive = activeTable === tableName;
-
-        let colHtml = '';
-        if (isExpanded) {
-            colHtml = `<div class="col-list">${meta.columns.map(col => `
-                <div class="col-item" onclick="insertColumnName('${col.name}')" title="Click to insert">
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${col.name}</span>
-                    <span class="col-type">${col.type}</span>
-                    ${col.is_pk ? '<span class="col-pk">PK</span>' : ''}
-                </div>
-            `).join('')}</div>`;
-        }
-
+    list.innerHTML = domains.map(domain => {
+        const tables = groups[domain];
+        // While searching, matching domains open automatically (the user can still close them).
+        const open = filtering ? !searchCollapsed.has(domain) : openDomains.has(domain);
         return `
-            <div class="table-group">
-                <div class="table-item ${isActive ? 'active' : ''}"
-                     onclick="selectTable('${tableName}')">
-                    <span class="table-icon">${isExpanded ? '▾' : '▸'}</span>
-                    <span class="table-name">${tableName}</span>
-                    <span class="table-row-count">${meta.row_count?.toLocaleString() ?? ''}</span>
+            <div class="domain-group">
+                <div class="domain-header ${open ? 'open' : ''} ${domain === UNASSIGNED ? 'unassigned' : ''}"
+                     onclick="toggleDomain('${domain}')">
+                    <span class="table-icon">${open ? '▾' : '▸'}</span>
+                    <span class="domain-name">${domain}</span>
+                    <span class="domain-count">${tables.length}</span>
                 </div>
-                ${colHtml}
-            </div>
-        `;
+                ${open ? `<div class="domain-tables">${tables.map(renderTableItem).join('')}</div>` : ''}
+            </div>`;
     }).join('');
 }
 
+function rerenderTableList() {
+    renderTableList(document.getElementById('table-search').value);
+}
+
+function toggleDomain(domain) {
+    const filtering = !!document.getElementById('table-search').value.trim();
+    const set = filtering ? searchCollapsed : openDomains;
+    if (set.has(domain)) set.delete(domain); else set.add(domain);
+    rerenderTableList();
+}
+
+function expandAllDomains() {
+    searchCollapsed.clear();
+    Object.values(schemaData).forEach(m => openDomains.add(m.domain || UNASSIGNED));
+    rerenderTableList();
+}
+
+function collapseAllDomains() {
+    openDomains.clear();
+    // While searching, "collapse all" closes every domain currently shown.
+    Object.values(schemaData).forEach(m => searchCollapsed.add(m.domain || UNASSIGNED));
+    expandedTable = null;
+    rerenderTableList();
+}
+
 function selectTable(tableName) {
+    // Make sure the table's domain is open (mobile chips can jump straight here)
+    const domain = schemaData[tableName]?.domain || UNASSIGNED;
+    openDomains.add(domain);
+    searchCollapsed.delete(domain);
+
     if (expandedTable === tableName) {
         expandedTable = null;
     } else {
@@ -200,7 +282,7 @@ function selectTable(tableName) {
         const cols = schemaData[tableName]?.columns?.map(c => c.name).slice(0, 8).join(', ') || '*';
         editor.setValue(`SELECT ${cols}\nFROM ${tableName}\nLIMIT 100;`);
     }
-    renderTableList(document.getElementById('table-search').value);
+    rerenderTableList();
     // Also highlight the mobile chip
     document.querySelectorAll('.mobile-schema-chip').forEach(c => {
         c.classList.toggle('active', c.dataset.table === tableName);
@@ -208,6 +290,7 @@ function selectTable(tableName) {
 }
 
 function filterTables(val) {
+    searchCollapsed.clear();   // a new search starts with every match open
     renderTableList(val);
 }
 
@@ -219,22 +302,35 @@ function insertColumnName(colName) {
 }
 
 // ── MOBILE SCHEMA STRIP ────────────────────────────────────────────────────────
-// Builds the horizontal chip strip shown only on mobile (≤768px).
+// Builds the strip shown only on mobile (≤768px): a domain <select> plus chips
+// for just that domain's tables, so mobile doesn't render ~70 chips in one row.
 // Clicking a chip loads the same SELECT as clicking a table in the left panel.
 function buildMobileSchemaStrip() {
     const strip = document.getElementById('mobile-schema-strip');
     if (!strip) return;
-    const label = strip.querySelector('.mobile-schema-label');
+    strip.querySelectorAll('.mobile-schema-select, .mobile-schema-chip').forEach(el => el.remove());
 
-    Object.keys(schemaData).forEach(tableName => {
+    const groups = groupTables('');
+    const domains = sortedDomains(Object.keys(groups));
+
+    const select = document.createElement('select');
+    select.className = 'mobile-schema-select';
+    select.innerHTML = domains.map(d => `<option value="${d}">${d} (${groups[d].length})</option>`).join('');
+    select.onchange = () => renderMobileChips(select.value, groups);
+    strip.appendChild(select);
+
+    renderMobileChips(domains[0], groups);
+}
+
+function renderMobileChips(domain, groups) {
+    const strip = document.getElementById('mobile-schema-strip');
+    strip.querySelectorAll('.mobile-schema-chip').forEach(c => c.remove());
+    (groups[domain] || []).forEach(tableName => {
         const chip = document.createElement('button');
         chip.className = 'mobile-schema-chip';
         chip.dataset.table = tableName;
         chip.textContent = tableName;
-        chip.onclick = () => {
-            selectTable(tableName);
-            editor.focus();
-        };
+        chip.onclick = () => { selectTable(tableName); editor.focus(); };
         strip.appendChild(chip);
     });
 }

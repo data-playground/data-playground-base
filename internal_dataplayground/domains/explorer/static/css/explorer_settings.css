@@ -1,0 +1,17 @@
+/* Explorer settings page (table → domain assignment) */
+.settings-wrap { padding:20px 24px; max-width:900px; }
+.settings-help { font-size:11px; color:var(--text-muted); line-height:1.7; margin-bottom:14px; }
+.settings-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.settings-filter, .domain-input { font-family:'DM Mono',monospace; font-size:11px; padding:5px 10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text-primary); border-radius:4px; outline:none; }
+.settings-filter:focus, .domain-input:focus { border-color:var(--accent); }
+.settings-summary { font-size:10px; color:var(--text-muted); margin-left:auto; }
+.bulk-bar { display:flex; gap:10px; align-items:center; padding:8px 12px; margin-bottom:10px; border:1px solid var(--border); border-radius:6px; background:var(--bg-hover); font-size:11px; color:var(--text-secondary); }
+.bulk-bar button:disabled { opacity:.4; cursor:not-allowed; }
+.settings-table { width:100%; border-collapse:collapse; font-size:12px; }
+.settings-table th { padding:8px 12px; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); text-align:left; border-bottom:2px solid var(--border); }
+.settings-table td { padding:5px 12px; border-bottom:1px solid var(--border); }
+.settings-table tbody tr:hover { background:var(--bg-hover); }
+.settings-table tr[hidden] { display:none; }   /* filtered-out rows (guards against any tr display override) */
+.tbl-name { color:var(--text-secondary); font-family:'DM Mono',monospace; }
+.domain-input { width:200px; }
+.domain-input:placeholder-shown { border-color:rgba(232,160,32,0.4); }   /* unassigned rows stand out */

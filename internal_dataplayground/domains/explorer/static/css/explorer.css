@@ -52,6 +52,20 @@
 .col-type { font-size:9px; padding:1px 5px; border-radius:3px; background:rgba(124,111,255,0.08); color:var(--accent); letter-spacing:.04em; flex-shrink:0; }
 .col-pk { font-size:9px; color:var(--yellow); margin-left:auto; }
 
+/* ── DOMAIN GROUPS (table browser) ── */
+.browser-actions { display:flex; gap:6px; margin-top:8px; }
+.domain-group { margin-bottom:2px; }
+.domain-header { display:flex; align-items:center; gap:8px; padding:7px 14px; cursor:pointer; user-select:none; border-left:2px solid transparent; transition:background var(--transition); }
+.domain-header:hover { background:rgba(124,111,255,0.08); }
+.domain-header.open { border-left-color:var(--accent); }
+.domain-name { flex:1; font-size:10px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:var(--text-secondary); }
+.domain-header.unassigned .domain-name { color:var(--yellow); }
+.domain-count { font-size:9px; padding:1px 7px; border-radius:10px; background:rgba(124,111,255,0.1); color:var(--accent); }
+.domain-header.unassigned .domain-count { background:rgba(232,160,32,0.12); color:var(--yellow); }
+.domain-tables .table-item { padding-left:26px; }
+.domain-tables .col-item { padding-left:44px; }
+.mobile-schema-select { font-family:'DM Mono',monospace; font-size:11px; padding:4px 8px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); border-radius:4px; flex-shrink:0; }
+
 /* ── RIGHT PANEL: editor + results ── */
 .right-panel { display:flex; flex-direction:column; overflow:hidden; background:var(--bg-card); }
 [data-theme="dark"] .right-panel { background:var(--bg); }
