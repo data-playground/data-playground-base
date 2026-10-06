@@ -615,10 +615,20 @@ def fetch_game_details_full(game_id: str) -> dict:
       - "minutes" here is an ISO-8601 duration ("PT37M30.00S"), not the
         "MM:SS" string stats.nba.com used — converted via _parse_iso_minutes().
 
-    Returns {"summary": {...}, "traditional_rows": [...], "pbp_rows": [...]}.
-    Any of these can legitimately come back empty for a given game (not
-    every game has every tab populated) — treat that as "no data," not an
-    error; callers should not assume a non-empty result.
+    Also returns "player_rows" — real names (and current team_id) for
+    every player on both full rosters, not just the ones with a stat
+    line: the box score's "players" array includes starters, bench, DNPs,
+    and inactives alike, each with a real "name"/"firstName"/"familyName".
+    This is now the primary way nba_players gets populated with real
+    names — no separate PLAYERS/commonallplayers call needed, since that
+    endpoint lives on stats.nba.com (blocked; see
+    life_os_nba_player_sync.py's docstring for where that stands).
+
+    Returns {"summary": {...}, "traditional_rows": [...], "pbp_rows": [...],
+    "player_rows": [...]}. Any of these can legitimately come back empty
+    for a given game (not every game has every tab populated) — treat
+    that as "no data," not an error; callers should not assume a
+    non-empty result.
     """
     url = f"{_GAME_DETAILS_URL}?gameid={game_id}&leagueid=00&platform=web&tabs=header,summary,pbp,boxscore"
     data = _fetch_json(url, CORE_API_HEADERS)
@@ -660,12 +670,17 @@ def fetch_game_details_full(game_id: str) -> dict:
     }
 
     traditional_rows = []
+    player_rows = []  # real names, straight from the box score's full roster — see docstring
     for side in ("homeTeam", "awayTeam"):
         team = boxscore.get(side) or {}
         team_id = team.get("teamId")
         for p in team.get("players") or []:
-            if p.get("personId") is None:
+            person_id = p.get("personId")
+            if person_id is None:
                 continue
+            full_name = p.get("name")
+            if full_name:
+                player_rows.append({"person_id": person_id, "full_name": full_name, "team_id": team_id})
             stats = p.get("statistics") or {}
             traditional_rows.append({
                 "game_id": game_id,
@@ -725,7 +740,12 @@ def fetch_game_details_full(game_id: str) -> dict:
             "shot_y": a.get("y"),
         })
 
-    return {"summary": summary, "traditional_rows": traditional_rows, "pbp_rows": pbp_rows}
+    return {
+        "summary": summary,
+        "traditional_rows": traditional_rows,
+        "pbp_rows": pbp_rows,
+        "player_rows": player_rows,
+    }
 
 
 def fetch_box_score(endpoint_key: str, game_id: str) -> dict:

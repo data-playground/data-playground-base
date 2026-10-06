@@ -42,20 +42,35 @@ from core.base_model import Base
 
 class Team(Base):
     """
-    Static reference table — the 30 NBA franchises. Seeded once via
-    seed_data.py (run manually after migrating), not written to by the
-    ingestion DAG. Team relocations/rebrands are rare enough that a static
-    seed is simpler and more reliable than deriving team metadata from
-    box-score responses, which only ever carry a bare teamId — never a
-    name or tricode.
+    Primarily the 30 real NBA franchises, seeded once via seed_data.py
+    (run manually after migrating). The ingestion DAG is also allowed to
+    write a placeholder row here — full_name only, tricode left NULL — for
+    a team_id it's never seen before: preseason schedules occasionally
+    include exhibition opponents (G League squads, international club
+    teams) that were never one of the 30 and have no tricode/conference/
+    division to speak of. Without this, a single exhibition game's foreign
+    key would fail and abort that whole date's upsert (see the WO#33
+    conversation history — this is exactly what happened backfilling
+    October 2025's preseason slate). tricode is nullable specifically to
+    allow this — NULL values don't count as duplicates under a UNIQUE
+    index in MariaDB/InnoDB, so many placeholder rows can coexist without
+    violating the constraint real franchises rely on to keep their
+    tricodes unique.
     """
     __tablename__ = "nba_teams"
 
     id = Column(Integer, primary_key=True, autoincrement=False)  # NBA's own numeric team ID
-    tricode = Column(String(3), nullable=False, unique=True)
+    tricode = Column(String(3), nullable=True, unique=True)
     full_name = Column(String(60), nullable=False)
     conference = Column(String(10), nullable=True)   # "East" / "West"
     division = Column(String(20), nullable=True)
+
+    @property
+    def display_code(self) -> str:
+        """What templates should show as the team's short label: the real
+        tricode for the 30 franchises, or the placeholder's full_name
+        ("Team #<id>") for an exhibition opponent with no tricode."""
+        return self.tricode or self.full_name
 
 
 class Player(Base):

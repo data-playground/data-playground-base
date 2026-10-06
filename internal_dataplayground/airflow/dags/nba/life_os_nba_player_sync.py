@@ -2,6 +2,22 @@
 """
 Weekly sync of the NBA player roster (WO#33).
 
+STATUS — no longer essential. This DAG calls stats.nba.com's
+commonallplayers, which times out from our deployment even after shrinking
+the request to the current season only (the whole stats.nba.com host is
+blocking us — see the WO#33 conversation history). Real player names now
+reach nba_players a different way: life_os_nba_ingest.py's
+_upsert_player_names() writes them straight from the box score rosters it
+already fetches from core-api.nba.com (every rostered player appears there,
+including bench, DNPs and inactives, each with a real name). What this DAG
+would still add is career metadata the box score doesn't carry
+(roster_status, from_year, to_year) and players who haven't appeared in
+any box score yet. It's left in place, not deleted, in case stats.nba.com
+access is restored or a core-api.nba.com roster endpoint is found — but
+nothing in the app depends on it succeeding. Safe to pause in the Airflow UI
+to stop the failing runs.
+
+
 Runs on its own weekly schedule, separate from the nightly game-ingestion
 DAG — see domains/nba/models.py's Player docstring for why: this is a
 full-league roster snapshot (PLAYERS/commonallplayers), not per-game data,

@@ -140,15 +140,16 @@ def _upsert(table: str, rows: list[dict], key_cols: list[str]) -> None:
 
 def _ensure_players_exist(person_ids: set[int]) -> None:
     """
-    Box score / matchup / play-by-play rows all FK into nba_players, but
-    that table is only filled by the *weekly* life_os_nba_player_sync.py —
-    a player can debut (or get called up) between sync runs, and this
-    nightly DAG must not fail on that. Inserts a minimal placeholder row
-    for any person_id not already present, and does nothing if it already
-    exists — "ON DUPLICATE KEY UPDATE person_id=person_id" is a genuine
-    no-op, so a real name from a previous sync is never clobbered back to
-    the placeholder. The next player-sync run overwrites the placeholder
-    with the real name via its own upsert, same as any other player.
+    Box score / matchup / play-by-play rows all FK into nba_players. As of
+    this DAG's move to fetch_game_details_full(), nba_players is
+    primarily populated with real names by _upsert_player_names() below,
+    called first every run — so by the time this runs, most person_ids
+    already exist with a real name. This is the fallback for the rest
+    (e.g. a person_id seen only in play-by-play, never in a box score
+    roster for some edge case). Inserts a minimal placeholder row for any
+    person_id not already present, and does nothing if it already exists
+    — "ON DUPLICATE KEY UPDATE person_id=person_id" is a genuine no-op,
+    so a real name is never clobbered back to a placeholder.
     """
     if not person_ids:
         return
@@ -161,7 +162,64 @@ def _ensure_players_exist(person_ids: set[int]) -> None:
         for pid in person_ids
     ]
     execute_many(statements)
-    log.info("Ensured %d player row(s) exist (placeholder where not yet synced)", len(person_ids))
+    log.info("Ensured %d player row(s) exist (placeholder where no real name seen yet)", len(person_ids))
+
+
+def _upsert_player_names(player_rows: list[dict]) -> None:
+    """
+    Updates nba_players with real names/current team straight from the box
+    score's full roster (see fetch_game_details_full()'s player_rows) — no
+    separate PLAYERS/commonallplayers call needed, which is the point:
+    that endpoint lives on stats.nba.com, still blocked as of this write
+    (life_os_nba_player_sync.py keeps failing against it even after
+    shrinking the payload — see the WO#33 conversation history). This is
+    now the primary way real names reach nba_players; unlike
+    _ensure_players_exist()'s placeholder-only no-op, this overwrites
+    full_name/team_id unconditionally, since the data is real, not a
+    last-resort stand-in.
+    """
+    if not player_rows:
+        return
+    by_id = {row["person_id"]: row for row in player_rows}  # last one wins if seen twice in one run
+    statements = [
+        (
+            "INSERT INTO nba_players (person_id, full_name, team_id) VALUES (%s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), team_id=VALUES(team_id)",
+            (row["person_id"], row["full_name"], row["team_id"]),
+        )
+        for row in by_id.values()
+    ]
+    execute_many(statements)
+    log.info("Updated %d player name(s) from box score rosters", len(statements))
+
+
+def _ensure_teams_exist(team_ids: set[int]) -> None:
+    """
+    nba_games and every per-player-stat table FK into nba_teams, which is
+    meant to hold the 30 real franchises (seeded once via the migration /
+    seed_data.py) — but preseason schedules sometimes include exhibition
+    opponents (G League squads, international club teams) with their own
+    team_id that was never one of the 30. Without this, a single
+    exhibition game blows up that whole date's upsert with a foreign-key
+    error (see the WO#33 conversation history — this is exactly what
+    happened backfilling October 2025's preseason slate). Inserts a
+    minimal placeholder row (full_name only — tricode/conference/division
+    stay NULL, which models.py's Team docstring explains is intentional)
+    for any team_id not already present; a genuine no-op if it already
+    exists, so a real franchise's real name/tricode is never touched.
+    """
+    if not team_ids:
+        return
+    statements = [
+        (
+            "INSERT INTO nba_teams (id, full_name) VALUES (%s, %s) "
+            "ON DUPLICATE KEY UPDATE id = id",
+            (tid, f"Team #{tid}"),
+        )
+        for tid in team_ids
+    ]
+    execute_many(statements)
+    log.info("Ensured %d team row(s) exist (placeholder where not a tracked franchise)", len(team_ids))
 
 
 def _date_range(start: datetime.date, end: datetime.date) -> list[datetime.date]:
@@ -221,6 +279,7 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
     game_rows = []
     trad_rows: list[dict] = []
     pbp_rows: list[dict] = []
+    player_rows: list[dict] = []
     box_rows_by_key: dict[str, list[dict]] = {k: [] for k in BOX_SCORE_TABLES}
     matchup_rows: list[dict] = []
 
@@ -255,6 +314,7 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
 
         trad_rows.extend(details["traditional_rows"])
         pbp_rows.extend(details["pbp_rows"])
+        player_rows.extend(details["player_rows"])
 
         if not fetch_advanced_stats:
             continue
@@ -268,7 +328,21 @@ def _ingest_date(target_date: datetime.date, fetch_advanced_stats: bool = False)
         matchup_parsed = fetch_box_score("BS_MATCH", game_id)
         matchup_rows.extend(flatten_matchup_box_score(matchup_parsed, game_id))
 
+    # Preseason schedules occasionally include exhibition opponents (G
+    # League squads, international clubs) whose team_id was never one of
+    # the 30 real franchises nba_teams is seeded with — without this, a
+    # single such game's FK violation aborts the whole date's upsert.
+    team_ids = {row["home_team_id"] for row in game_rows if row.get("home_team_id")}
+    team_ids |= {row["away_team_id"] for row in game_rows if row.get("away_team_id")}
+    _ensure_teams_exist(team_ids)
+
     _upsert("nba_games", game_rows, key_cols=["game_id"])
+
+    # Real names first (from box score rosters — see _upsert_player_names),
+    # then the placeholder fallback for anything left over. Order matters:
+    # _ensure_players_exist()'s no-op-on-conflict logic means it will never
+    # clobber a real name this just wrote.
+    _upsert_player_names(player_rows)
 
     # Traditional + PBP always run now, so their person_ids always need the
     # placeholder-row treatment too — not just when fetch_advanced_stats.

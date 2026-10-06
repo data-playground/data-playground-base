@@ -1,9 +1,9 @@
 -- Reference DDL generated from domains/nba/models.py (WO#33).
--- Convenience sanity-check only -- the real Alembic migration is the source of truth.
+-- Convenience sanity-check only -- the Alembic migrations are the source of truth.
 
 CREATE TABLE nba_teams (
 	id INTEGER NOT NULL, 
-	tricode VARCHAR(3) NOT NULL, 
+	tricode VARCHAR(3), 
 	full_name VARCHAR(60) NOT NULL, 
 	conference VARCHAR(10), 
 	division VARCHAR(20), 

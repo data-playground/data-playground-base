@@ -23,9 +23,9 @@
             <div style="display:flex;align-items:center;gap:14px;">
                 <span class="badge badge-muted">{{ game.game_status_text or '—' }}</span>
                 <span style="font-size:12px;">
-                    {{ game.away_team.tricode if game.away_team else game.away_team_id }}
+                    {{ game.away_team.display_code if game.away_team else game.away_team_id }}
                     <span style="color:var(--text-muted);">@</span>
-                    {{ game.home_team.tricode if game.home_team else game.home_team_id }}
+                    {{ game.home_team.display_code if game.home_team else game.home_team_id }}
                 </span>
             </div>
             <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;">
