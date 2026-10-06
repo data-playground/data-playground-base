@@ -26,27 +26,18 @@ dependency on models.py, database.py, or any FastAPI router/service, in
 line with the DAG/FastAPI boundary rule in CONTRIBUTING.md /
 GOVERNANCE.md §2.2.
 
-FIELD-NAME CAVEAT — UPDATE (2026-09-10): the original version of this
-module was written from general knowledge of FIFA's public API shape,
-not a captured sample, and it guessed wrong on the calendar endpoint's
-team fields specifically (guessed HomeTeam/AwayTeam with a nested `Name`
-list; the real fields are `Home`/`Away` with a nested `TeamName` list —
-see parse_match_summary() and _extract_localized_text()'s call sites,
-now fixed against a real captured Qatar-vs-Ecuador World Cup match).
-MatchStatus's meaning was also initially guessed backwards and has since
-been corrected against the project owner's own reference mapping — see
-_MATCH_STATUS_MAP's docstring. Scores (HomeTeamScore/AwayTeamScore) and
-Stadium.Name were right from the start and needed no correction.
-Everything below is still read defensively (dict.get(), never direct
-indexing) as a matter of course, but "defensive" only protects against
-missing/malformed data — it does not substitute for checking field names
-against a real response, which is what actually should have caught the
-Home/Away mistake sooner than it did. Nothing here blocks ingestion if a
-field is missing or a status code is unrecognized: worst case, a match
-row gets NULL scores or status_label="unknown", and the full raw JSON is
-still preserved in
-soccer_raw_payloads for reprocessing later once the real field names/
-codes are confirmed.
+FIELD NAMES. The calendar and /live endpoints name things differently:
+the calendar uses Home/Away (team name under a TeamName locale list),
+/live uses HomeTeam/AwayTeam. Field names here were verified against
+captured real payloads (a Qatar-vs-Ecuador World Cup match for the
+calendar shape; finished league and cup matches for /live). MatchStatus
+meanings come from the _MATCH_STATUS_MAP table below. Everything is
+still read defensively (dict.get(), never direct indexing) — that
+guards against missing/malformed data but does NOT validate field
+names, so check any new field against a real response first. A missing
+field or unrecognized status code never blocks ingestion: the row gets
+NULLs / status_label="unknown", and the full raw JSON stays in
+soccer_raw_payloads for reprocessing.
 """
 import logging
 import time
@@ -132,10 +123,9 @@ def fetch_competitions() -> list[dict]:
     """
     Fetches FIFA's full competitions list (200+ entries), cached
     in-process for _COMPETITIONS_CACHE_TTL_SEC. Not called by the daily
-    ingest DAG — the watch list lives in soccer_competitions, seeded by
-    life_os_soccer_ingest.py's _SEED_COMPETITIONS. This is the "quick
-    button to fetch the competition list from FIFA" admin flow (WO#34
-    fast-follow) — the same role ats_slug_service.py plays for the jobs
+    ingest DAG — the watch list lives in soccer_competitions (seeded by
+    the s0cc3r_d0ma1n001 migration, edited on /soccer/settings). This is
+    the "fetch competitions from FIFA" admin flow — the same role ats_slug_service.py plays for the jobs
     domain, just backed by a real FIFA endpoint instead of a guess-probe.
 
     competitionId is cast to str — see the module docstring's rationale
@@ -238,12 +228,11 @@ def fetch_match_events(competition_id: str, season_id: str, stage_id: str, match
 
 # FIFA MatchStatus -> label mapping.
 #
-# Confirmed by project owner (2026-09-10) against their own reference:
+# Authoritative mapping (confirmed 2026-09-10 against a known reference):
 #   0 -> Completed
 #   1 -> Scheduled
 #   3 -> Decided on Penalties  (a completed match — bucketed as "finished",
-#        not "live"; a previous version of this map guessed 3 -> "live"
-#        with zero evidence, which this now corrects)
+#        not "live")
 #   7 -> Postponed             (distinct from "scheduled" — no longer
 #        expected at its listed kickoff time, but not resolved either)
 #   9 -> Forfeited/Suspended   (bucketed as "finished" so the details/
@@ -439,9 +428,8 @@ def _parse_minute(minute_str: Optional[str]) -> Optional[int]:
         return None
 
 
-# FIFA Period code for a penalty shootout. Confirmed by the project owner
-# (who watched a real shootout match whose Goals array contained period-11
-# rows). Shootout kicks are excluded from the goals list in
+# FIFA Period code for a penalty shootout (confirmed: a real shootout
+# match's Goals array carried period-11 rows). Shootout kicks are excluded from the goals list in
 # parse_match_lineup_data() so scorer lines, pitch badges and assist
 # counts only reflect goals scored in play; the shootout result is carried
 # by home_penalty_score / away_penalty_score instead. The raw payload in
@@ -571,17 +559,11 @@ def parse_match_lineup_data(raw_details: dict) -> dict:
 
 # ── EVENT-STREAM STATS (from /timelines) ──────────────────────────────────
 #
-# CONTEXT (2026-09-18): a real match's soccer_goals rows initially looked
-# like duplicates (4 "goals" for a team that appeared to have scored 3) —
-# two guesses were made and both were wrong (extra time, then a
-# still-in-progress shootout) before the project owner confirmed, having
-# watched the match, that it really was a penalty shootout with more
-# goals scored there. That incident is also why home_penalty_score/
-# away_penalty_score exist now (see parse_match_lineup_data() above) —
-# so a shootout's outcome has an explicit home, not something that has
-# to be inferred from the Goals array's minute/period fields.
+# NOTE: shootout outcomes live in home_penalty_score / away_penalty_score
+# (see parse_match_lineup_data()); individual shootout kicks are excluded
+# from the goals list (_SHOOTOUT_PERIOD_CODE).
 #
-# Separately, this module now also derives a handful of match stats from
+# This module also derives a handful of match stats from
 # the /timelines endpoint (a different raw payload than match_details —
 # see fetch_match_events() / the "match_events" endpoint in
 # soccer_raw_payloads). Confirmed, structured Type codes only — no
@@ -591,12 +573,12 @@ def parse_match_lineup_data(raw_details: dict) -> dict:
 #   15 = "Offside"
 #   16 = "Corner"
 #   18 = "Foul"
-# Deliberately NOT attempted: shots specifically ON TARGET (would need
-# decoding the Qualifiers array, unconfirmed), and saves/blocks (both
-# bucketed under Type 17 "Goal Prevention", distinguished only by
-# English EventDescription text — "pulls off a save" vs "blocks the
-# shot" — which is exactly the kind of text-matching this module avoids
-# elsewhere).
+# Deliberately NOT counted here: shots on target, saves and blocks.
+# Observed in a real payload: keeper saves are Type 57 (attributed to the
+# DEFENDING team) and outfield blocks are Type 17, i.e. distinct codes —
+# no text matching needed. Goals are Type 0. How these relate to Type 12
+# (whether a saved shot also appears as a Type 12 event) is unverified;
+# see postmortem item I2 before deriving "shots on target".
 
 _EVENT_TYPE_SHOT = 12
 _EVENT_TYPE_OFFSIDE = 15

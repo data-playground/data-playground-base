@@ -23,16 +23,12 @@ Four tasks, in order:
                                    a small amount of history for
                                    debugging (see its own docstring).
 
-REDESIGNED 2026-09-18. The previous design fetched/parsed a match's
-detail data ONCE and locked it forever once "finished". That failed in
-a very concrete way this session: a real match's soccer_goals rows
-looked like duplicates (4 goals for a 3-goal side) because the /live
-snapshot had been captured while a penalty shootout was still in
-progress — confirmed by the project owner, who watched the match. The
-lock meant that incomplete snapshot was never going to be refreshed.
-The new design accepts that ANY single snapshot might be incomplete and
-just keeps refreshing anything within the rolling window until it ages
-out, rather than trusting the first "finished" status it sees.
+Refresh policy. Any single snapshot of a match may be incomplete — a
+/live payload captured mid-shootout is the known example — so a match is
+never treated as final the first time it looks "finished". Matches
+inside the rolling window are refetched and fully re-parsed on every
+run until they age out of it. See postmortem
+migration_docs/Work Orders/work_order_34_soccer_domain_postmortem.md.
 """
 import sys
 import json
@@ -528,11 +524,11 @@ def prune_raw_payloads():
 
     This PRUNES, it does not collapse to a single row per group — losing
     all history would remove exactly what made two real issues
-    diagnosable this session (a match_events payload confirmed going
-    from empty to populated across separate pulls; a soccer_goals
-    puzzle resolved by checking status_label against raw history).
-    RAW_PAYLOAD_RETENTION_COUNT is deliberately small but not 1, as the
-    balance between bounding growth and keeping that value.
+    diagnosable in practice (a match_events payload going from empty to
+    populated across separate pulls; a goals discrepancy resolved by
+    comparing snapshots over time). RAW_PAYLOAD_RETENTION_COUNT is
+    deliberately small but not 1, as the balance between bounding
+    growth and keeping that value.
 
     fifa_match_id is NULL for the "matches" (calendar page) endpoint —
     COALESCE'd to '' so those rows group correctly per competition
