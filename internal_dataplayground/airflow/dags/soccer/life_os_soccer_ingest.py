@@ -69,6 +69,15 @@ DAG_ID = "life_os_soccer_ingest"
 ROLLING_WINDOW_PAST_DAYS = 3
 ROLLING_WINDOW_FUTURE_DAYS = 60
 
+# How far ahead ingest_match_details() reaches. Deliberately much shorter
+# than the fixtures window: /live and /timelines for a match days away
+# hold no lineup or events yet, so fetching them daily for every
+# scheduled fixture in the next 60 days only burns API calls and adds
+# useless raw rows. A 1-day lookahead catches lineups published before
+# kickoff and matches kicking off late in the day. ingest_fixtures() and
+# parse_finished_match_details() are NOT affected.
+DETAIL_LOOKAHEAD_DAYS = 1
+
 
 def _get_window_days() -> tuple[int, int]:
     """
@@ -248,8 +257,9 @@ def ingest_match_details():
     soccer_raw_payloads.
 
     REDESIGNED 2026-09-18: refetches EVERY match whose kickoff falls
-    within the current rolling ingestion window (the same window
-    ingest_fixtures() uses — see _get_window_days()), unconditionally,
+    between the start of the rolling ingestion window (see
+    _get_window_days()) and DETAIL_LOOKAHEAD_DAYS ahead (not the full
+    future window — see that constant), unconditionally,
     on every run — not gated by status_label or a one-time lock. Outside
     that window, a match is only fetched if it has NEVER had a
     match_details payload at all — this still catches historical/
@@ -268,19 +278,30 @@ def ingest_match_details():
     past_days, future_days = _get_window_days()
     today = date.today()
     window_start = today - timedelta(days=past_days)
-    window_end = today + timedelta(days=future_days)
+    # Upper bound is the short detail lookahead, capped by the configured
+    # future window, taken to END of that day (a bare date would compare
+    # as midnight and exclude that day's own kickoffs).
+    lookahead_days = min(future_days, DETAIL_LOOKAHEAD_DAYS)
+    window_end = datetime.combine(today + timedelta(days=lookahead_days), datetime.max.time())
 
+    # Both branches are capped at window_end: the "never fetched" branch
+    # still sweeps up old/backfilled matches, but no longer drags in every
+    # future fixture. Matches with NULL kickoff_at are skipped (they have
+    # no details to fetch yet).
     pending = fetch_all(
         """
         SELECT id, fifa_competition_id, fifa_season_id, fifa_stage_id, fifa_match_id
         FROM soccer_matches
-        WHERE kickoff_at BETWEEN %s AND %s
-           OR NOT EXISTS (
-               SELECT 1 FROM soccer_raw_payloads
-               WHERE endpoint = 'match_details' AND fifa_match_id = soccer_matches.fifa_match_id
-           )
+        WHERE kickoff_at <= %s
+          AND (
+               kickoff_at >= %s
+               OR NOT EXISTS (
+                   SELECT 1 FROM soccer_raw_payloads
+                   WHERE endpoint = 'match_details' AND fifa_match_id = soccer_matches.fifa_match_id
+               )
+          )
         """,
-        (window_start, window_end),
+        (window_end, window_start),
     )
 
     fetched = 0

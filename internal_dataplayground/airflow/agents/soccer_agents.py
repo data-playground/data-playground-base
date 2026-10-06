@@ -439,6 +439,24 @@ def _parse_minute(minute_str: Optional[str]) -> Optional[int]:
         return None
 
 
+# FIFA Period code for a penalty shootout. Confirmed by the project owner
+# (who watched a real shootout match whose Goals array contained period-11
+# rows). Shootout kicks are excluded from the goals list in
+# parse_match_lineup_data() so scorer lines, pitch badges and assist
+# counts only reflect goals scored in play; the shootout result is carried
+# by home_penalty_score / away_penalty_score instead. The raw payload in
+# soccer_raw_payloads still holds the individual kicks.
+_SHOOTOUT_PERIOD_CODE = 11
+
+
+def _is_shootout_period(period) -> bool:
+    """True if a Goals[].Period value is the shootout code (int or numeric str)."""
+    try:
+        return int(period) == _SHOOTOUT_PERIOD_CODE
+    except (TypeError, ValueError):
+        return False
+
+
 def parse_match_lineup_data(raw_details: dict) -> dict:
     """
     Parses a /live match-detail payload into normalized lineup/goal/
@@ -446,6 +464,10 @@ def parse_match_lineup_data(raw_details: dict) -> dict:
     fields (formation, possession, attendance). Intended to be called
     only once a match is confirmed 'finished' — see
     life_os_soccer_ingest.py::parse_finished_match_details().
+
+    Goals with Period == _SHOOTOUT_PERIOD_CODE (penalty-shootout kicks)
+    are omitted from "goals"; the shootout result is in
+    home_penalty_score / away_penalty_score.
 
     Returns a dict with keys: home_formation, away_formation,
     possession_home, possession_away, attendance, lineups, goals,
@@ -475,6 +497,10 @@ def parse_match_lineup_data(raw_details: dict) -> dict:
     def _goals(team: dict, side: str) -> list[dict]:
         rows = []
         for g in (team.get("Goals") or []):
+            # Penalty-shootout kicks are not goals for scorer/badge
+            # purposes — see _SHOOTOUT_PERIOD_CODE.
+            if _is_shootout_period(g.get("Period")):
+                continue
             rows.append({
                 "team_side": side,
                 "fifa_player_id": str(g.get("IdPlayer", "")) if g.get("IdPlayer") else None,
