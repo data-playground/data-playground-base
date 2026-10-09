@@ -52,6 +52,7 @@ app.mount("/static/finance", StaticFiles(directory="domains/finance/static"), na
 app.mount("/static/journal", StaticFiles(directory="domains/journal/static"), name="journal_static")
 app.mount("/static/workout", StaticFiles(directory="domains/workout/static"), name="workout_static")
 app.mount("/static/media", StaticFiles(directory="domains/media/static"), name="media_static")
+app.mount("/static/soccer", StaticFiles(directory="domains/soccer/static"), name="soccer_static")
 app.mount("/static/medium", StaticFiles(directory="domains/medium/static"), name="medium_static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

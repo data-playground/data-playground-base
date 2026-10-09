@@ -32,9 +32,13 @@ nothing in the data says that — so it falls back to FIFA's own Players
 array order for that assignment, which is a best-effort guess, not a
 confirmed convention. This fixes the visual complaint (six players
 crammed into one line instead of two rows of four and two) even though
-individual placement within the split rows may occasionsally be off.
+individual placement within the split rows may occasionally be off.
 """
 from collections import defaultdict
+
+# Filled into FIFA's PictureUrl template — UNVERIFIED, see build_crest_url().
+CREST_FORMAT = "sq"
+CREST_SIZE = "4"
 
 
 def _parse_tactics(tactics: str | None) -> list[int] | None:
@@ -172,17 +176,38 @@ def build_pitch_tokens(lineup_rows: list, goals: list, bookings: list, tactics: 
     return tokens
 
 
-def build_crest_url(fifa_team_id: str | None) -> str | None:
+def build_crest_url(picture_url_template: str | None) -> str | None:
     """
-    https://api.fifa.com/api/v3/picture/teams-{format}-{size}/{IdTeam}.
-    The "sq-4" format/size guess is UNVERIFIED — no network access was
-    available to confirm it resolves. The template's <img onerror=...>
-    falls back to a colored-initials placeholder if this 404s or gets
-    CORS-blocked, so a wrong guess here degrades gracefully rather than
-    breaking the page. If it turns out not to work, the real fix is
-    proxying these images through our own backend rather than the
-    browser hotlinking FIFA's CDN directly.
+    Resolves FIFA's PictureUrl template (stored verbatim on the match row,
+    e.g. "https://api.fifa.com/api/v3/picture/flags-{format}-{size}/KSA")
+    into a real image URL by filling the {format}/{size} placeholders.
+    Returns None when FIFA gave no PictureUrl — the template then shows
+    the colored-initials fallback rather than a guessed URL.
+
+    For national teams FIFA's PictureUrl is a FLAG, not a crest.
+    CREST_FORMAT / CREST_SIZE are UNVERIFIED defaults: open one resolved
+    URL in a browser and adjust if it doesn't load (the <img onerror>
+    fallback in the template covers failures meanwhile).
     """
-    if not fifa_team_id:
+    if not picture_url_template:
         return None
-    return f"https://api.fifa.com/api/v3/picture/teams-sq-4/{fifa_team_id}"
+    return (picture_url_template
+            .replace("{format}", CREST_FORMAT)
+            .replace("{size}", CREST_SIZE))
+
+
+# FIFA match-centre page for a match. UNVERIFIED URL shape (written from
+# memory; could not be confirmed) — if the button 404s, copy a real match
+# URL from fifa.com and adjust this template. All four ids are stored on
+# soccer_matches.
+FIFA_MATCH_URL_TMPL = "https://www.fifa.com/en/match-centre/match/{competition}/{season}/{stage}/{match}"
+
+
+def build_fifa_match_url(match) -> str | None:
+    """Link to the match on fifa.com, or None if any identity id is missing."""
+    ids = (match.fifa_competition_id, match.fifa_season_id,
+           match.fifa_stage_id, match.fifa_match_id)
+    if not all(ids):
+        return None
+    return FIFA_MATCH_URL_TMPL.format(
+        competition=ids[0], season=ids[1], stage=ids[2], match=ids[3])

@@ -428,6 +428,7 @@ def parse_finished_match_details():
             "UPDATE soccer_matches SET home_formation=%s, away_formation=%s, "
             "possession_home=%s, possession_away=%s, attendance=%s, "
             "home_penalty_score=%s, away_penalty_score=%s, "
+            "home_team_picture_url=%s, away_team_picture_url=%s, "
             "shots_home=%s, shots_away=%s, corners_home=%s, corners_away=%s, "
             "fouls_home=%s, fouls_away=%s, offsides_home=%s, offsides_away=%s, "
             "details_fetched_at=%s "
@@ -435,6 +436,7 @@ def parse_finished_match_details():
             (parsed["home_formation"], parsed["away_formation"],
              parsed["possession_home"], parsed["possession_away"], parsed["attendance"],
              parsed["home_penalty_score"], parsed["away_penalty_score"],
+             parsed["home_team_picture_url"], parsed["away_team_picture_url"],
              event_stats["shots_home"], event_stats["shots_away"],
              event_stats["corners_home"], event_stats["corners_away"],
              event_stats["fouls_home"], event_stats["fouls_away"],

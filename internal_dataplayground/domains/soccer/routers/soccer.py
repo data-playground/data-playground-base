@@ -17,14 +17,11 @@ task has run for a match (still scheduled, or finished but not yet
 parsed this cycle), the template shows an empty state rather than the
 old raw-JSON dump.
 
-Stats shown on the match page are deliberately limited to what's
-actually confirmed and stored (score, possession, formations). Earlier
-WO#34 mockups also showed xG/shots/big-chances/corners/passes/duels/
-saves/fouls, but those numbers came from a reference ESPN screenshot
-used purely for layout design — never a real FIFA field this pipeline
-has parsed. See soccer_match_detail.html for the honest, data-backed
-version and a note on which of those could realistically be derived
-later from the /timelines event stream.
+Stats shown on the match page are limited to confirmed, stored fields:
+score, penalty score, possession, formations, and shots/corners/fouls/
+offsides derived from /timelines (see soccer_agents.py's
+parse_match_event_stats()). xG, passes, duels and saves are not
+available from any field this pipeline parses.
 
 `since` defaults to yesterday: competitions can carry years of backfilled
 history (World Cup 2022 onward, for example), and a fixtures list with no
@@ -50,7 +47,7 @@ from domains.soccer.models import (
     SoccerCompetition, SoccerMatch, SoccerMatchLineup,
     SoccerGoal, SoccerBooking, SoccerSubstitution, SoccerCoach,
 )
-from domains.soccer.lineup_helpers import build_pitch_tokens, build_crest_url
+from domains.soccer.lineup_helpers import build_pitch_tokens, build_crest_url, build_fifa_match_url
 
 router = APIRouter(prefix="/soccer", tags=["Soccer"])
 
@@ -201,6 +198,7 @@ async def soccer_match_detail(request: Request, match_id: int, db: AsyncSession 
         "away_coach": away_coach,
         "home_carded_ids": {b.fifa_player_id for b in home_bookings if b.fifa_player_id},
         "away_carded_ids": {b.fifa_player_id for b in away_bookings if b.fifa_player_id},
-        "home_crest_url": build_crest_url(match.fifa_home_team_id),
-        "away_crest_url": build_crest_url(match.fifa_away_team_id),
+        "home_crest_url": build_crest_url(match.home_team_picture_url),
+        "away_crest_url": build_crest_url(match.away_team_picture_url),
+        "fifa_match_url": build_fifa_match_url(match),
     })

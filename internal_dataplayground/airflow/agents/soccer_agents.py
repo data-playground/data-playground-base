@@ -542,6 +542,11 @@ def parse_match_lineup_data(raw_details: dict) -> dict:
     return {
         "home_formation": _scalar_or_none(home.get("Tactics")),
         "away_formation": _scalar_or_none(away.get("Tactics")),
+        # FIFA's own image-URL TEMPLATE for the team, e.g.
+        # ".../picture/flags-{format}-{size}/KSA" — the {format}/{size}
+        # placeholders are filled in at render time (lineup_helpers.py).
+        "home_team_picture_url": _scalar_or_none(home.get("PictureUrl")),
+        "away_team_picture_url": _scalar_or_none(away.get("PictureUrl")),
         "possession_home": _scalar_or_none(possession.get("OverallHome")),
         "possession_away": _scalar_or_none(possession.get("OverallAway")),
         "attendance": _scalar_or_none(raw_details.get("Attendance")),

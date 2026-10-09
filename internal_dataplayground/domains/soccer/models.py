@@ -69,9 +69,9 @@ class SoccerCompetition(Base):
     # season/tournament without every daily run for every OTHER
     # competition also re-pulling from this same far-back date.
     #
-    # UPDATED (2026-09-10): this is now also editable after the fact from
-    # /soccer/settings, to go further back than the original backfill
-    # covered. See life_os_soccer_ingest.py::_needs_backfill() — the DAG
+    # Also editable after the fact from /soccer/settings, to go further
+    # back than the original backfill covered. See
+    # life_os_soccer_ingest.py::_needs_backfill() — the DAG
     # re-checks this value against the earliest match currently on file
     # for the competition on every run, not just "does it have zero
     # matches." So setting this to an earlier date on an already-ingested
@@ -80,7 +80,7 @@ class SoccerCompetition(Base):
     # the cheap rolling window).
     backfill_from_date = Column(Date, nullable=True)
 
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
 
     matches = relationship("SoccerMatch", back_populates="competition")
 
@@ -128,6 +128,14 @@ class SoccerMatch(Base):
     fifa_home_team_id = Column(String(64), nullable=True)
     fifa_away_team_id = Column(String(64), nullable=True)
 
+    # FIFA's own image-URL template for each team (from the /live payload's
+    # HomeTeam/AwayTeam.PictureUrl), still containing the literal
+    # "{format}" and "{size}" placeholders — see lineup_helpers.build_crest_url().
+    # For national teams this is a flag URL, not a crest. NULL until the
+    # match's /live details have been parsed.
+    home_team_picture_url = Column(String(255), nullable=True)
+    away_team_picture_url = Column(String(255), nullable=True)
+
     kickoff_at = Column(DateTime, nullable=True)
 
     # Raw FIFA MatchStatus integer code, preserved as-is (see
@@ -139,28 +147,22 @@ class SoccerMatch(Base):
 
     venue_name = Column(String(255), nullable=True)
 
-    # Populated once by parse_finished_match_details() from the /live
-    # payload — see domains/soccer/models.py's module docstring and
-    # migration s0cc3r_l1n3ups001. Real, confirmed fields (Tactics,
-    # BallPossession, Attendance) — NOT the same thing as the
-    # xG/big-chances/passes/duels/saves numbers shown in early WO#34
-    # mockups, which came from a reference ESPN screenshot used purely
-    # for layout design, not from any FIFA field we've actually
-    # confirmed. Possession, shots/corners/fouls/offsides (below), and
-    # penalty scores (below) ARE real, confirmed fields.
+    # Parsed from the /live payload by parse_match_lineup_data() and
+    # refreshed on every in-window reprocess (see migration
+    # s0cc3r_l1n3ups001): Tactics, BallPossession, Attendance. The
+    # penalty scores and shots/corners/fouls/offsides below are likewise
+    # real FIFA-derived fields. xG, passes, duels and saves are not
+    # available from any field this pipeline parses.
     home_formation = Column(String(20), nullable=True)
     away_formation = Column(String(20), nullable=True)
     possession_home = Column(Float(), nullable=True)
     possession_away = Column(Float(), nullable=True)
     attendance = Column(Integer(), nullable=True)
 
-    # Confirmed real fields (HomeTeamPenaltyScore/AwayTeamPenaltyScore on
-    # the /live endpoint), added after a real penalty-shootout match
-    # surfaced extra goal rows this conversation initially misdiagnosed
-    # as duplicates (see soccer_agents.py's parse_match_lineup_data()
-    # docstring) — the project owner confirmed by having watched the
-    # match that it was, in fact, a shootout. NULL for any match that
-    # didn't need one.
+    # Shootout result (HomeTeamPenaltyScore/AwayTeamPenaltyScore on the
+    # /live endpoint). Individual shootout kicks (Period 11) are NOT
+    # stored in soccer_goals — see _SHOOTOUT_PERIOD_CODE in
+    # soccer_agents.py. NULL for any match that didn't need a shootout.
     home_penalty_score = Column(Integer(), nullable=True)
     away_penalty_score = Column(Integer(), nullable=True)
 
@@ -180,19 +182,15 @@ class SoccerMatch(Base):
     offsides_away = Column(Integer(), nullable=True)
 
     # Timestamp of the most recent successful detail/events fetch+parse.
-    # UPDATED (2026-09-18): no longer a permanent "never touch again"
-    # lock. A match whose kickoff falls within the current rolling
-    # ingestion window gets its /live + /timelines data refetched AND
-    # its lineup/goal/booking/substitution/coach rows fully replaced on
-    # EVERY run, not fetched once and frozen — see
-    # life_os_soccer_ingest.py::ingest_match_details() and
-    # parse_finished_match_details() for why: a match captured mid-event
-    # (e.g. before a penalty shootout concluded) used to stay stuck on
-    # that incomplete snapshot forever. This column is now informational
-    # (last-refreshed-at), not a gate.
+    # Informational only (last-refreshed-at), not a processing gate: a
+    # match inside the rolling ingestion window has its /live + /timelines
+    # data refetched and its lineup/goal/booking/substitution/coach rows
+    # fully replaced on every run, because any single snapshot may be
+    # incomplete. See life_os_soccer_ingest.py::ingest_match_details()
+    # and parse_finished_match_details().
     details_fetched_at = Column(DateTime, nullable=True)
 
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
     competition = relationship("SoccerCompetition", back_populates="matches")
 
@@ -334,7 +332,7 @@ class SoccerRawPayload(Base):
 
     payload = Column(JSON, nullable=False)
 
-    fetched_at = Column(DateTime, server_default=func.now())
+    fetched_at = Column(DateTime, nullable=False, server_default=func.now())
 
     def __repr__(self):
         return f"<SoccerRawPayload {self.endpoint} comp={self.fifa_competition_id} match={self.fifa_match_id}>"
@@ -367,4 +365,4 @@ class SoccerSettings(Base):
     window_past_days = Column(Integer, nullable=False, default=3)
     window_future_days = Column(Integer, nullable=False, default=60)
 
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

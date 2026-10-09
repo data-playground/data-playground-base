@@ -5,80 +5,12 @@
     {% if match %}<span style="font-size:10px;color:var(--text-muted);">{{ match.home_team_name }} vs {{ match.away_team_name }}</span>{% endif %}
 {% endblock %}
 {% block topbar_actions %}
+    {% if fifa_match_url %}<a class="btn" href="{{ fifa_match_url }}" target="_blank" rel="noopener">View on FIFA ↗</a>{% endif %}
     <a class="btn" href="/soccer">← Back to fixtures</a>
 {% endblock %}
 
 {% block extra_css %}
-<style>
-  /* Match detail — pitch diagram + lineup tokens.
-     Colors reuse the app's existing theme variables (base.css) so this
-     renders correctly across all three themes without a separate
-     light/dark version. Team crest fallback colors (--accent for home,
-     a fixed neutral gray for away) are NOT real team colors — see the
-     WO#34 conversation's "deferred ideas" note; nothing in any FIFA
-     payload we've parsed includes kit/brand colors.
-  */
-  .md-wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding:4px 0 24px;}
-  .comp-ribbon{text-align:center;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;}
-
-  .score-header{display:flex;align-items:center;justify-content:space-between;gap:16px;}
-  .team-block{flex:1;display:flex;flex-direction:column;gap:9px;}
-  .team-block.home{align-items:flex-end;text-align:right;}
-  .team-block.away{align-items:flex-start;text-align:left;}
-  .crest{width:56px;height:56px;border-radius:50%;flex-shrink:0;position:relative;overflow:hidden;}
-  .crest img{width:100%;height:100%;object-fit:cover;display:block;}
-  .crest .fallback{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:#fff;}
-  .crest.home-c .fallback{background:var(--accent);}
-  .crest.away-c .fallback{background:#6b7280;}
-  .mini-crest{width:22px;height:22px;}
-  .mini-crest .fallback{font-size:8px;}
-  .team-name-row{display:flex;align-items:center;gap:12px;}
-  .team-block.home .team-name-row{flex-direction:row-reverse;}
-  .team-name{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;}
-  .team-record{font-size:10px;color:var(--text-muted);margin-top:2px;}
-  .scorers{font-size:11px;color:var(--text-secondary);line-height:2;}
-  .score-center{display:flex;flex-direction:column;align-items:center;gap:6px;padding:0 20px;flex-shrink:0;}
-  .score-big{font-family:'Syne',sans-serif;font-weight:800;font-size:38px;}
-  .pen-score{font-size:10px;color:var(--text-muted);letter-spacing:.04em;margin-top:-2px;}
-  .ft-badge{background:var(--accent-dim);color:var(--accent);font-size:9px;font-weight:600;letter-spacing:.1em;padding:3px 11px;border-radius:10px;}
-
-  .tri-grid{display:grid;grid-template-columns:1fr 260px 1fr;gap:20px;align-items:start;}
-  .pitch-col-title{display:flex;align-items:center;justify-content:center;gap:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:10px;}
-  .pitch{position:relative;width:100%;aspect-ratio:2/3;border-radius:10px;overflow:hidden;
-    background:repeating-linear-gradient(180deg,#2a7a3c 0px,#2a7a3c 34px,#337f45 34px,#337f45 68px);
-    border:1px solid #1d5a2a;}
-  .pitch::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,0.25);}
-  .pitch::after{content:'';position:absolute;top:50%;left:50%;width:70px;height:70px;border:1px solid rgba(255,255,255,0.25);border-radius:50%;transform:translate(-50%,-50%);}
-  .pbox{position:absolute;left:22%;right:22%;height:11%;border:1px solid rgba(255,255,255,0.25);}
-  .pbox.top{top:0;} .pbox.bottom{bottom:0;}
-  .ptoken{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;}
-  .pdot{width:36px;height:36px;border-radius:50%;background:#fff;border:2.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#18182e;position:relative;flex-shrink:0;}
-  .pdot.away-dot{border-color:#c8102e;}
-  .pdot.gk-dot{background:#64748b;border-color:#64748b;color:#fff;}
-  .pname{font-size:9.5px;color:#fff;white-space:nowrap;background:rgba(0,0,0,0.6);padding:2px 5px;border-radius:3px;}
-
-  .badge-goal{position:absolute;top:-8px;right:-9px;background:var(--green);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;}
-  .badge-assist{position:absolute;top:-8px;left:-9px;background:var(--blue);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;}
-  .badge-card{position:absolute;bottom:-4px;left:-6px;width:9px;height:13px;background:var(--yellow);border:1px solid #a56d00;border-radius:1.5px;}
-  .badge-sub{position:absolute;bottom:-4px;right:-6px;width:15px;height:15px;border-radius:50%;background:var(--red);color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;}
-
-  .subs-list{margin-top:12px;display:flex;flex-direction:column;gap:5px;}
-  .sub-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:5px 8px;border-radius:5px;background:var(--bg-hover);}
-  .sub-row .out{color:var(--text-muted);text-decoration:line-through;}
-  .sub-row .in{color:var(--green);font-weight:500;}
-  .sub-row .min{color:var(--text-muted);flex-shrink:0;margin-left:8px;white-space:nowrap;}
-  .card-dot{display:inline-block;width:7px;height:9px;background:var(--yellow);border:1px solid #a56d00;border-radius:1px;margin-left:4px;vertical-align:middle;}
-  .manager-line{margin-top:10px;font-size:10px;color:var(--text-muted);text-align:center;}
-
-  .mini-stats{display:flex;flex-direction:column;gap:14px;padding-top:2px;}
-  .mini-stat-label{text-align:center;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
-  .mini-stat-row{display:flex;align-items:center;gap:7px;}
-  .mini-stat-row span{font-size:11px;font-weight:700;width:40px;text-align:center;flex-shrink:0;}
-  .msbar{flex:1;display:flex;height:5px;border-radius:3px;overflow:hidden;background:var(--bg-hover);}
-  .msbar-h{background:var(--accent);height:100%;}
-  .msbar-a{background:var(--border-accent);height:100%;}
-  .stats-note{font-size:9px;color:var(--text-muted);line-height:1.6;margin-top:6px;text-align:center;}
-</style>
+<link rel="stylesheet" href="/static/soccer/css/soccer.css">
 {% endblock %}
 
 {% macro stat_row(label, home_val, away_val) %}
@@ -225,8 +157,7 @@
         {% if match.shots_home is none %}
         <div class="stats-note">
           Shots/corners/fouls/offsides appear once the daily ingest has parsed
-          this match's play-by-play data — derived from confirmed FIFA event
-          types, not the earlier placeholder mockup numbers.
+          this match's play-by-play data.
         </div>
         {% endif %}
       </div>
