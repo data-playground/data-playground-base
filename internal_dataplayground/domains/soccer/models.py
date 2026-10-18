@@ -38,6 +38,7 @@ Integer column would break the moment that competition is ever watched.
 from sqlalchemy import (
     Column, Integer, String, DateTime, Date, Boolean, Float, JSON, ForeignKey, Index, UniqueConstraint,
 )
+from sqlalchemy.dialects.mysql import MEDIUMBLOB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -315,10 +316,18 @@ class SoccerRawPayload(Base):
     docstring. `endpoint` is a free-text label, not an Enum, deliberately:
     adding a new FIFA endpoint to ingest should never require a schema
     migration, only a new string value here.
+
+    MIGRATION IN PROGRESS (S1a): `payload_gz` is the compressed copy
+    (zlib-compressed compact JSON, see airflow/agents/payload_codec.py) and
+    is the intended long-term store. `payload` (uncompressed JSON) is
+    TRANSITIONAL: it is still dual-written so reverting the code stays safe,
+    and it will be dropped in a later stage. Rows written before S1a have
+    payload_gz NULL (no backfill yet); readers fall back to `payload`.
     """
     __tablename__ = "soccer_raw_payloads"
     __table_args__ = (
         Index("ix_soccer_raw_payloads_lookup", "endpoint", "fifa_competition_id", "fifa_match_id"),
+        Index("ix_soccer_raw_payloads_match_lookup", "fifa_match_id", "endpoint", "fetched_at"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -331,6 +340,7 @@ class SoccerRawPayload(Base):
     fifa_match_id = Column(String(64), nullable=True)  # null for competitions/matches-list payloads
 
     payload = Column(JSON, nullable=False)
+    payload_gz = Column(MEDIUMBLOB, nullable=True)
 
     fetched_at = Column(DateTime, nullable=False, server_default=func.now())
 

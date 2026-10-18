@@ -42,6 +42,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 from dag_db import fetch_all, fetch_one, execute, execute_many
+from agents.payload_codec import compress_json, decompress_json
 from agents.soccer_agents import (
     fetch_matches, fetch_match_details, fetch_match_events, parse_match_summary,
     parse_match_lineup_data, parse_match_event_stats,
@@ -126,10 +127,24 @@ def _needs_backfill(comp: dict) -> bool:
 
 def _store_raw(endpoint: str, fifa_competition_id, fifa_match_id, payload):
     execute(
-        "INSERT INTO soccer_raw_payloads (endpoint, fifa_competition_id, fifa_match_id, payload) "
-        "VALUES (%s, %s, %s, %s)",
-        (endpoint, fifa_competition_id, fifa_match_id, json.dumps(payload)),
+        "INSERT INTO soccer_raw_payloads "
+        "(endpoint, fifa_competition_id, fifa_match_id, payload, payload_gz) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (endpoint, fifa_competition_id, fifa_match_id, json.dumps(payload), compress_json(payload)),
     )
+
+
+def _load_raw_payload(row: dict):
+    """
+    Returns the parsed payload for a soccer_raw_payloads row selected as
+    `payload_gz, IF(payload_gz IS NULL, payload, NULL) AS payload`.
+    Prefers the compressed copy; falls back to the legacy column for rows
+    written before payload_gz existed.
+    """
+    if row.get("payload_gz") is not None:
+        return decompress_json(row["payload_gz"])
+    legacy = row["payload"]
+    return json.loads(legacy) if isinstance(legacy, str) else legacy
 
 
 def _upsert_match(competition_row_id: int, parsed: dict):
@@ -378,7 +393,8 @@ def parse_finished_match_details():
     parsed_count = 0
     for match in pending:
         details_row = fetch_one(
-            "SELECT payload FROM soccer_raw_payloads "
+            "SELECT payload_gz, IF(payload_gz IS NULL, payload, NULL) AS payload "
+            "FROM soccer_raw_payloads "
             "WHERE endpoint = 'match_details' AND fifa_match_id = %s "
             "ORDER BY fetched_at DESC LIMIT 1",
             (match["fifa_match_id"],),
@@ -390,8 +406,7 @@ def parse_finished_match_details():
             continue
 
         try:
-            payload = details_row["payload"]
-            raw_details = json.loads(payload) if isinstance(payload, str) else payload
+            raw_details = _load_raw_payload(details_row)
             parsed = parse_match_lineup_data(raw_details)
         except Exception as exc:
             log.error("Failed to parse match_details for %s: %s", match["fifa_match_id"], exc)
@@ -409,15 +424,15 @@ def parse_finished_match_details():
             "offsides_home": None, "offsides_away": None,
         }
         events_row = fetch_one(
-            "SELECT payload FROM soccer_raw_payloads "
+            "SELECT payload_gz, IF(payload_gz IS NULL, payload, NULL) AS payload "
+            "FROM soccer_raw_payloads "
             "WHERE endpoint = 'match_events' AND fifa_match_id = %s "
             "ORDER BY fetched_at DESC LIMIT 1",
             (match["fifa_match_id"],),
         )
         if events_row:
             try:
-                events_payload = events_row["payload"]
-                raw_events = json.loads(events_payload) if isinstance(events_payload, str) else events_payload
+                raw_events = _load_raw_payload(events_row)
                 event_stats = parse_match_event_stats(
                     raw_events, match["fifa_home_team_id"], match["fifa_away_team_id"],
                 )
