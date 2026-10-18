@@ -126,11 +126,14 @@ def _needs_backfill(comp: dict) -> bool:
 
 
 def _store_raw(endpoint: str, fifa_competition_id, fifa_match_id, payload):
+    # S1b: write ONLY the compressed copy. The legacy `payload` column is
+    # now nullable and is left NULL for new rows (see SoccerRawPayload's
+    # docstring); readers go through _load_raw_payload().
     execute(
         "INSERT INTO soccer_raw_payloads "
-        "(endpoint, fifa_competition_id, fifa_match_id, payload, payload_gz) "
-        "VALUES (%s, %s, %s, %s, %s)",
-        (endpoint, fifa_competition_id, fifa_match_id, json.dumps(payload), compress_json(payload)),
+        "(endpoint, fifa_competition_id, fifa_match_id, payload_gz) "
+        "VALUES (%s, %s, %s, %s)",
+        (endpoint, fifa_competition_id, fifa_match_id, compress_json(payload)),
     )
 
 
