@@ -140,14 +140,17 @@ def _store_raw(endpoint: str, fifa_competition_id, fifa_match_id, payload):
 def _load_raw_payload(row: dict):
     """
     Returns the parsed payload for a soccer_raw_payloads row selected as
-    `payload_gz, IF(payload_gz IS NULL, payload, NULL) AS payload`.
-    Prefers the compressed copy; falls back to the legacy column for rows
-    written before payload_gz existed.
+    `payload_gz`. S1c: reads ONLY the compressed copy — the legacy
+    uncompressed column is no longer read. Raises ValueError if payload_gz
+    is NULL, so the caller's existing try/except logs it and skips that
+    match.
     """
-    if row.get("payload_gz") is not None:
-        return decompress_json(row["payload_gz"])
-    legacy = row["payload"]
-    return json.loads(legacy) if isinstance(legacy, str) else legacy
+    if row.get("payload_gz") is None:
+        raise ValueError(
+            "soccer_raw_payloads row has payload_gz IS NULL — "
+            "run backfill_raw_gz.py to fill it before parsing"
+        )
+    return decompress_json(row["payload_gz"])
 
 
 def _upsert_match(competition_row_id: int, parsed: dict):
@@ -396,7 +399,7 @@ def parse_finished_match_details():
     parsed_count = 0
     for match in pending:
         details_row = fetch_one(
-            "SELECT payload_gz, IF(payload_gz IS NULL, payload, NULL) AS payload "
+            "SELECT payload_gz "
             "FROM soccer_raw_payloads "
             "WHERE endpoint = 'match_details' AND fifa_match_id = %s "
             "ORDER BY fetched_at DESC LIMIT 1",
@@ -427,7 +430,7 @@ def parse_finished_match_details():
             "offsides_home": None, "offsides_away": None,
         }
         events_row = fetch_one(
-            "SELECT payload_gz, IF(payload_gz IS NULL, payload, NULL) AS payload "
+            "SELECT payload_gz "
             "FROM soccer_raw_payloads "
             "WHERE endpoint = 'match_events' AND fifa_match_id = %s "
             "ORDER BY fetched_at DESC LIMIT 1",
