@@ -317,15 +317,11 @@ class SoccerRawPayload(Base):
     adding a new FIFA endpoint to ingest should never require a schema
     migration, only a new string value here.
 
-    MIGRATION IN PROGRESS (S1b): `payload_gz` is the compressed copy
-    (zlib-compressed compact JSON, see airflow/agents/payload_codec.py) and
-    is the authoritative store for all NEW rows. `payload` (uncompressed
-    JSON) is TRANSITIONAL and is now NULLABLE: new rows are written with
-    payload NULL and only payload_gz set. Rows written before S1b still
-    carry their legacy `payload`; backfill_raw_gz.py fills payload_gz for
-    any row that lacks it. Readers prefer payload_gz and fall back to
-    `payload` (see life_os_soccer_ingest.py::_load_raw_payload). The
-    `payload` column is dropped in a later stage (S1c).
+    STORAGE (end state, S1d): `payload_gz` is the only stored copy of each
+    response — zlib-compressed compact JSON, see
+    airflow/agents/payload_codec.py. The legacy uncompressed `payload`
+    column was dropped in S1d (migration s0cc3r_r4wgz003). Readers use
+    life_os_soccer_ingest.py::_load_raw_payload().
     """
     __tablename__ = "soccer_raw_payloads"
     __table_args__ = (
@@ -342,7 +338,6 @@ class SoccerRawPayload(Base):
     fifa_competition_id = Column(String(64), nullable=True)
     fifa_match_id = Column(String(64), nullable=True)  # null for competitions/matches-list payloads
 
-    payload = Column(JSON, nullable=True)
     payload_gz = Column(MEDIUMBLOB, nullable=True)
 
     fetched_at = Column(DateTime, nullable=False, server_default=func.now())
